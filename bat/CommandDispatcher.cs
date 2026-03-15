@@ -373,12 +373,12 @@ public class CommandDispatcher
             }
 
             // IF handling
-            if (processedLine.StartsWith("IF ", StringComparison.OrdinalIgnoreCase) || processedLine.StartsWith("@IF ", StringComparison.OrdinalIgnoreCase))
+            if (processedLine.ToUpper().StartsWith("IF ") || processedLine.ToUpper().StartsWith("@IF "))
             {
-                bool suppressIfEcho = processedLine.StartsWith("@");
+                bool suppressIfEcho = processedLine.ToUpper().StartsWith("@IF ");
                 string workingIfLine = suppressIfEcho ? processedLine.Substring(1).TrimStart() : processedLine;
 
-                var (conditionMet, commandToExecute, nextIndex) = ParseIfCondition(workingIfLine, currentLineIndex, lines);
+                var (conditionMet, commands, nextIndex) = ParseIfCondition(workingIfLine, currentLineIndex, lines);
                 currentLineIndex = nextIndex;
 
                 if (_fileSystem.EchoOn && !suppressIfEcho)
@@ -386,9 +386,12 @@ public class CommandDispatcher
                     console.WriteLine(workingIfLine);
                 }
 
-                if (conditionMet && !string.IsNullOrWhiteSpace(commandToExecute))
+                if (conditionMet)
                 {
-                    await DispatchAsync(commandToExecute, cancellationToken, console);
+                    foreach (var cmd in commands)
+                    {
+                        await DispatchAsync(cmd, cancellationToken, console);
+                    }
                 }
                 continue;
             }
@@ -399,11 +402,11 @@ public class CommandDispatcher
         }
     }
 
-    private (bool conditionMet, string command, int nextIndex) ParseIfCondition(string line, int currentLineIndex, string[] allLines)
+    private (bool conditionMet, List<string> commands, int nextIndex) ParseIfCondition(string line, int currentLineIndex, string[] allLines)
     {
         var parts = ParseInput(line);
-        if (parts.Length < 2 || !parts[0].Equals("IF", StringComparison.OrdinalIgnoreCase))
-            return (false, "", currentLineIndex);
+        if (parts.Length < 2 || parts[0].ToUpper() != "IF")
+            return (false, new List<string>(), currentLineIndex);
 
         bool isNot = false;
         int index = 1;
@@ -414,7 +417,7 @@ public class CommandDispatcher
         }
 
         bool conditionMet = false;
-        if (index >= parts.Length) return (false, "", currentLineIndex);
+        if (index >= parts.Length) return (false, new List<string>(), currentLineIndex);
 
         if (parts[index].Equals("ERRORLEVEL", StringComparison.OrdinalIgnoreCase))
         {
@@ -462,47 +465,98 @@ public class CommandDispatcher
 
         if (isNot) conditionMet = !conditionMet;
 
-        // The rest of the parts are the command to execute
-        string commandToExecute = string.Join(" ", parts.Skip(index));
+        var commands = new List<string>();
+        int nextIndex = currentLineIndex + 1;
 
-        // Handle ELSE
-        // This is tricky because ELSE must be on the same line or we need to look ahead if it's a block.
-        // For now, let's look at the next lines if they start with ELSE.
-        
-        int nextIndex = currentLineIndex;
-        if (!conditionMet)
+        // Check if it's a block with (
+        var remaining = string.Join(" ", parts.Skip(index)).Trim();
+        if (remaining.StartsWith("("))
         {
-            // If condition not met, check if next line is ELSE
-            if (nextIndex < allLines.Length)
+            // Collect lines until )
+            int parenCount = 1; // Already have one (
+            bool inBlock = true;
+            while (nextIndex < allLines.Length && inBlock)
             {
-                var nextLine = allLines[nextIndex].Trim();
-                if (nextLine.StartsWith("ELSE ", StringComparison.OrdinalIgnoreCase))
+                var blockLine = allLines[nextIndex].Trim();
+                nextIndex++;
+                if (blockLine == ")")
                 {
-                    commandToExecute = nextLine.Substring(5).Trim();
-                    nextIndex++;
-                    conditionMet = true; // We want to execute the ELSE branch
+                    parenCount--;
+                    if (parenCount == 0)
+                    {
+                        inBlock = false;
+                    }
                 }
-                else if (nextLine.Equals("ELSE", StringComparison.OrdinalIgnoreCase))
+                else if (blockLine.StartsWith("("))
                 {
-                    // ELSE on its own line followed by command on next line (not standard but possible in some variants)
-                    // Standard CMD requires ELSE on same line as IF's closing paren if using blocks.
+                    parenCount++;
+                }
+                else if (!string.IsNullOrWhiteSpace(blockLine))
+                {
+                    commands.Add(blockLine);
                 }
             }
         }
         else
         {
-            // If condition MET, we need to SKIP the ELSE branch if it exists
-            if (nextIndex < allLines.Length)
+            // Single command
+            commands.Add(remaining);
+        }
+
+        // Handle ELSE
+        if (nextIndex < allLines.Length)
+        {
+            var nextLine = allLines[nextIndex].Trim();
+            if (nextLine.StartsWith("ELSE", StringComparison.OrdinalIgnoreCase))
             {
-                var nextLine = allLines[nextIndex].Trim();
-                if (nextLine.StartsWith("ELSE ", StringComparison.OrdinalIgnoreCase) || nextLine.Equals("ELSE", StringComparison.OrdinalIgnoreCase))
+                nextIndex++;
+                var elseRemaining = nextLine.Substring(4).Trim();
+                if (elseRemaining.StartsWith("("))
                 {
-                    nextIndex++;
+                    // Else block
+                    int parenCount = 1;
+                    bool inBlock = true;
+                    var elseCommands = new List<string>();
+                    while (nextIndex < allLines.Length && inBlock)
+                    {
+                        var blockLine = allLines[nextIndex].Trim();
+                        nextIndex++;
+                        if (blockLine == ")")
+                        {
+                            parenCount--;
+                            if (parenCount == 0)
+                            {
+                                inBlock = false;
+                            }
+                        }
+                        else if (blockLine.StartsWith("("))
+                        {
+                            parenCount++;
+                        }
+                        else if (!string.IsNullOrWhiteSpace(blockLine))
+                        {
+                            elseCommands.Add(blockLine);
+                        }
+                    }
+                    if (!conditionMet)
+                    {
+                        commands = elseCommands;
+                        conditionMet = true;
+                    }
+                }
+                else
+                {
+                    // Single else command
+                    if (!conditionMet)
+                    {
+                        commands = new List<string> { elseRemaining };
+                        conditionMet = true;
+                    }
                 }
             }
         }
 
-        return (conditionMet, commandToExecute, nextIndex);
+        return (conditionMet, commands, nextIndex);
     }
 
     private async Task TryExecuteExternalApplicationAsync(string exePath, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
