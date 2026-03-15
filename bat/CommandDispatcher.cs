@@ -242,15 +242,20 @@ public class CommandDispatcher
     private async Task TryExecuteExternalApplicationAsync(string exePath, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
     {
         var handshake = Guid.NewGuid().ToString("N").Substring(0, 8);
+        
+        // Handshake whitelist: alleen proberen voor programma's in de bat directory
+        var batDir = _fileSystem.GetBatDirectory();
+        var shouldTryHandshake = exePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
+
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = exePath,
             Arguments = string.Join(" ", args.Select(a => a.Contains(" ") ? $"\"{a}\"" : a)),
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            RedirectStandardInput = shouldTryHandshake,
+            RedirectStandardOutput = shouldTryHandshake,
+            RedirectStandardError = shouldTryHandshake,
+            UseShellExecute = !shouldTryHandshake,
+            CreateNoWindow = shouldTryHandshake
         };
 
         // Check for shebang
@@ -263,12 +268,34 @@ public class CommandDispatcher
             startInfo.Arguments = shebangArgs + $"\"{exePath}\" " + startInfo.Arguments;
         }
 
-        startInfo.EnvironmentVariables["DOS_HANDSHAKE"] = handshake;
+        if (shouldTryHandshake)
+        {
+            startInfo.EnvironmentVariables["DOS_HANDSHAKE"] = handshake;
+        }
 
         // Voeg andere DOS omgevingsvariabelen toe
         foreach (var kvp in _fileSystem.GetAllEnvironmentVariables())
         {
+            // Skip Rider-specific .NET startup hooks that cause issues with external .NET processes
+            if (kvp.Key.Equals("DOTNET_STARTUP_HOOKS", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
             startInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
+        }
+
+        // Als het een bekende shell is, gebruik de raw environment variabelen van het systeem
+        var isShell = exePath.EndsWith("bash", StringComparison.OrdinalIgnoreCase) || 
+                      exePath.EndsWith("pwsh", StringComparison.OrdinalIgnoreCase) ||
+                      exePath.EndsWith("sh", StringComparison.OrdinalIgnoreCase);
+        
+        if (isShell)
+        {
+            var rawEnv = _fileSystem.GetRawEnvironmentVariables();
+            foreach (var kvp in rawEnv)
+            {
+                startInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
+            }
         }
 
         try
@@ -276,18 +303,31 @@ public class CommandDispatcher
             using var process = System.Diagnostics.Process.Start(startInfo);
             if (process == null) return;
 
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (!shouldTryHandshake)
+            {
+                await process.WaitForExitAsync(cancellationToken);
+                return;
+            }
 
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var protocolServer = new DosProtocolServer();
 
             // First wait for handshake
-            var handshakeSuccess = await protocolServer.WaitForHandshakeAsync(
-                process.StandardOutput.BaseStream,
-                process.StandardInput.BaseStream,
-                handshake,
-                cts.Token);
+            var handshakeResult = new HandshakeResult { Success = false };
+            try
+            {
+                handshakeResult = await protocolServer.WaitForHandshakeAsync(
+                    process.StandardOutput.BaseStream,
+                    process.StandardInput.BaseStream,
+                    handshake,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Handshake timed out or was cancelled by user
+            }
 
-            if (handshakeSuccess)
+            if (handshakeResult.Success)
             {
                 // Then process stream
                 var stdoutTask = protocolServer.ProcessStreamAsync(
@@ -297,41 +337,65 @@ public class CommandDispatcher
                     text => console.Write(text),
                     cts.Token);
 
-                var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+                var stderrTask = process.StandardError.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
 
                 await process.WaitForExitAsync(cancellationToken);
                 cts.Cancel();
 
-                await Task.WhenAll(stdoutTask, stderrTask);
-
-                var stderr = stderrTask.Result;
-                if (!string.IsNullOrEmpty(stderr))
-                {
-                    console.Write(stderr);
-                }
+                try { await stdoutTask; } catch (OperationCanceledException) {}
+                try { await stderrTask; } catch (OperationCanceledException) {}
             }
             else
             {
-                // Handshake failed - treat as regular program
-                var outputTask = Task.Run(async () =>
+                // Handshake failed - treat as transparent program
+                
+                // Eerst de geconsumeerde bytes uitsturen
+                if (handshakeResult.ConsumedBytes != null && handshakeResult.ConsumedBytes.Length > 0)
                 {
-                    string? line;
-                    while ((line = await process.StandardOutput.ReadLineAsync(cancellationToken)) != null)
-                    {
-                        console.WriteLine(line);
-                    }
-                }, cancellationToken);
+                    console.Write(System.Text.Encoding.Default.GetString(handshakeResult.ConsumedBytes));
+                }
 
-                var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+                var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
+                var stderrTask = process.StandardError.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
+                
+                var stdinTask = Task.Run(async () =>
+                {
+                    var buffer = new byte[1024];
+                    while (!cts.Token.IsCancellationRequested && !process.HasExited)
+                    {
+                        if (Console.KeyAvailable)
+                        {
+                            var key = Console.ReadKey(true);
+                            if (key.Key == ConsoleKey.Enter)
+                            {
+                                await process.StandardInput.WriteAsync("\n");
+                            }
+                            else if (key.Key == ConsoleKey.Backspace)
+                            {
+                                // Veel shells op Linux verwachten een andere backspace code of specifieke handling 
+                                // voor "line discipline". Omdat we hier geen TTY hebben, is dit lastig.
+                                // We sturen nu expliciet \b en kijken of dat beter gaat.
+                                await process.StandardInput.WriteAsync("\b");
+                            }
+                            else if (key.KeyChar != '\0')
+                            {
+                                await process.StandardInput.WriteAsync(key.KeyChar.ToString());
+                            }
+                            await process.StandardInput.FlushAsync();
+                        }
+                        else
+                        {
+                            await Task.Delay(10, cts.Token);
+                        }
+                    }
+                }, cts.Token);
 
                 await process.WaitForExitAsync(cancellationToken);
-                await outputTask;
-
-                var stderr = stderrTask.Result;
-                if (!string.IsNullOrEmpty(stderr))
-                {
-                    console.Write(stderr);
-                }
+                cts.Cancel();
+                
+                try { await stdoutTask; } catch (OperationCanceledException) {}
+                try { await stderrTask; } catch (OperationCanceledException) {}
+                try { await stdinTask; } catch (OperationCanceledException) {}
             }
         }
         catch (Exception ex)
@@ -625,6 +689,48 @@ public class CommandDispatcher
         {
             Out = new AnsiConsoleOutput(writer)
         });
+    }
+
+    private class ConsoleStreamWrapper : Stream
+    {
+        private readonly IAnsiConsole _console;
+
+        public ConsoleStreamWrapper(IAnsiConsole console)
+        {
+            _console = console;
+        }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) => 0;
+
+        public override long Seek(long offset, SeekOrigin origin) => 0;
+
+        public override void SetLength(long value) { }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            var text = System.Text.Encoding.Default.GetString(buffer, offset, count);
+            _console.Write(text);
+        }
+
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            var text = System.Text.Encoding.Default.GetString(buffer, offset, count);
+            _console.Write(text);
+            await Task.CompletedTask;
+        }
+
+        public override void WriteByte(byte value)
+        {
+            _console.Write(System.Text.Encoding.Default.GetString(new[] { value }));
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => 0;
+        public override long Position { get; set; }
     }
 
     private string[] ParseInput(string input)

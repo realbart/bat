@@ -9,6 +9,7 @@ public class FileSystemService
     private string _currentDirectory;
     private readonly Stack<string> _directoryStack = new();
     private readonly Dictionary<string, string> _environmentVariables = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _rawEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _substMounts = new(StringComparer.OrdinalIgnoreCase); // drive -> path
     private static readonly System.Text.RegularExpressions.Regex PathRegex = new(@"^/([^/]+(/|$))*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -28,6 +29,8 @@ public class FileSystemService
         {
             var key = de.Key.ToString() ?? string.Empty;
             var value = de.Value?.ToString() ?? string.Empty;
+            
+            _rawEnvironmentVariables[key] = value;
 
             if (key.Equals("PATH", StringComparison.OrdinalIgnoreCase))
             {
@@ -64,9 +67,12 @@ public class FileSystemService
 
     private bool IsPathLike(string value)
     {
-        if (string.IsNullOrEmpty(value) || !value.StartsWith("/")) return false;
-        // Don't match "//" or strings that don't look like paths
-        if (value.Contains("//")) return false;
+        if (string.IsNullOrEmpty(value)) return false;
+        if (value.StartsWith("/") || (value.Length >= 3 && value[1] == ':' && value[2] == '\\'))
+        {
+             // Het lijkt op een Linux of DOS pad
+             return true;
+        }
         return PathRegex.IsMatch(value);
     }
 
@@ -96,15 +102,47 @@ public class FileSystemService
         if (string.IsNullOrEmpty(value))
         {
             _environmentVariables.Remove(name);
+            _rawEnvironmentVariables.Remove(name);
         }
         else
         {
             _environmentVariables[name] = value;
+            // Voor de raw variant gebruiken we de originele Linux waarde als die beschikbaar is,
+            // anders de nieuwe waarde (maar dan wel vertaald naar Linux stijl indien nodig)
+            if (IsPathLike(value))
+            {
+                _rawEnvironmentVariables[name] = GetLinuxPath(value);
+            }
+            else
+            {
+                _rawEnvironmentVariables[name] = value;
+            }
         }
         return Result.Success();
     }
 
+    private string GetLinuxPath(string dosPath)
+    {
+        var path = dosPath;
+        if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path.Substring(2);
+        }
+        return path.Replace('\\', '/');
+    }
+
     public IDictionary<string, string> GetAllEnvironmentVariables() => _environmentVariables;
+    public IDictionary<string, string> GetRawEnvironmentVariables() => _rawEnvironmentVariables;
+
+    public string GetBatDirectory()
+    {
+        var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+        if (exePath != null)
+        {
+            return Path.GetDirectoryName(exePath) ?? "/";
+        }
+        return "/";
+    }
 
     public IFileSystem FileSystem => _fileSystem;
 

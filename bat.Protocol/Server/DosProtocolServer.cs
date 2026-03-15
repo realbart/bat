@@ -17,31 +17,56 @@ public class DosProtocolServer
     /// <param name="stdin">Client's stdin stream to write to</param>
     /// <param name="handshake">Expected handshake string</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if handshake succeeded</returns>
-    public async Task<bool> WaitForHandshakeAsync(Stream stdout, Stream stdin, string handshake, CancellationToken cancellationToken = default)
+    /// <returns>HandshakeResult containing success and consumed bytes</returns>
+    public async Task<HandshakeResult> WaitForHandshakeAsync(Stream stdout, Stream stdin, string handshake, CancellationToken cancellationToken = default)
     {
         var buffer = new byte[handshake.Length + 1]; // \0 + handshake
         var totalRead = 0;
 
-        while (totalRead < buffer.Length && !cancellationToken.IsCancellationRequested)
+        // Gebruik een korte timeout voor de handshake
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(200));
+
+        try
         {
-            var bytesRead = await stdout.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cancellationToken);
-            if (bytesRead == 0) return false; // EOF
-            totalRead += bytesRead;
+            while (totalRead < buffer.Length && !cts.Token.IsCancellationRequested)
+            {
+                // We moeten bytesRead één voor één of in kleine stukjes lezen om niet te blokkeren 
+                // als er geen \0 komt. Maar ReadAsync op een NetworkStream of PipeStream 
+                // blokkeert tot er data is of de stream gesloten wordt.
+                
+                var bytesRead = await stdout.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cts.Token);
+                if (bytesRead == 0) break; // EOF
+                totalRead += bytesRead;
+                
+                // Als de eerste byte geen \0 is, dan is het geen protocol handshake
+                if (totalRead > 0 && buffer[0] != 0) break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Timeout of annulering
         }
 
         // Verify: \0 + handshake
-        if (buffer[0] != 0) return false;
+        if (totalRead >= buffer.Length && buffer[0] == 0)
+        {
+            var receivedHandshake = Encoding.ASCII.GetString(buffer, 1, handshake.Length);
+            if (receivedHandshake == handshake)
+            {
+                // Send handshake back
+                var response = Encoding.ASCII.GetBytes(handshake);
+                await stdin.WriteAsync(response, 0, response.Length, cancellationToken);
+                await stdin.FlushAsync(cancellationToken);
 
-        var receivedHandshake = Encoding.ASCII.GetString(buffer, 1, handshake.Length);
-        if (receivedHandshake != handshake) return false;
+                return new HandshakeResult { Success = true };
+            }
+        }
 
-        // Send handshake back
-        var response = Encoding.ASCII.GetBytes(handshake);
-        await stdin.WriteAsync(response, 0, response.Length, cancellationToken);
-        await stdin.FlushAsync(cancellationToken);
-
-        return true;
+        // Faal: geef geconsumeerde bytes terug
+        var consumed = new byte[totalRead];
+        Array.Copy(buffer, 0, consumed, 0, totalRead);
+        return new HandshakeResult { Success = false, ConsumedBytes = consumed };
     }
 
     /// <summary>

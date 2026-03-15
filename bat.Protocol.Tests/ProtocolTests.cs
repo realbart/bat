@@ -59,7 +59,7 @@ public class ProtocolTests
         var result = await server.WaitForHandshakeAsync(clientOutput, serverInput, handshake);
 
         // Assert
-        Assert.True(result);
+        Assert.True(result.Success);
 
         // Verify server sent handshake back
         serverInput.Position = 0;
@@ -67,6 +67,37 @@ public class ProtocolTests
         await serverInput.ReadAsync(response, 0, response.Length);
         var responseStr = Encoding.ASCII.GetString(response);
         Assert.Equal(handshake, responseStr);
+    }
+
+    [Fact]
+    public async Task Server_ShouldFailHandshake_OnInvalidStart()
+    {
+        var server = new DosProtocolServer();
+        var handshake = "abc12345";
+        
+        using var stdout = new MemoryStream();
+        using var stdin = new MemoryStream();
+        stdout.WriteByte((byte)'A'); // Not \0
+        stdout.Position = 0;
+        
+        var result = await server.WaitForHandshakeAsync(stdout, stdin, handshake);
+        Assert.False(result.Success);
+        Assert.Single(result.ConsumedBytes);
+        Assert.Equal((byte)'A', result.ConsumedBytes[0]);
+    }
+
+    [Fact]
+    public async Task Server_ShouldFailHandshake_OnTimeout()
+    {
+        var server = new DosProtocolServer();
+        var handshake = "abc12345";
+        
+        using var stdout = new MemoryStream(); // Empty stream will timeout
+        using var stdin = new MemoryStream();
+        
+        var result = await server.WaitForHandshakeAsync(stdout, stdin, handshake);
+        Assert.False(result.Success);
+        Assert.Empty(result.ConsumedBytes);
     }
 
     [Fact]

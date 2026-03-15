@@ -182,24 +182,40 @@ public class FileSystemServiceTests
     }
 
     [Fact]
-    public void GetAllSubsts_ShouldReturnAllMappings()
+    public void SetEnvironmentVariable_ShouldUpdateBothStandardAndRaw()
     {
         // Arrange
-        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
-        {
-            { "/temp", new MockDirectoryData() },
-            { "/projects", new MockDirectoryData() }
-        });
-        var service = new FileSystemService(fileSystem);
-        service.SetSubst("D:", "/temp");
-        service.SetSubst("E:", "/projects");
-
+        var service = new FileSystemService(new MockFileSystem());
+        
         // Act
-        var substs = service.GetAllSubsts();
-
+        service.SetEnvironmentVariable("MYPATH", @"C:\usr\bin");
+        service.SetEnvironmentVariable("MYVAR", "someValue");
+        
         // Assert
-        Assert.Equal(2, substs.Count);
-        Assert.Equal("/temp", substs["D:"]);
-        Assert.Equal("/projects", substs["E:"]);
+        var standardVars = service.GetAllEnvironmentVariables();
+        var rawVars = service.GetRawEnvironmentVariables();
+        
+        Assert.Equal(@"C:\usr\bin", standardVars["MYPATH"]);
+        Assert.Equal("/usr/bin", rawVars["MYPATH"]);
+        
+        Assert.Equal("someValue", standardVars["MYVAR"]);
+        Assert.Equal("someValue", rawVars["MYVAR"]);
+    }
+    [Fact]
+    public void SetEnvironmentVariable_EmptyValue_ShouldRemoveFromBoth()
+    {
+        // Arrange
+        var service = new FileSystemService(new MockFileSystem());
+        service.SetEnvironmentVariable("MYVAR", "someValue");
+        
+        // Act
+        service.SetEnvironmentVariable("MYVAR", "");
+        
+        // Assert
+        var standardVars = service.GetAllEnvironmentVariables();
+        var rawVars = service.GetRawEnvironmentVariables();
+        
+        Assert.False(standardVars.ContainsKey("MYVAR"));
+        Assert.False(rawVars.ContainsKey("MYVAR"));
     }
 }
