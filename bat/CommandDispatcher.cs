@@ -637,11 +637,12 @@ public class CommandDispatcher
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var protocolServer = new DosProtocolServer();
 
-                // Wait for connection or process exit
+                // Wait for connection, process exit, or timeout
                 var connectTask = pipeServer.WaitForConnectionAsync(cts.Token);
                 var processExitTask = process.WaitForExitAsync(cts.Token);
+                var timeoutTask = Task.Delay(500, cts.Token);
 
-                var completedTask = await Task.WhenAny(connectTask, processExitTask);
+                var completedTask = await Task.WhenAny(connectTask, processExitTask, timeoutTask);
                 if (completedTask == connectTask)
                 {
                     var handshakeResult = await protocolServer.WaitForHandshakeAsync(pipeServer, handshake, cts.Token);
@@ -655,6 +656,7 @@ public class CommandDispatcher
                         await process.WaitForExitAsync(cancellationToken);
                         cts.Cancel();
                         try { await protocolTask; } catch (OperationCanceledException) {}
+                        _lastErrorLevel = process.ExitCode;
                     }
                     else
                     {
@@ -662,9 +664,16 @@ public class CommandDispatcher
                         _lastErrorLevel = process.ExitCode;
                     }
                 }
-                else
+                else if (completedTask == processExitTask)
                 {
-                    // Process exited before connecting
+                    // Process exited before connecting or timeout
+                    _lastErrorLevel = process.ExitCode;
+                }
+                else // timeout
+                {
+                    // No handshake, just wait for process exit
+                    await process.WaitForExitAsync(cancellationToken);
+                    _lastErrorLevel = process.ExitCode;
                 }
             }
             else
