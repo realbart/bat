@@ -7,8 +7,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
 		publish.sh = publish.sh
-		autoexec.bat = autoexec.bat
+		example.bat = example.bat
 		readme.md = readme.md
+		autoexec.bat = autoexec.bat
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "doskey", "doskey\doskey.csproj", "{DE7AE236-032E-4802-B5CD-55FFF6D7B9B6}"
@@ -19,7 +20,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "bat.Protocol.Tests", "bat.P
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "subst", "subst\subst.csproj", "{A9D8F7E5-3B2C-4F1D-9E8A-6C5B4D7E9F2A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "choice", "choice\choice.csproj", "{E4F2B9A1-5C8D-4E3F-9B7A-1D6F8C2E5G3H}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "choice", "choice\choice.csproj", "{00000000-0000-0000-0000-000000000000}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
