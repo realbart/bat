@@ -6,7 +6,8 @@ namespace Bat.FileSystem;
 public class FileSystemService
 {
     private readonly IFileSystem _fileSystem;
-    private string _currentDirectory;
+    private string _currentDrive = "C";
+    private readonly Dictionary<string, string> _driveCurrentDirs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stack<string> _directoryStack = new();
     private readonly Dictionary<string, string> _environmentVariables = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _rawEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase);
@@ -17,9 +18,10 @@ public class FileSystemService
     {
         var innerFileSystem = fileSystem ?? new global::System.IO.Abstractions.FileSystem();
         _fileSystem = new DosFileSystem(innerFileSystem, this);
-        _currentDirectory = _fileSystem.Directory.GetCurrentDirectory();
         
         LoadEnvironmentVariables();
+        var currentDir = System.IO.Directory.GetCurrentDirectory();
+        _driveCurrentDirs["C"] = GetDosPath(currentDir);
     }
 
     private void LoadEnvironmentVariables()
@@ -78,7 +80,7 @@ public class FileSystemService
 
     public Result PushDirectory(string path)
     {
-        _directoryStack.Push(_currentDirectory);
+        _directoryStack.Push(_driveCurrentDirs[_currentDrive]);
         return ChangeDirectory(path);
     }
 
@@ -86,7 +88,7 @@ public class FileSystemService
     {
         if (_directoryStack.Count > 0)
         {
-            _currentDirectory = _directoryStack.Pop();
+            _driveCurrentDirs[_currentDrive] = _directoryStack.Pop();
             return Result.Success(true);
         }
         return Result.Success(false);
@@ -148,11 +150,7 @@ public class FileSystemService
 
     public bool EchoOn { get; set; } = true;
 
-    public string CurrentDirectory
-    {
-        get => _currentDirectory;
-        private set => _currentDirectory = value;
-    }
+    public string CurrentDirectory => _driveCurrentDirs[_currentDrive];
 
     /// <summary>
     /// Resolves a path while preserving the case if it exists on the file system.
@@ -189,7 +187,7 @@ public class FileSystemService
             }
             else
             {
-                directory = _currentDirectory;
+                directory = CurrentDirectory;
                 pattern = targetPath;
             }
 
@@ -253,7 +251,8 @@ public class FileSystemService
         }
         else
         {
-            absolutePath = _fileSystem.Path.GetFullPath(_fileSystem.Path.Combine(_currentDirectory, targetPath));
+            var linuxCurrent = GetLinuxPath(CurrentDirectory);
+            absolutePath = _fileSystem.Path.GetFullPath(_fileSystem.Path.Combine(linuxCurrent, targetPath));
         }
 
         // Now we need to handle case preservation.
@@ -271,7 +270,7 @@ public class FileSystemService
         var dir = fs.Path.GetDirectoryName(path);
         var fileName = fs.Path.GetFileName(path);
 
-        if (string.IsNullOrEmpty(dir)) dir = _currentDirectory;
+        if (string.IsNullOrEmpty(dir)) dir = CurrentDirectory;
         else
         {
             // ResolvePath uses _fileSystem which is DosFileSystem.
@@ -357,7 +356,7 @@ public class FileSystemService
         
         if (resolvedPath != null && _fileSystem.Directory.Exists(resolvedPath))
         {
-            _currentDirectory = resolvedPath;
+            _driveCurrentDirs[_currentDrive] = GetDosPath(resolvedPath);
             return Result.Success();
         }
 
@@ -452,7 +451,7 @@ public class FileSystemService
 
     public string GetDosPath(string? linuxPath = null)
     {
-        linuxPath ??= _currentDirectory;
+        linuxPath ??= CurrentDirectory;
 
         // Check if linuxPath is actually a substituted path
         foreach (var kvp in _substMounts)
@@ -533,9 +532,10 @@ public class FileSystemService
         var extensions = new[] { "", ".exe", ".com", ".bat", ".cmd" };
         
         // 1. Zoek in huidige map
+        var linuxCurrent = GetLinuxPath(CurrentDirectory);
         foreach (var ext in extensions)
         {
-            var fullPath = _fileSystem.Path.Combine(_currentDirectory, commandName + ext);
+            var fullPath = _fileSystem.Path.Combine(linuxCurrent, commandName + ext);
             if (IsExecutable(fullPath))
             {
                 return fullPath;
@@ -679,6 +679,7 @@ public class FileSystemService
             return Result.Failure("Drive already substituted.");
 
         _substMounts[drive] = resolvedPath;
+        _driveCurrentDirs[drive.TrimEnd(':')] = drive;
         return Result.Success();
     }
 
@@ -696,10 +697,14 @@ public class FileSystemService
 
         _substMounts.Remove(drive);
 
-        // If current directory is on this drive, move to C:
-        if (_currentDirectory.StartsWith(drive, StringComparison.OrdinalIgnoreCase))
+        var driveLetter = drive.TrimEnd(':');
+        if (_driveCurrentDirs.ContainsKey(driveLetter))
         {
-            _currentDirectory = "/";
+            _driveCurrentDirs.Remove(driveLetter);
+            if (_currentDrive == driveLetter)
+            {
+                _currentDrive = "C";
+            }
         }
 
         return Result.Success();
@@ -717,5 +722,13 @@ public class FileSystemService
             drive += ":";
 
         return _substMounts.TryGetValue(drive, out var path) ? path : null;
+    }
+
+    public void SetCurrentDrive(string drive)
+    {
+        if (_driveCurrentDirs.ContainsKey(drive))
+        {
+            _currentDrive = drive;
+        }
     }
 }

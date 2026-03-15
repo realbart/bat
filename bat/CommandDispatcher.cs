@@ -236,7 +236,7 @@ public class CommandDispatcher
                 var drive = commandName.ToUpper();
                 if (drive == "C:")
                 {
-                    _fileSystem.ChangeDirectory("C:\\");
+                    _fileSystem.SetCurrentDrive("C");
                     _lastErrorLevel = 0;
                 }
                 else
@@ -244,7 +244,7 @@ public class CommandDispatcher
                     var substPath = _fileSystem.GetSubstPath(drive);
                     if (substPath != null)
                     {
-                        _fileSystem.ChangeDirectory(drive + "\\");
+                        _fileSystem.SetCurrentDrive(drive.TrimEnd(':'));
                         _lastErrorLevel = 0;
                     }
                     else
