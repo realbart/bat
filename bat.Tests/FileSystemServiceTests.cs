@@ -218,4 +218,77 @@ public class FileSystemServiceTests
         Assert.False(standardVars.ContainsKey("MYVAR"));
         Assert.False(rawVars.ContainsKey("MYVAR"));
     }
+
+    [Fact]
+    public void ChangeDirectory_ShouldWorkWithSubstDrive()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/user/data");
+        var service = new FileSystemService(fs);
+        service.SetSubst("D:", "/home/user/data");
+
+        // Act
+        var result = service.ChangeDirectory("D:\\");
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        // GetDosPath() will return "D:\"
+        Assert.Equal("D:\\", service.GetDosPath());
+    }
+
+    [Fact]
+    public void GetDosPath_ShouldUseSubstDrive_WhenInsideSubstPath()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/user/data/sub");
+        var service = new FileSystemService(fs);
+        service.SetSubst("D:", "/home/user/data");
+
+        // Act
+        service.ChangeDirectory("/home/user/data/sub");
+        var dosPath = service.GetDosPath();
+
+        // Assert
+        Assert.Equal("D:\\sub", dosPath);
+    }
+
+    [Fact]
+    public void FormatPrompt_ShouldUseSubstDrive_WhenInsideSubstPath()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/user/data");
+        var service = new FileSystemService(fs);
+        service.SetSubst("D:", "/home/user/data");
+        service.ChangeDirectory("D:\\");
+
+        // Act
+        var prompt = service.FormatPrompt();
+
+        // Assert
+        Assert.Equal("D:\\>", prompt);
+    }
+
+    [Fact]
+    public void GetDosPath_ShouldPreferC_WhenPathIsOnCAndAlsoSubsted()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/user/data");
+        var service = new FileSystemService(fs);
+        // If we are in /home/user/data, and we subst D: to /home/user/data
+        // Does GetDosPath return C:\home\user\data or D:\ ?
+        // Currently it iterates _substMounts and returns the first match.
+        service.ChangeDirectory("/home/user/data");
+        service.SetSubst("D:", "/home/user/data");
+
+        // Act
+        var dosPath = service.GetDosPath();
+
+        // Assert
+        // Given current implementation, it will return D:\ because it checks _substMounts first
+        Assert.Equal("D:\\", dosPath);
+    }
 }

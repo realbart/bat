@@ -212,12 +212,25 @@ public class CommandDispatcher
             {
                 await command.ExecuteAsync(args, _fileSystem, console, cancellationToken);
             }
-            else if (commandName.EndsWith(":") && commandName.Length == 2)
+            else if (commandName.EndsWith(":") && commandName.Length == 2 && char.IsLetter(commandName[0]))
             {
-                // Drive change? We ondersteunen alleen C:
-                if (!commandName.Equals("C:", StringComparison.OrdinalIgnoreCase))
+                // Drive change (e.g., D:)
+                var drive = commandName.ToUpper();
+                if (drive == "C:")
                 {
-                    console.MarkupLine($"[red]The system cannot find the drive specified.[/]");
+                    _fileSystem.ChangeDirectory("C:\\");
+                }
+                else
+                {
+                    var substPath = _fileSystem.GetSubstPath(drive);
+                    if (substPath != null)
+                    {
+                        _fileSystem.ChangeDirectory(drive + "\\");
+                    }
+                    else
+                    {
+                        console.MarkupLine($"[red]The system cannot find the drive specified.[/]");
+                    }
                 }
             }
             else

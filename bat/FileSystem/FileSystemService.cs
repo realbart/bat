@@ -451,6 +451,19 @@ public class FileSystemService
     public string GetDosPath(string? linuxPath = null)
     {
         linuxPath ??= _currentDirectory;
+
+        // Check if linuxPath is actually a substituted path
+        foreach (var kvp in _substMounts)
+        {
+            if (linuxPath.StartsWith(kvp.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                var relative = linuxPath.Substring(kvp.Value.Length).Replace('/', '\\');
+                if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
+                var result = kvp.Key + relative;
+                if (result.Length == 2) result += "\\";
+                return result;
+            }
+        }
         
         var dosPath = linuxPath.Replace('/', '\\');
         if (dosPath.StartsWith("\\"))
@@ -488,7 +501,15 @@ public class FileSystemService
                     case 'D': sb.Append(DateTime.Now.ToShortDateString()); break;
                     case 'T': sb.Append(DateTime.Now.ToShortTimeString()); break;
                     case 'V': sb.Append("0.1.0"); break;
-                    case 'N': sb.Append("C:"); break;
+                    case 'N': 
+                        {
+                            var currentDos = GetDosPath();
+                            if (currentDos.Length >= 2 && currentDos[1] == ':')
+                                sb.Append(currentDos.Substring(0, 2));
+                            else
+                                sb.Append("C:");
+                        }
+                        break;
                     case '_': sb.AppendLine(); break;
                     case '$': sb.Append('$'); break;
                     case 'S': sb.Append(' '); break;

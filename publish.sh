@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # Publish script for bat utilities as self-contained executables
 
 echo "Building bat..."
