@@ -194,29 +194,15 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
                             pattern = tabSearchPattern;
                         }
 
-                        if (fileSystem.FileSystem.Directory.Exists(searchDir))
+                        var resolved = fileSystem.ResolvePath(searchDir);
+                        if (fileSystem.FileSystem.Directory.Exists(resolved))
                         {
-                            tabMatches = fileSystem.FileSystem.Directory.GetFileSystemEntries(searchDir)
+                            tabMatches = fileSystem.FileSystem.Directory.GetFileSystemEntries(resolved)
                                 .Select(e => fileSystem.FileSystem.Path.GetFileName(e))
                                 .Where(name => !string.IsNullOrEmpty(name) && name.StartsWith(pattern, StringComparison.OrdinalIgnoreCase))
                                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                                 .Select(name => lastSlash >= 0 ? tabSearchPattern.Substring(0, lastSlash + 1) + name : name)
                                 .ToList();
-                        }
-                        else if (searchDir.EndsWith(":") || searchDir.EndsWith(":\\") || searchDir.EndsWith(":/"))
-                        {
-                             // Could be a drive letter that MockFileSystem handles differently
-                             // Try to resolve it and see if it exists then
-                             var resolved = fileSystem.ResolvePath(searchDir);
-                             if (fileSystem.FileSystem.Directory.Exists(resolved))
-                             {
-                                 tabMatches = fileSystem.FileSystem.Directory.GetFileSystemEntries(resolved)
-                                    .Select(e => fileSystem.FileSystem.Path.GetFileName(e))
-                                    .Where(name => !string.IsNullOrEmpty(name) && name.StartsWith(pattern, StringComparison.OrdinalIgnoreCase))
-                                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                                    .Select(name => lastSlash >= 0 ? tabSearchPattern.Substring(0, lastSlash + 1) + name : name)
-                                    .ToList();
-                             }
                         }
                     }
                     catch { }
