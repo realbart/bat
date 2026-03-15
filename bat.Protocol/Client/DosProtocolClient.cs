@@ -10,14 +10,12 @@ namespace Bat.Protocol.Client;
 /// </summary>
 public class DosProtocolClient
 {
-    private readonly TextReader _input;
-    private readonly TextWriter _output;
+    private readonly Stream _stream;
     private bool _handshakeCompleted;
 
-    public DosProtocolClient(TextReader input, TextWriter output)
+    public DosProtocolClient(Stream stream)
     {
-        _input = input;
-        _output = output;
+        _stream = stream;
     }
 
     /// <summary>
@@ -30,15 +28,21 @@ public class DosProtocolClient
         if (string.IsNullOrEmpty(handshake))
             return false;
 
-        // Send: \0 + handshake
-        await _output.WriteAsync('\0');
-        await _output.WriteAsync(handshake);
-        await _output.FlushAsync();
+        // Send: handshake
+        var bytes = Encoding.ASCII.GetBytes(handshake);
+        await _stream.WriteAsync(bytes, 0, bytes.Length);
+        await _stream.FlushAsync();
 
         // Wait for response (handshake echo)
-        var response = new char[handshake.Length];
-        var read = await _input.ReadAsync(response, 0, handshake.Length);
-        var responseStr = new string(response, 0, read);
+        var response = new byte[handshake.Length];
+        var totalRead = 0;
+        while (totalRead < response.Length)
+        {
+            var read = await _stream.ReadAsync(response, totalRead, response.Length - totalRead);
+            if (read == 0) break;
+            totalRead += read;
+        }
+        var responseStr = Encoding.ASCII.GetString(response, 0, totalRead);
 
         _handshakeCompleted = responseStr == handshake;
         return _handshakeCompleted;
@@ -53,9 +57,9 @@ public class DosProtocolClient
             throw new InvalidOperationException("Handshake must be completed before sending commands");
 
         var json = JsonSerializer.Serialize(command, DosCommandContext.Default.DosCommand);
-        await _output.WriteAsync('\0');
-        await _output.WriteAsync(json);
-        await _output.FlushAsync();
+        var bytes = Encoding.UTF8.GetBytes(json);
+        await _stream.WriteAsync(bytes, 0, bytes.Length);
+        await _stream.FlushAsync();
     }
 
     /// <summary>
@@ -64,11 +68,6 @@ public class DosProtocolClient
     /// <returns>The response, or null if stream ended</returns>
     public async Task<DosResponse?> ReadResponseAsync()
     {
-        // Read until \0
-        var ch = _input.Read();
-        if (ch == -1) return null; // EOF
-        if (ch != 0) return null; // Invalid protocol
-
         // Read JSON until closing brace
         var json = await ReadJsonAsync();
         if (string.IsNullOrEmpty(json)) return null;
@@ -104,13 +103,14 @@ public class DosProtocolClient
         var sb = new StringBuilder();
         var bracketCount = 0;
         var started = false;
+        var buffer = new byte[1];
 
         while (true)
         {
-            var ch = _input.Read();
-            if (ch == -1) break; // EOF
+            var read = await _stream.ReadAsync(buffer, 0, 1);
+            if (read == 0) break; // EOF
 
-            var c = (char)ch;
+            var c = (char)buffer[0];
             sb.Append(c);
 
             if (c == '{')

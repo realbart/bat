@@ -233,12 +233,33 @@ public class CommandDispatcher
                     }
                 }
             }
+            else if (commandName.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) || 
+                     commandName.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+            {
+                var fullPath = _fileSystem.ResolvePath(commandName);
+                if (_fileSystem.FileSystem.File.Exists(fullPath))
+                {
+                    await ExecuteBatchFileAsync(fullPath, args, console, cancellationToken);
+                }
+                else
+                {
+                    console.MarkupLine($"[red]The system cannot find the file specified: {commandName}[/]");
+                }
+            }
             else
             {
                 var exePath = _fileSystem.FindExecutable(commandName);
                 if (exePath != null)
                 {
-                    await TryExecuteExternalApplicationAsync(exePath, args, console, cancellationToken);
+                    if (exePath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) || 
+                        exePath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await ExecuteBatchFileAsync(exePath, args, console, cancellationToken);
+                    }
+                    else
+                    {
+                        await TryExecuteExternalApplicationAsync(exePath, args, console, cancellationToken);
+                    }
                 }
                 else
                 {
@@ -252,9 +273,49 @@ public class CommandDispatcher
         }
     }
 
+    private async Task ExecuteBatchFileAsync(string path, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
+    {
+        var lines = await _fileSystem.FileSystem.File.ReadAllLinesAsync(path, cancellationToken);
+        
+        // Simpele parameter afhandeling (%1, %2, etc.)
+        // In een volledige implementatie zouden we dit in ExpandVariables doen,
+        // maar dat heeft toegang nodig tot de batch context.
+        // Voor nu doen we een simpele replace.
+        
+        foreach (var line in lines)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            
+            var trimmedLine = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedLine)) continue;
+            if (trimmedLine.StartsWith("::") || trimmedLine.StartsWith("REM", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // Skip polyglot shebang
+            if (trimmedLine.Contains("#!")) continue;
+
+            // Parameter substitutie (%0-%9)
+            var processedLine = trimmedLine;
+            processedLine = processedLine.Replace("%0", path);
+            for (int i = 0; i < args.Length && i < 9; i++)
+            {
+                processedLine = processedLine.Replace($"%{i + 1}", args[i]);
+            }
+            // Lege parameters verwijderen
+            for (int i = args.Length; i < 9; i++)
+            {
+                processedLine = processedLine.Replace($"%{i + 1}", "");
+            }
+
+            // Voer regel uit (zonder recursie naar deze functie via DispatchAsync)
+            // Maar we gebruiken DispatchAsync om interne commando's en redirecties te ondersteunen.
+            await DispatchAsync(processedLine, cancellationToken, console);
+        }
+    }
+
     private async Task TryExecuteExternalApplicationAsync(string exePath, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
     {
         var handshake = Guid.NewGuid().ToString("N").Substring(0, 8);
+        var pipeName = "bat-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         
         // Handshake whitelist: alleen proberen voor programma's in de bat directory
         var batDir = _fileSystem.GetBatDirectory();
@@ -265,11 +326,11 @@ public class CommandDispatcher
         {
             FileName = exePath,
             Arguments = string.Join(" ", args.Select(a => a.Contains(" ") ? $"\"{a}\"" : a)),
-            RedirectStandardInput = shouldTryHandshake,
-            RedirectStandardOutput = shouldTryHandshake,
-            RedirectStandardError = shouldTryHandshake,
+            RedirectStandardInput = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
             UseShellExecute = false, // Altijd false om WorkingDirectory en Environment te kunnen zetten
-            CreateNoWindow = shouldTryHandshake,
+            CreateNoWindow = false,
             WorkingDirectory = _fileSystem.GetLinuxPath(_fileSystem.CurrentDirectory)
         };
 
@@ -286,6 +347,7 @@ public class CommandDispatcher
         if (shouldTryHandshake)
         {
             startInfo.EnvironmentVariables["DOS_HANDSHAKE"] = handshake;
+            startInfo.EnvironmentVariables["BAT_PIPE"] = pipeName;
         }
 
         // Voeg andere DOS omgevingsvariabelen toe
@@ -315,102 +377,50 @@ public class CommandDispatcher
 
         try
         {
-            using var process = System.Diagnostics.Process.Start(startInfo);
-            if (process == null) return;
-
-            if (!shouldTryHandshake)
+            if (shouldTryHandshake)
             {
-                await process.WaitForExitAsync(cancellationToken);
-                return;
-            }
+                using var pipeServer = new System.IO.Pipes.NamedPipeServerStream(pipeName, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+                
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process == null) return;
 
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var protocolServer = new DosProtocolServer();
+                var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var protocolServer = new DosProtocolServer();
 
-            // First wait for handshake
-            var handshakeResult = new HandshakeResult { Success = false };
-            try
-            {
-                handshakeResult = await protocolServer.WaitForHandshakeAsync(
-                    process.StandardOutput.BaseStream,
-                    process.StandardInput.BaseStream,
-                    handshake,
-                    cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // Handshake timed out or was cancelled by user
-            }
+                // Wait for connection or process exit
+                var connectTask = pipeServer.WaitForConnectionAsync(cts.Token);
+                var processExitTask = process.WaitForExitAsync(cts.Token);
 
-            if (handshakeResult.Success)
-            {
-                // Then process stream
-                var stdoutTask = protocolServer.ProcessStreamAsync(
-                    process.StandardOutput.BaseStream,
-                    process.StandardInput.BaseStream,
-                    async command => await ProcessJsonCommandAsync(command, console, process.StandardInput.BaseStream, cts.Token),
-                    text => console.Write(text),
-                    cts.Token);
+                var completedTask = await Task.WhenAny(connectTask, processExitTask);
+                if (completedTask == connectTask)
+                {
+                    var handshakeResult = await protocolServer.WaitForHandshakeAsync(pipeServer, handshake, cts.Token);
+                    if (handshakeResult.Success)
+                    {
+                        var protocolTask = protocolServer.ProcessStreamAsync(
+                            pipeServer,
+                            async command => await ProcessJsonCommandAsync(command, console, pipeServer, cts.Token),
+                            cts.Token);
 
-                var stderrTask = process.StandardError.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
-
-                await process.WaitForExitAsync(cancellationToken);
-                cts.Cancel();
-
-                try { await stdoutTask; } catch (OperationCanceledException) {}
-                try { await stderrTask; } catch (OperationCanceledException) {}
+                        await process.WaitForExitAsync(cancellationToken);
+                        cts.Cancel();
+                        try { await protocolTask; } catch (OperationCanceledException) {}
+                    }
+                    else
+                    {
+                        await process.WaitForExitAsync(cancellationToken);
+                    }
+                }
+                else
+                {
+                    // Process exited before connecting
+                }
             }
             else
             {
-                // Handshake failed - treat as transparent program
-                
-                // Eerst de geconsumeerde bytes uitsturen
-                if (handshakeResult.ConsumedBytes != null && handshakeResult.ConsumedBytes.Length > 0)
-                {
-                    console.Write(System.Text.Encoding.Default.GetString(handshakeResult.ConsumedBytes));
-                }
-
-                var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
-                var stderrTask = process.StandardError.BaseStream.CopyToAsync(new ConsoleStreamWrapper(console), 8192, cts.Token);
-                
-                var stdinTask = Task.Run(async () =>
-                {
-                    var buffer = new byte[1024];
-                    while (!cts.Token.IsCancellationRequested && !process.HasExited)
-                    {
-                        if (Console.KeyAvailable)
-                        {
-                            var key = Console.ReadKey(true);
-                            if (key.Key == ConsoleKey.Enter)
-                            {
-                                await process.StandardInput.WriteAsync("\n");
-                            }
-                            else if (key.Key == ConsoleKey.Backspace)
-                            {
-                                // Veel shells op Linux verwachten een andere backspace code of specifieke handling 
-                                // voor "line discipline". Omdat we hier geen TTY hebben, is dit lastig.
-                                // We sturen nu expliciet \b en kijken of dat beter gaat.
-                                await process.StandardInput.WriteAsync("\b");
-                            }
-                            else if (key.KeyChar != '\0')
-                            {
-                                await process.StandardInput.WriteAsync(key.KeyChar.ToString());
-                            }
-                            await process.StandardInput.FlushAsync();
-                        }
-                        else
-                        {
-                            await Task.Delay(10, cts.Token);
-                        }
-                    }
-                }, cts.Token);
-
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process == null) return;
                 await process.WaitForExitAsync(cancellationToken);
-                cts.Cancel();
-                
-                try { await stdoutTask; } catch (OperationCanceledException) {}
-                try { await stderrTask; } catch (OperationCanceledException) {}
-                try { await stdinTask; } catch (OperationCanceledException) {}
             }
         }
         catch (Exception ex)

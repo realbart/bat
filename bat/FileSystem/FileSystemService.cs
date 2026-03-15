@@ -597,9 +597,25 @@ public class FileSystemService
             using var stream = _fileSystem.File.OpenRead(path);
             using var reader = new StreamReader(stream);
             var firstLine = reader.ReadLine();
-            if (firstLine != null && firstLine.StartsWith("#!"))
+            if (firstLine != null)
             {
-                return firstLine.Substring(2).Trim();
+                var trimmed = firstLine.Trim();
+                // Direct shebang: #!
+                if (trimmed.StartsWith("#!"))
+                {
+                    return trimmed.Substring(2).Trim();
+                }
+                // Polyglot shebang: ::#! or ::;#! or REM#!
+                if (trimmed.StartsWith("::#!") || trimmed.StartsWith("REM#!", StringComparison.OrdinalIgnoreCase))
+                {
+                    var index = trimmed.IndexOf("#!");
+                    return trimmed.Substring(index + 2).Trim();
+                }
+                if (trimmed.StartsWith("::;#!") || trimmed.StartsWith("REM ;#!", StringComparison.OrdinalIgnoreCase))
+                {
+                    var index = trimmed.IndexOf("#!");
+                    return trimmed.Substring(index + 2).Trim();
+                }
             }
         }
         catch { }

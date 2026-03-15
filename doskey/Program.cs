@@ -1,11 +1,16 @@
+using System.IO.Pipes;
 using Bat.Protocol.Client;
 using Bat.Protocol.Models;
 
 var handshake = Environment.GetEnvironmentVariable("DOS_HANDSHAKE");
+var pipeName = Environment.GetEnvironmentVariable("BAT_PIPE");
 
-if (!string.IsNullOrEmpty(handshake))
+if (!string.IsNullOrEmpty(handshake) && !string.IsNullOrEmpty(pipeName))
 {
-    var client = new DosProtocolClient(Console.In, Console.Out);
+    using var pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+    await pipeClient.ConnectAsync(1000);
+
+    var client = new DosProtocolClient(pipeClient);
 
     // Perform handshake
     if (await client.PerformHandshakeAsync(handshake))
@@ -220,7 +225,7 @@ if (!string.IsNullOrEmpty(handshake))
 }
 else
 {
-    Console.WriteLine("DOS_HANDSHAKE not found. This application should be run from bat.");
+    Console.WriteLine("DOS_HANDSHAKE or BAT_PIPE not found. This application should be run from bat.");
 }
 
 void ShowHelp()

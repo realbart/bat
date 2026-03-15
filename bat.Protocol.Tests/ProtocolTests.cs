@@ -13,17 +13,19 @@ public class ProtocolTests
     {
         // Arrange
         var handshake = "test1234";
-        var inputStream = new MemoryStream();
-        var outputStream = new MemoryStream();
-        var inputReader = new StreamReader(inputStream);
-        var outputWriter = new StreamWriter(outputStream) { AutoFlush = true };
-
-        var client = new DosProtocolClient(inputReader, outputWriter);
+        var clientStream = new MemoryStream();
+        var serverStream = new MemoryStream();
+        
+        // We simuleren de pipe door twee streams of een custom stream te gebruiken
+        // Maar voor de client test is het makkelijker om te weten wat hij schrijft
+        // en wat hij leest.
+        
+        var client = new DosProtocolClient(new BidirectionalMemoryStream(serverStream, clientStream));
 
         // Simulate server response: echo handshake back
-        var serverResponse = Encoding.ASCII.GetBytes(handshake);
-        await inputStream.WriteAsync(serverResponse, 0, serverResponse.Length);
-        inputStream.Position = 0;
+        var handshakeBytes = Encoding.ASCII.GetBytes(handshake);
+        serverStream.Write(handshakeBytes, 0, handshakeBytes.Length);
+        serverStream.Position = 0;
 
         // Act
         var result = await client.PerformHandshakeAsync(handshake);
@@ -31,11 +33,10 @@ public class ProtocolTests
         // Assert
         Assert.True(result);
 
-        // Verify client sent: \0 + handshake
-        outputStream.Position = 0;
-        var sentData = outputStream.ToArray();
-        Assert.Equal(0, sentData[0]); // Null byte
-        var sentHandshake = Encoding.ASCII.GetString(sentData, 1, handshake.Length);
+        // Verify client sent: handshake
+        clientStream.Position = 0;
+        var sentData = clientStream.ToArray();
+        var sentHandshake = Encoding.ASCII.GetString(sentData, 0, handshake.Length);
         Assert.Equal(handshake, sentHandshake);
     }
 
@@ -44,46 +45,43 @@ public class ProtocolTests
     {
         // Arrange
         var handshake = "abcd5678";
-        var clientOutput = new MemoryStream();
-        var serverInput = new MemoryStream();
+        var clientStream = new MemoryStream();
+        var serverStream = new MemoryStream();
 
-        // Simulate client sending: \0 + handshake
-        clientOutput.WriteByte(0);
+        // Simulate client sending: handshake
         var handshakeBytes = Encoding.ASCII.GetBytes(handshake);
-        await clientOutput.WriteAsync(handshakeBytes, 0, handshakeBytes.Length);
-        clientOutput.Position = 0;
+        clientStream.Write(handshakeBytes, 0, handshakeBytes.Length);
+        clientStream.Position = 0;
 
         var server = new DosProtocolServer();
 
         // Act
-        var result = await server.WaitForHandshakeAsync(clientOutput, serverInput, handshake);
+        var result = await server.WaitForHandshakeAsync(new BidirectionalMemoryStream(clientStream, serverStream), handshake);
 
         // Assert
         Assert.True(result.Success);
 
         // Verify server sent handshake back
-        serverInput.Position = 0;
+        serverStream.Position = 0;
         var response = new byte[handshake.Length];
-        await serverInput.ReadAsync(response, 0, response.Length);
+        await serverStream.ReadAsync(response, 0, response.Length);
         var responseStr = Encoding.ASCII.GetString(response);
         Assert.Equal(handshake, responseStr);
     }
 
     [Fact]
-    public async Task Server_ShouldFailHandshake_OnInvalidStart()
+    public async Task Server_ShouldFailHandshake_OnInvalidContent()
     {
         var server = new DosProtocolServer();
         var handshake = "abc12345";
         
-        using var stdout = new MemoryStream();
-        using var stdin = new MemoryStream();
-        stdout.WriteByte((byte)'A'); // Not \0
-        stdout.Position = 0;
+        using var stream = new MemoryStream();
+        var bytes = Encoding.ASCII.GetBytes("WRONG_HS");
+        stream.Write(bytes, 0, bytes.Length);
+        stream.Position = 0;
         
-        var result = await server.WaitForHandshakeAsync(stdout, stdin, handshake);
+        var result = await server.WaitForHandshakeAsync(stream, handshake);
         Assert.False(result.Success);
-        Assert.Single(result.ConsumedBytes);
-        Assert.Equal((byte)'A', result.ConsumedBytes[0]);
     }
 
     [Fact]
@@ -92,12 +90,10 @@ public class ProtocolTests
         var server = new DosProtocolServer();
         var handshake = "abc12345";
         
-        using var stdout = new MemoryStream(); // Empty stream will timeout
-        using var stdin = new MemoryStream();
+        using var stream = new MemoryStream(); // Empty stream will timeout
         
-        var result = await server.WaitForHandshakeAsync(stdout, stdin, handshake);
+        var result = await server.WaitForHandshakeAsync(stream, handshake);
         Assert.False(result.Success);
-        Assert.Empty(result.ConsumedBytes);
     }
 
     [Fact]
@@ -105,17 +101,15 @@ public class ProtocolTests
     {
         // Arrange
         var handshake = "test1234";
-        var inputStream = new MemoryStream();
-        var outputStream = new MemoryStream();
+        var clientStream = new MemoryStream();
+        var serverStream = new MemoryStream();
 
         // Echo handshake for initial handshake
-        var serverResponse = Encoding.ASCII.GetBytes(handshake);
-        await inputStream.WriteAsync(serverResponse, 0, serverResponse.Length);
-        inputStream.Position = 0;
+        var handshakeBytes = Encoding.ASCII.GetBytes(handshake);
+        serverStream.Write(handshakeBytes, 0, handshakeBytes.Length);
+        serverStream.Position = 0;
 
-        var inputReader = new StreamReader(inputStream);
-        var outputWriter = new StreamWriter(outputStream) { AutoFlush = true };
-        var client = new DosProtocolClient(inputReader, outputWriter);
+        var client = new DosProtocolClient(new BidirectionalMemoryStream(serverStream, clientStream));
 
         await client.PerformHandshakeAsync(handshake);
 
@@ -124,26 +118,48 @@ public class ProtocolTests
         await client.SendCommandAsync(command);
 
         // Assert
-        outputStream.Position = handshake.Length + 1; // Skip handshake output
-        var commandData = outputStream.ToArray()[(handshake.Length + 1)..];
+        clientStream.Position = handshake.Length; // Skip handshake
+        var commandData = clientStream.ToArray()[handshake.Length..];
         
-        Assert.Equal(0, commandData[0]); // Null byte
-        var jsonStr = Encoding.UTF8.GetString(commandData, 1, commandData.Length - 1);
+        var jsonStr = Encoding.UTF8.GetString(commandData);
         Assert.Contains("\"command\":\"reset_buffer\"", jsonStr);
+    }
+
+    private class BidirectionalMemoryStream : Stream
+    {
+        private readonly Stream _readStream;
+        private readonly Stream _writeStream;
+
+        public BidirectionalMemoryStream(Stream readStream, Stream writeStream)
+        {
+            _readStream = readStream;
+            _writeStream = writeStream;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => _writeStream.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => _readStream.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => _writeStream.Write(buffer, offset, count);
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _readStream.ReadAsync(buffer, offset, count, cancellationToken);
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _writeStream.WriteAsync(buffer, offset, count, cancellationToken);
     }
 
     [Fact]
     public async Task Server_ShouldProcessJsonCommands()
     {
         // Arrange
-        var clientOutput = new MemoryStream();
-        var serverInput = new MemoryStream();
+        var stream = new MemoryStream();
 
-        // Simulate client sending JSON command: \0{"command":"test"}
-        clientOutput.WriteByte(0);
+        // Simulate client sending JSON command: {"command":"test"}
         var jsonBytes = Encoding.UTF8.GetBytes("{\"command\":\"test\"}");
-        await clientOutput.WriteAsync(jsonBytes, 0, jsonBytes.Length);
-        clientOutput.Position = 0;
+        await stream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+        stream.Position = 0;
 
         var server = new DosProtocolServer();
         DosCommand? receivedCommand = null;
@@ -152,14 +168,12 @@ public class ProtocolTests
         var processTask = Task.Run(async () =>
         {
             await server.ProcessStreamAsync(
-                clientOutput,
-                serverInput,
+                stream,
                 async cmd =>
                 {
                     receivedCommand = cmd;
                     await Task.CompletedTask;
                 },
-                text => { },
                 CancellationToken.None);
         });
 
@@ -172,39 +186,41 @@ public class ProtocolTests
     }
 
     [Fact]
-    public async Task Server_ShouldHandleRegularOutput()
+    public async Task Server_ShouldHandleMultipleJsonCommands()
     {
         // Arrange
-        var clientOutput = new MemoryStream();
-        var serverInput = new MemoryStream();
+        var stream = new MemoryStream();
 
-        // Simulate client sending regular text (no null byte prefix)
-        var textBytes = Encoding.UTF8.GetBytes("Hello World");
-        await clientOutput.WriteAsync(textBytes, 0, textBytes.Length);
-        clientOutput.Position = 0;
+        // Simulate client sending two JSON commands
+        var jsonBytes1 = Encoding.UTF8.GetBytes("{\"command\":\"test1\"}");
+        var jsonBytes2 = Encoding.UTF8.GetBytes("{\"command\":\"test2\"}");
+        await stream.WriteAsync(jsonBytes1, 0, jsonBytes1.Length);
+        await stream.WriteAsync(jsonBytes2, 0, jsonBytes2.Length);
+        stream.Position = 0;
 
         var server = new DosProtocolServer();
-        var receivedOutput = new StringBuilder();
+        var receivedCommands = new List<DosCommand>();
 
         // Act
-        var cts = new CancellationTokenSource();
         var processTask = Task.Run(async () =>
         {
             await server.ProcessStreamAsync(
-                clientOutput,
-                serverInput,
-                async cmd => await Task.CompletedTask,
-                text => receivedOutput.Append(text),
-                cts.Token);
+                stream,
+                async cmd =>
+                {
+                    receivedCommands.Add(cmd);
+                    await Task.CompletedTask;
+                },
+                CancellationToken.None);
         });
 
+        // Give it time to process
         await Task.Delay(100);
-        cts.Cancel();
-
-        try { await processTask; } catch { }
-
+        
         // Assert
-        Assert.Contains("Hello World", receivedOutput.ToString());
+        Assert.Equal(2, receivedCommands.Count);
+        Assert.Equal("test1", receivedCommands[0].Command);
+        Assert.Equal("test2", receivedCommands[1].Command);
     }
 
     [Fact]

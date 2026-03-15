@@ -217,15 +217,19 @@ string? TryCompletePathAsync(string input, int cursorPos)
         if (entries.Count == 1)
         {
             // Exact match - return volledige naam
+            var matchedName = entries[0];
             var fullPath = lastSlash >= 0
-                ? partialPath.Substring(0, lastSlash + 1) + entries[0]
-                : entries[0];
+                ? partialPath.Substring(0, lastSlash + 1) + matchedName
+                : matchedName;
 
-            // Voeg trailing slash toe voor directories
+            // Voeg trailing backslash toe voor directories
             var resolvedFullPath = fileSystem.ResolvePath(fullPath);
             if (fileSystem.FileSystem.Directory.Exists(resolvedFullPath))
             {
-                fullPath += fileSystem.FileSystem.Path.DirectorySeparatorChar;
+                if (!fullPath.EndsWith("\\") && !fullPath.EndsWith("/"))
+                {
+                    fullPath += "\\";
+                }
             }
 
             return fullPath;
