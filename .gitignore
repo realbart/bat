@@ -1,0 +1,46 @@
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+publish/
+# ... eventuele andere build outputs ...
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docuser
+*.userprefs
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+*.csproj.iml
+*.DotSettings.user
+
+# NuGet
+project.lock.json
+project.assets.json
+*.nuget.props
+*.nuget.targets
+
+# MSTest attributes
+TestResults/
+
+# Visual Studio cache/options directory
+.vs/
+
+# Roslyn cache directory
+.roslyn/
+
+# Others
+*.tmp
+*.log

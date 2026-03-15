@@ -1,0 +1,27 @@
+# Example Doskey Macros File
+# Lines starting with # or ; are comments
+# Use [exename] to specify macros for specific executables
+
+# General macros for dosux
+ll=dir /w
+la=dir /a
+cls=cls
+
+# Macro with parameters - $1, $2, etc.
+greet=echo Hello $1!
+
+# Macro with all parameters - $*
+search=echo Searching for: $*
+
+# Multi-command macro using $T separator
+showinfo=ver $T date $T time
+
+# Macro using special codes
+pipe=echo Input $L $1 $B more $G output.txt
+
+# Macros for a specific executable (example)
+[notepad]
+edit=notepad $1
+
+[cmd]
+np=notepad $*
