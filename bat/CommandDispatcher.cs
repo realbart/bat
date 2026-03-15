@@ -84,27 +84,44 @@ public class CommandDispatcher
         }
     }
 
+    private int _lastErrorLevel = 0;
+
     public async Task DispatchAsync(string input, CancellationToken cancellationToken = default, IAnsiConsole? consoleOverride = null)
     {
         if (string.IsNullOrWhiteSpace(input)) return;
 
-        AddToHistory(input);
-
         var baseConsole = consoleOverride ?? AnsiConsole.Console;
 
+        // Check for @ prefix to suppress echo
+        bool suppressEcho = input.StartsWith("@");
+        string workingInput = suppressEcho ? input.Substring(1).TrimStart() : input;
+
+        if (string.IsNullOrWhiteSpace(workingInput)) return;
+
         // DOS 'slimmigheid': cd.. en cd\ direct herkennen
-        if (input.StartsWith("cd..", StringComparison.OrdinalIgnoreCase))
+        if (workingInput.StartsWith("cd..", StringComparison.OrdinalIgnoreCase))
         {
-            await _commands["cd"].ExecuteAsync(new[] { ".." }, _fileSystem, baseConsole, cancellationToken);
-            return;
+            workingInput = "cd ..";
         }
-        if (input.StartsWith("cd\\", StringComparison.OrdinalIgnoreCase))
+        else if (workingInput.StartsWith("cd\\", StringComparison.OrdinalIgnoreCase))
         {
-            await _commands["cd"].ExecuteAsync(new[] { "\\" }, _fileSystem, baseConsole, cancellationToken);
-            return;
+            workingInput = "cd \\";
+        }
+        else if (workingInput.StartsWith("echo.", StringComparison.OrdinalIgnoreCase))
+        {
+            workingInput = "echo " + (workingInput.Length > 5 ? workingInput.Substring(5) : "");
         }
 
-        var parts = ParseInput(input);
+        // Echo command if not suppressed and echo is on
+        if (!suppressEcho && _fileSystem.EchoOn && consoleOverride != null)
+        {
+            // Only echo if we are in a batch file (indicated by consoleOverride being passed from ExecuteBatchFileAsync)
+            baseConsole.WriteLine(workingInput);
+        }
+
+        AddToHistory(workingInput);
+
+        var parts = ParseInput(workingInput);
         if (parts.Length == 0) return;
 
         // Variabele expansie
@@ -211,6 +228,7 @@ public class CommandDispatcher
             if (_commands.TryGetValue(commandName, out var command))
             {
                 await command.ExecuteAsync(args, _fileSystem, console, cancellationToken);
+                _lastErrorLevel = 0; // Internal commands currently don't return exit code, assume 0
             }
             else if (commandName.EndsWith(":") && commandName.Length == 2 && char.IsLetter(commandName[0]))
             {
@@ -219,6 +237,7 @@ public class CommandDispatcher
                 if (drive == "C:")
                 {
                     _fileSystem.ChangeDirectory("C:\\");
+                    _lastErrorLevel = 0;
                 }
                 else
                 {
@@ -226,10 +245,12 @@ public class CommandDispatcher
                     if (substPath != null)
                     {
                         _fileSystem.ChangeDirectory(drive + "\\");
+                        _lastErrorLevel = 0;
                     }
                     else
                     {
                         console.MarkupLine($"[red]The system cannot find the drive specified.[/]");
+                        _lastErrorLevel = 1;
                     }
                 }
             }
@@ -244,6 +265,7 @@ public class CommandDispatcher
                 else
                 {
                     console.MarkupLine($"[red]The system cannot find the file specified: {commandName}[/]");
+                    _lastErrorLevel = 1;
                 }
             }
             else
@@ -264,6 +286,7 @@ public class CommandDispatcher
                 else
                 {
                     console.MarkupLine($"'{commandName}' is not recognized as an internal or external command, operable program or batch file.");
+                    _lastErrorLevel = 9009; // Standard CMD error for command not found
                 }
             }
         }
@@ -277,18 +300,34 @@ public class CommandDispatcher
     {
         var lines = await _fileSystem.FileSystem.File.ReadAllLinesAsync(path, cancellationToken);
         
-        // Simpele parameter afhandeling (%1, %2, etc.)
-        // In een volledige implementatie zouden we dit in ExpandVariables doen,
-        // maar dat heeft toegang nodig tot de batch context.
-        // Voor nu doen we een simpele replace.
-        
-        foreach (var line in lines)
+        // Pre-parse labels
+        var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var trimmedLine = lines[i].Trim();
+            if (trimmedLine.StartsWith(":") && !trimmedLine.StartsWith("::"))
+            {
+                var labelName = trimmedLine.Substring(1).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                if (labelName != null)
+                {
+                    labels[labelName] = i;
+                }
+            }
+        }
+
+        int currentLineIndex = 0;
+        while (currentLineIndex < lines.Length)
         {
             if (cancellationToken.IsCancellationRequested) break;
             
+            var line = lines[currentLineIndex];
+            currentLineIndex++;
+
             var trimmedLine = line.Trim();
             if (string.IsNullOrWhiteSpace(trimmedLine)) continue;
-            if (trimmedLine.StartsWith("::") || trimmedLine.StartsWith("REM", StringComparison.OrdinalIgnoreCase)) continue;
+            
+            // Labels and comments
+            if (trimmedLine.StartsWith(":") || trimmedLine.StartsWith("REM", StringComparison.OrdinalIgnoreCase)) continue;
 
             // Skip polyglot shebang
             if (trimmedLine.Contains("#!")) continue;
@@ -306,10 +345,164 @@ public class CommandDispatcher
                 processedLine = processedLine.Replace($"%{i + 1}", "");
             }
 
+            // GOTO handling
+            if (processedLine.StartsWith("GOTO", StringComparison.OrdinalIgnoreCase))
+            {
+                var gotoParts = processedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (gotoParts.Length > 1)
+                {
+                    var targetLabel = gotoParts[1];
+                    if (targetLabel.StartsWith(":")) targetLabel = targetLabel.Substring(1);
+                    
+                    if (targetLabel.Equals("EOF", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+
+                    if (labels.TryGetValue(targetLabel, out var labelIndex))
+                    {
+                        currentLineIndex = labelIndex + 1;
+                        continue;
+                    }
+                    else
+                    {
+                        console.MarkupLine($"[red]Label not found: {targetLabel}[/]");
+                        continue;
+                    }
+                }
+            }
+
+            // IF handling
+            if (processedLine.StartsWith("IF ", StringComparison.OrdinalIgnoreCase) || processedLine.StartsWith("@IF ", StringComparison.OrdinalIgnoreCase))
+            {
+                bool suppressIfEcho = processedLine.StartsWith("@");
+                string workingIfLine = suppressIfEcho ? processedLine.Substring(1).TrimStart() : processedLine;
+
+                var (conditionMet, commandToExecute, nextIndex) = ParseIfCondition(workingIfLine, currentLineIndex, lines);
+                currentLineIndex = nextIndex;
+
+                if (_fileSystem.EchoOn && !suppressIfEcho)
+                {
+                    console.WriteLine(workingIfLine);
+                }
+
+                if (conditionMet && !string.IsNullOrWhiteSpace(commandToExecute))
+                {
+                    await DispatchAsync(commandToExecute, cancellationToken, console);
+                }
+                continue;
+            }
+
             // Voer regel uit (zonder recursie naar deze functie via DispatchAsync)
             // Maar we gebruiken DispatchAsync om interne commando's en redirecties te ondersteunen.
             await DispatchAsync(processedLine, cancellationToken, console);
         }
+    }
+
+    private (bool conditionMet, string command, int nextIndex) ParseIfCondition(string line, int currentLineIndex, string[] allLines)
+    {
+        var parts = ParseInput(line);
+        if (parts.Length < 2 || !parts[0].Equals("IF", StringComparison.OrdinalIgnoreCase))
+            return (false, "", currentLineIndex);
+
+        bool isNot = false;
+        int index = 1;
+        if (parts[index].Equals("NOT", StringComparison.OrdinalIgnoreCase))
+        {
+            isNot = true;
+            index++;
+        }
+
+        bool conditionMet = false;
+        if (index >= parts.Length) return (false, "", currentLineIndex);
+
+        if (parts[index].Equals("ERRORLEVEL", StringComparison.OrdinalIgnoreCase))
+        {
+            index++;
+            if (index < parts.Length && int.TryParse(parts[index], out int level))
+            {
+                conditionMet = _lastErrorLevel >= level;
+                index++;
+            }
+        }
+        else if (parts[index].Equals("DEFINED", StringComparison.OrdinalIgnoreCase))
+        {
+            index++;
+            if (index < parts.Length)
+            {
+                var varName = parts[index];
+                conditionMet = !string.IsNullOrEmpty(_fileSystem.GetEnvironmentVariable(varName));
+                index++;
+            }
+        }
+        else if (parts[index].Equals("EXIST", StringComparison.OrdinalIgnoreCase))
+        {
+            index++;
+            if (index < parts.Length)
+            {
+                var path = _fileSystem.ResolvePath(parts[index]);
+                conditionMet = _fileSystem.FileSystem.File.Exists(path) || _fileSystem.FileSystem.Directory.Exists(path);
+                index++;
+            }
+        }
+        else if (parts[index].Contains("=="))
+        {
+            var comparison = parts[index].Split(new[] { "==" }, StringSplitOptions.None);
+            if (comparison.Length == 2)
+            {
+                conditionMet = comparison[0].Equals(comparison[1], StringComparison.OrdinalIgnoreCase);
+                index++;
+            }
+        }
+        else if (index + 2 < parts.Length && parts[index+1] == "==")
+        {
+             conditionMet = parts[index].Equals(parts[index+2], StringComparison.OrdinalIgnoreCase);
+             index += 3;
+        }
+
+        if (isNot) conditionMet = !conditionMet;
+
+        // The rest of the parts are the command to execute
+        string commandToExecute = string.Join(" ", parts.Skip(index));
+
+        // Handle ELSE
+        // This is tricky because ELSE must be on the same line or we need to look ahead if it's a block.
+        // For now, let's look at the next lines if they start with ELSE.
+        
+        int nextIndex = currentLineIndex;
+        if (!conditionMet)
+        {
+            // If condition not met, check if next line is ELSE
+            if (nextIndex < allLines.Length)
+            {
+                var nextLine = allLines[nextIndex].Trim();
+                if (nextLine.StartsWith("ELSE ", StringComparison.OrdinalIgnoreCase))
+                {
+                    commandToExecute = nextLine.Substring(5).Trim();
+                    nextIndex++;
+                    conditionMet = true; // We want to execute the ELSE branch
+                }
+                else if (nextLine.Equals("ELSE", StringComparison.OrdinalIgnoreCase))
+                {
+                    // ELSE on its own line followed by command on next line (not standard but possible in some variants)
+                    // Standard CMD requires ELSE on same line as IF's closing paren if using blocks.
+                }
+            }
+        }
+        else
+        {
+            // If condition MET, we need to SKIP the ELSE branch if it exists
+            if (nextIndex < allLines.Length)
+            {
+                var nextLine = allLines[nextIndex].Trim();
+                if (nextLine.StartsWith("ELSE ", StringComparison.OrdinalIgnoreCase) || nextLine.Equals("ELSE", StringComparison.OrdinalIgnoreCase))
+                {
+                    nextIndex++;
+                }
+            }
+        }
+
+        return (conditionMet, commandToExecute, nextIndex);
     }
 
     private async Task TryExecuteExternalApplicationAsync(string exePath, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
@@ -317,10 +510,13 @@ public class CommandDispatcher
         var handshake = Guid.NewGuid().ToString("N").Substring(0, 8);
         var pipeName = "bat-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         
-        // Handshake whitelist: alleen proberen voor programma's in de bat directory
+        // Handshake: proberen voor programma's in de bat directory OF .NET assemblies
         var batDir = _fileSystem.GetBatDirectory();
         var fullExePath = Path.GetFullPath(exePath);
-        var shouldTryHandshake = fullExePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
+        var isInBatDir = fullExePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
+        var isDotNet = _fileSystem.IsDotNetAssembly(exePath);
+        
+        var shouldTryHandshake = isInBatDir || isDotNet;
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
@@ -409,6 +605,7 @@ public class CommandDispatcher
                     else
                     {
                         await process.WaitForExitAsync(cancellationToken);
+                        _lastErrorLevel = process.ExitCode;
                     }
                 }
                 else
@@ -421,6 +618,7 @@ public class CommandDispatcher
                 using var process = System.Diagnostics.Process.Start(startInfo);
                 if (process == null) return;
                 await process.WaitForExitAsync(cancellationToken);
+                _lastErrorLevel = process.ExitCode;
             }
         }
         catch (Exception ex)

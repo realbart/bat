@@ -291,4 +291,40 @@ public class FileSystemServiceTests
         // Given current implementation, it will return D:\ because it checks _substMounts first
         Assert.Equal("D:\\", dosPath);
     }
+    [Fact]
+    public void IsDotNetAssembly_ShouldReturnTrue_WhenFileContainsBSJB()
+    {
+        // Arrange
+        var bsjbData = new byte[100];
+        bsjbData[50] = 0x42; // B
+        bsjbData[51] = 0x53; // S
+        bsjbData[52] = 0x4A; // J
+        bsjbData[53] = 0x42; // B
+        
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+        {
+            { "/test/dotnet.exe", new MockFileData(bsjbData) },
+            { "/test/not-dotnet.exe", new MockFileData(new byte[] { 0x01, 0x02, 0x03, 0x04 }) }
+        });
+        var service = new FileSystemService(fileSystem);
+
+        // Act & Assert
+        Assert.True(service.IsDotNetAssembly("/test/dotnet.exe"));
+        Assert.False(service.IsDotNetAssembly("/test/not-dotnet.exe"));
+        Assert.False(service.IsDotNetAssembly("/test/nonexistent.exe"));
+    }
+
+    [Fact]
+    public void IsDotNetAssembly_ShouldHandleSmallFiles()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+        {
+            { "/test/small.exe", new MockFileData(new byte[] { 0x42, 0x53, 0x4A, 0x42 }) }
+        });
+        var service = new FileSystemService(fileSystem);
+
+        // Act & Assert
+        Assert.True(service.IsDotNetAssembly("/test/small.exe"));
+    }
 }

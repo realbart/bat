@@ -21,21 +21,21 @@ public class EchoCommand : ICommand
             return;
         }
 
-        if (args.Length == 0)
-        {
-            console.WriteLine("ECHO is ON.");
-            return;
-        }
-
         if (args.Length == 1 && args[0].Equals("ON", StringComparison.OrdinalIgnoreCase))
         {
-            // Dummy for now
+            fileSystem.EchoOn = true;
             return;
         }
         
         if (args.Length == 1 && args[0].Equals("OFF", StringComparison.OrdinalIgnoreCase))
         {
-            // Dummy for now
+            fileSystem.EchoOn = false;
+            return;
+        }
+
+        if (args.Length == 0)
+        {
+            console.WriteLine(fileSystem.EchoOn ? "ECHO is ON." : "ECHO is OFF.");
             return;
         }
 

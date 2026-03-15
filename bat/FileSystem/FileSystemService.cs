@@ -146,6 +146,8 @@ public class FileSystemService
 
     public IFileSystem FileSystem => _fileSystem;
 
+    public bool EchoOn { get; set; } = true;
+
     public string CurrentDirectory
     {
         get => _currentDirectory;
@@ -561,6 +563,36 @@ public class FileSystemService
         }
 
         return null;
+    }
+
+    public bool IsDotNetAssembly(string path)
+    {
+        if (!_fileSystem.File.Exists(path)) return false;
+
+        try
+        {
+            // We zoeken naar de BSJB magic string (0x42 0x53 0x4A 0x42)
+            // die in de CLI metadata header van een .NET assembly voorkomt.
+            // Voor native executables (.NET AppHost) staat dit ergens in het bestand.
+            using var stream = _fileSystem.File.OpenRead(path);
+            
+            // Optimalisatie: we scannen niet het hele bestand als het heel groot is, 
+            // maar voor de meeste .NET executables staat het relatief aan het begin of einde.
+            // Een AppHost executable is meestal klein (~100-200 KB).
+            var buffer = new byte[1024 * 512]; // Scan de eerste 512 KB
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            
+            for (int i = 0; i < bytesRead - 4; i++)
+            {
+                if (buffer[i] == 0x42 && buffer[i + 1] == 0x53 && buffer[i + 2] == 0x4A && buffer[i + 3] == 0x42)
+                {
+                    return true;
+                }
+            }
+        }
+        catch { }
+
+        return false;
     }
 
     private bool IsExecutable(string path)

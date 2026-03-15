@@ -14,6 +14,24 @@ var dispatcher = new CommandDispatcher(fileSystem);
 
 var cts = new CancellationTokenSource();
 
+// Check if a batch file was passed as argument
+if (args.Length > 0)
+{
+    var batchFile = args[0];
+    var batchArgs = args.Skip(1).ToArray();
+    var fullPath = fileSystem.ResolvePath(batchFile);
+    if (fileSystem.FileSystem.File.Exists(fullPath))
+    {
+        await dispatcher.DispatchAsync(batchFile + " " + string.Join(" ", batchArgs), cts.Token);
+        return;
+    }
+    else
+    {
+        AnsiConsole.MarkupLine($"[red]The system cannot find the file specified: {batchFile}[/]");
+        return;
+    }
+}
+
 Console.CancelKeyPress += (s, e) =>
 {
     // Voorkom dat de applicatie afsluit

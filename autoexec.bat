@@ -1,4 +1,4 @@
-:;#!~/.local/bin/bat
+:; exec /home/bart/.local/bin/bat "$0" "$@"
 @echo off
 setlocal EnableExtensions
 
