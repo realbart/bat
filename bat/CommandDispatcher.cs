@@ -245,7 +245,8 @@ public class CommandDispatcher
         
         // Handshake whitelist: alleen proberen voor programma's in de bat directory
         var batDir = _fileSystem.GetBatDirectory();
-        var shouldTryHandshake = exePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
+        var fullExePath = Path.GetFullPath(exePath);
+        var shouldTryHandshake = fullExePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
@@ -254,8 +255,9 @@ public class CommandDispatcher
             RedirectStandardInput = shouldTryHandshake,
             RedirectStandardOutput = shouldTryHandshake,
             RedirectStandardError = shouldTryHandshake,
-            UseShellExecute = !shouldTryHandshake,
-            CreateNoWindow = shouldTryHandshake
+            UseShellExecute = false, // Altijd false om WorkingDirectory en Environment te kunnen zetten
+            CreateNoWindow = shouldTryHandshake,
+            WorkingDirectory = _fileSystem.GetLinuxPath(_fileSystem.CurrentDirectory)
         };
 
         // Check for shebang

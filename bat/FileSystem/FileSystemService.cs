@@ -121,7 +121,7 @@ public class FileSystemService
         return Result.Success();
     }
 
-    private string GetLinuxPath(string dosPath)
+    public string GetLinuxPath(string dosPath)
     {
         var path = dosPath;
         if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
