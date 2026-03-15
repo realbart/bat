@@ -5,14 +5,28 @@ using Bat;
 using Bat.FileSystem;
 using Spectre.Console;
 
-AnsiConsole.MarkupLine("[yellow]bat [[Version 0.1.0]][/]");
-AnsiConsole.MarkupLine("(c) Bart Corporation. All rights reserved.");
+AnsiConsole.MarkupLine("[yellow]🦇bat [[Version 0.1.1]][/]");
+AnsiConsole.MarkupLine("(c) Bart Kemps. All rights reserved.");
 AnsiConsole.WriteLine();
 
 var fileSystem = new FileSystemService();
 var dispatcher = new CommandDispatcher(fileSystem);
 
+// Execute autoexec.bat if it exists
+var autoexecPath = fileSystem.ResolvePath("autoexec.bat");
 var cts = new CancellationTokenSource();
+if (fileSystem.FileSystem.File.Exists(autoexecPath))
+{
+    try
+    {
+        await dispatcher.DispatchAsync("autoexec.bat", cts.Token);
+    }
+    catch (OperationCanceledException)
+    {
+        // Ignore cancellation during autoexec, continue to main loop
+    }
+}
+
 
 // Check if a batch file was passed as argument
 if (args.Length > 0)
@@ -56,7 +70,7 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
 
         if (keyInfo.Key == ConsoleKey.Enter)
         {
-            AnsiConsole.WriteLine();
+            Console.WriteLine();
             return currentInput.ToString();
         }
         else if (keyInfo.Key == ConsoleKey.Backspace)
@@ -65,13 +79,13 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
             {
                 currentInput.Remove(cursorPosition - 1, 1);
                 cursorPosition--;
-                AnsiConsole.Write("\b \b");
+                Console.Write("\b \b");
                 // Herteken de rest van de regel als we niet aan het eind waren
                 if (cursorPosition < currentInput.Length)
                 {
                     var remaining = currentInput.ToString().Substring(cursorPosition);
-                    AnsiConsole.Write(remaining + " ");
-                    for (var i = 0; i <= remaining.Length; i++) AnsiConsole.Write("\b");
+                    Console.Write(remaining + " ");
+                    for (var i = 0; i <= remaining.Length; i++) Console.Write("\b");
                 }
             }
         }
@@ -81,8 +95,8 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
             {
                 currentInput.Remove(cursorPosition, 1);
                 var remaining = currentInput.ToString().Substring(cursorPosition);
-                AnsiConsole.Write(remaining + " ");
-                for (var i = 0; i <= remaining.Length; i++) AnsiConsole.Write("\b");
+                Console.Write(remaining + " ");
+                for (var i = 0; i <= remaining.Length; i++) Console.Write("\b");
             }
         }
         else if (keyInfo.Key == ConsoleKey.LeftArrow)
@@ -90,14 +104,14 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
             if (cursorPosition > 0)
             {
                 cursorPosition--;
-                AnsiConsole.Write("\b");
+                Console.Write("\b");
             }
         }
         else if (keyInfo.Key == ConsoleKey.RightArrow)
         {
             if (cursorPosition < currentInput.Length)
             {
-                AnsiConsole.Write(currentInput[cursorPosition].ToString());
+                Console.Write(currentInput[cursorPosition].ToString());
                 cursorPosition++;
             }
         }
@@ -109,7 +123,7 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
                 ClearCurrentLine(prompt, currentInput.Length);
                 currentInput.Clear();
                 currentInput.Append(history[historyIndex]);
-                AnsiConsole.Write(currentInput.ToString());
+                Console.Write(currentInput.ToString());
                 cursorPosition = currentInput.Length;
             }
         }
@@ -124,16 +138,17 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
                 {
                     currentInput.Append(history[historyIndex]);
                 }
-                AnsiConsole.Write(currentInput.ToString());
+                Console.Write(currentInput.ToString());
                 cursorPosition = currentInput.Length;
             }
         }
         else if (keyInfo.Key == ConsoleKey.Tab)
         {
-            // Tab completion voor files en directories
-            var completion = TryCompletePathAsync(currentInput.ToString(), cursorPosition);
+            // Tab completion voor commands en files
+            var completion = TryCompleteAsync(currentInput.ToString(), cursorPosition, dispatcher, fileSystem);
             if (!string.IsNullOrEmpty(completion))
             {
+
                 // Vind het laatste woord (path component)
                 var input = currentInput.ToString();
                 var lastSpace = input.LastIndexOf(' ', cursorPosition - 1);
@@ -147,15 +162,15 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
 
                 // Voeg completion toe
                 currentInput.Insert(cursorPosition, completion);
-                AnsiConsole.Write(completion);
+                Console.Write(completion);
                 cursorPosition += completion.Length;
 
                 // Herteken rest
                 if (cursorPosition < currentInput.Length)
                 {
                     var remaining = currentInput.ToString().Substring(cursorPosition);
-                    AnsiConsole.Write(remaining);
-                    for (var i = 0; i < remaining.Length; i++) AnsiConsole.Write("\b");
+                    Console.Write(remaining);
+                    for (var i = 0; i < remaining.Length; i++) Console.Write("\b");
                 }
             }
         }
@@ -169,15 +184,15 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
         else if (keyInfo.KeyChar != '\0' && !char.IsControl(keyInfo.KeyChar))
         {
             currentInput.Insert(cursorPosition, keyInfo.KeyChar);
-            AnsiConsole.Write(keyInfo.KeyChar.ToString());
+            Console.Write(keyInfo.KeyChar.ToString());
             cursorPosition++;
             
             // Herteken de rest van de regel
             if (cursorPosition < currentInput.Length)
             {
                 var remaining = currentInput.ToString().Substring(cursorPosition);
-                AnsiConsole.Write(remaining);
-                for (var i = 0; i < remaining.Length; i++) AnsiConsole.Write("\b");
+                Console.Write(remaining);
+                for (var i = 0; i < remaining.Length; i++) Console.Write("\b");
             }
         }
     }
@@ -185,40 +200,65 @@ async Task<string?> ReadLineWithHistoryAsync(string prompt, CommandDispatcher di
 
 void ClearCurrentLine(string prompt, int inputLength)
 {
-    for (var i = 0; i < inputLength; i++) AnsiConsole.Write("\b \b");
+    for (var i = 0; i < inputLength; i++) Console.Write("\b \b");
 }
 
 void ClearPartialInput(int length)
 {
-    for (var i = 0; i < length; i++) AnsiConsole.Write("\b \b");
+    for (var i = 0; i < length; i++) Console.Write("\b \b");
 }
 
-string? TryCompletePathAsync(string input, int cursorPos)
+string? TryCompleteAsync(string input, int cursorPos, CommandDispatcher dispatcher, FileSystemService fileSystem)
 {
     // Haal het huidige woord op (vanaf laatste spatie tot cursor)
     var lastSpace = input.LastIndexOf(' ', cursorPos - 1);
-    var partialPath = input.Substring(lastSpace + 1, cursorPos - lastSpace - 1);
+    var partialWord = input.Substring(lastSpace + 1, cursorPos - lastSpace - 1);
 
-    if (string.IsNullOrEmpty(partialPath)) return null;
+    if (string.IsNullOrEmpty(partialWord)) return null;
 
+    // Als het het eerste woord is, probeer command completion
+    if (lastSpace == -1)
+    {
+        var commands = dispatcher.GetCommandNames()
+            .Where(name => name.StartsWith(partialWord, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (commands.Count == 1)
+        {
+            return commands[0];
+        }
+        else if (commands.Count > 1)
+        {
+            var commonPrefix = FindCommonPrefix(commands);
+            if (commonPrefix.Length > partialWord.Length)
+            {
+                return commonPrefix;
+            }
+            Console.Beep();
+            return null;
+        }
+    }
+
+    // Anders, path completion
     try
     {
         // Bepaal directory en pattern
         string searchDir;
         string pattern;
 
-        var lastSlash = Math.Max(partialPath.LastIndexOf('/'), partialPath.LastIndexOf('\\'));
+        var lastSlash = Math.Max(partialWord.LastIndexOf('/'), partialWord.LastIndexOf('\\'));
         if (lastSlash >= 0)
         {
             // Pad bevat directory component
-            searchDir = fileSystem.ResolvePath(partialPath.Substring(0, lastSlash + 1));
-            pattern = partialPath.Substring(lastSlash + 1);
+            searchDir = fileSystem.ResolvePath(partialWord.Substring(0, lastSlash + 1));
+            pattern = partialWord.Substring(lastSlash + 1);
         }
         else
         {
             // Alleen filename pattern
             searchDir = fileSystem.CurrentDirectory;
-            pattern = partialPath;
+            pattern = partialWord;
         }
 
         if (!fileSystem.FileSystem.Directory.Exists(searchDir)) return null;
@@ -237,18 +277,9 @@ string? TryCompletePathAsync(string input, int cursorPos)
             // Exact match - return volledige naam
             var matchedName = entries[0];
             var fullPath = lastSlash >= 0
-                ? partialPath.Substring(0, lastSlash + 1) + matchedName
+                ? partialWord.Substring(0, lastSlash + 1) + matchedName
                 : matchedName;
 
-            // Voeg trailing backslash toe voor directories
-            var resolvedFullPath = fileSystem.ResolvePath(fullPath);
-            if (fileSystem.FileSystem.Directory.Exists(resolvedFullPath))
-            {
-                if (!fullPath.EndsWith("\\") && !fullPath.EndsWith("/"))
-                {
-                    fullPath += "\\";
-                }
-            }
 
             return fullPath;
         }
@@ -259,7 +290,7 @@ string? TryCompletePathAsync(string input, int cursorPos)
         {
             // Er is een langere gemeenschappelijke prefix
             var completion = lastSlash >= 0
-                ? partialPath.Substring(0, lastSlash + 1) + commonPrefix
+                ? partialWord.Substring(0, lastSlash + 1) + commonPrefix
                 : commonPrefix;
             return completion;
         }

@@ -1,10 +1,12 @@
-:; exec /home/bart/.local/bin/bat "$0" "$@"
+:; exec /home/bart/.local/bin/bat -k "$0" "$@"
 @echo off
 setlocal EnableExtensions
 
 :: Vraag of we D: willen koppelen aan ~
 choice /C JN /N /M "Wil je station D: koppelen aan %HOME%? (J/N): "
 if errorlevel 2 goto END
+
+echo Koppelen D: aan %HOME%...
 
 :: Koppel D: aan ~
 subst D: "%HOME%"

@@ -54,6 +54,8 @@ public class FileSystemService
         
         var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "bat.exe";
         _environmentVariables["COMSPEC"] = GetDosPath(exePath);
+
+        _environmentVariables["ERRORLEVEL"] = "0";
     }
 
     private string TranslatePathVariable(string value)
@@ -251,7 +253,7 @@ public class FileSystemService
         }
         else
         {
-            var linuxCurrent = GetLinuxPath(CurrentDirectory);
+            var linuxCurrent = ResolvePath(CurrentDirectory);
             absolutePath = _fileSystem.Path.GetFullPath(_fileSystem.Path.Combine(linuxCurrent, targetPath));
         }
 
@@ -481,6 +483,37 @@ public class FileSystemService
         return dosPath;
     }
 
+    public string GetCurrentDosPath()
+    {
+        var linuxPath = CurrentDirectory;
+        foreach (var kvp in _substMounts)
+        {
+            if (linuxPath.StartsWith(kvp.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_currentDrive == kvp.Key.TrimEnd(':'))
+                {
+                    var relative = linuxPath.Substring(kvp.Value.Length).Replace('/', '\\');
+                    if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
+                    var result = kvp.Key + relative;
+                    if (result.Length == 2) result += "\\";
+                    return result;
+                }
+            }
+        }
+        // For C: or other
+        var dosPath = linuxPath.Replace('/', '\\');
+        if (dosPath.StartsWith("\\"))
+        {
+            dosPath = "C:" + dosPath;
+        }
+        else if (!dosPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+        {
+            dosPath = "C:\\" + dosPath;
+        }
+        if (dosPath.Length == 2) dosPath += "\\";
+        return dosPath;
+    }
+
     public string FormatPrompt()
     {
         var prompt = GetEnvironmentVariable("PROMPT");
@@ -494,7 +527,7 @@ public class FileSystemService
                 var code = char.ToUpper(prompt[i + 1]);
                 switch (code)
                 {
-                    case 'P': sb.Append(GetDosPath()); break;
+                    case 'P': sb.Append(CurrentDirectory); break;
                     case 'G': sb.Append('>'); break;
                     case 'L': sb.Append('<'); break;
                     case 'B': sb.Append('|'); break;
@@ -502,15 +535,7 @@ public class FileSystemService
                     case 'D': sb.Append(DateTime.Now.ToShortDateString()); break;
                     case 'T': sb.Append(DateTime.Now.ToShortTimeString()); break;
                     case 'V': sb.Append("0.1.0"); break;
-                    case 'N': 
-                        {
-                            var currentDos = GetDosPath();
-                            if (currentDos.Length >= 2 && currentDos[1] == ':')
-                                sb.Append(currentDos.Substring(0, 2));
-                            else
-                                sb.Append("C:");
-                        }
-                        break;
+                    case 'N': sb.Append(CurrentDirectory.Substring(0,2)); break;
                     case '_': sb.AppendLine(); break;
                     case '$': sb.Append('$'); break;
                     case 'S': sb.Append(' '); break;
@@ -532,7 +557,7 @@ public class FileSystemService
         var extensions = new[] { "", ".exe", ".com", ".bat", ".cmd" };
         
         // 1. Zoek in huidige map
-        var linuxCurrent = GetLinuxPath(CurrentDirectory);
+        var linuxCurrent = ResolvePath(CurrentDirectory);
         foreach (var ext in extensions)
         {
             var fullPath = _fileSystem.Path.Combine(linuxCurrent, commandName + ext);
@@ -679,7 +704,7 @@ public class FileSystemService
             return Result.Failure("Drive already substituted.");
 
         _substMounts[drive] = resolvedPath;
-        _driveCurrentDirs[drive.TrimEnd(':')] = drive;
+        _driveCurrentDirs[drive.TrimEnd(':')] = drive + "\\";
         return Result.Success();
     }
 

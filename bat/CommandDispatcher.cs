@@ -66,6 +66,8 @@ public class CommandDispatcher
 
     public IReadOnlyList<string> History => _history.AsReadOnly();
 
+    public IEnumerable<string> GetCommandNames() => _commands.Keys;
+
     private void AddToHistory(string input)
     {
         _history.Add(input);
@@ -294,6 +296,9 @@ public class CommandDispatcher
         {
             redirectDisposable?.Dispose();
         }
+
+        // Set ERRORLEVEL environment variable
+        _fileSystem.SetEnvironmentVariable("ERRORLEVEL", _lastErrorLevel.ToString());
     }
 
     private async Task ExecuteBatchFileAsync(string path, string[] args, IAnsiConsole console, CancellationToken cancellationToken)
@@ -390,9 +395,38 @@ public class CommandDispatcher
                 {
                     foreach (var cmd in commands)
                     {
-                        await DispatchAsync(cmd, cancellationToken, console);
+                        var trimmedCmd = cmd.Trim();
+                        if (trimmedCmd.StartsWith("goto", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var gotoParts = trimmedCmd.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            if (gotoParts.Length > 1)
+                            {
+                                var targetLabel = gotoParts[1];
+                                if (targetLabel.StartsWith(":")) targetLabel = targetLabel.Substring(1);
+                                
+                                if (targetLabel.Equals("EOF", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    currentLineIndex = lines.Length;
+                                    goto afterIf;
+                                }
+                                if (labels.TryGetValue(targetLabel, out var labelIndex))
+                                {
+                                    currentLineIndex = labelIndex + 1;
+                                    goto afterIf;
+                                }
+                                else
+                                {
+                                    console.MarkupLine($"[red]Label not found: {targetLabel}[/]");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            await DispatchAsync(cmd, cancellationToken, console);
+                        }
                     }
                 }
+                afterIf:
                 continue;
             }
 
@@ -581,7 +615,7 @@ public class CommandDispatcher
             RedirectStandardError = false,
             UseShellExecute = false, // Altijd false om WorkingDirectory en Environment te kunnen zetten
             CreateNoWindow = false,
-            WorkingDirectory = _fileSystem.GetLinuxPath(_fileSystem.CurrentDirectory)
+            WorkingDirectory = _fileSystem.ResolvePath(_fileSystem.CurrentDirectory)
         };
 
         // Check for shebang
