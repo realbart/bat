@@ -266,7 +266,7 @@ public class DirCommand : ICommand
                     }
                     else
                     {
-                        sizeOrDir = item.IsDirectory ? "<DIR>          " : (thousandSeparator ? item.Size.ToString("N0") : item.Size.ToString()).PadLeft(14);
+                        sizeOrDir = item.IsDirectory ? "<DIR>         " : (thousandSeparator ? item.Size.ToString("N0") : item.Size.ToString()).PadLeft(14);
                     }
                     
                     if (showOwner)
