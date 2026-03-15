@@ -7,6 +7,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6E99EE05-0457-4830-BEED-04CF1DE37C59}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		publish.sh = publish.sh
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "doskey", "doskey\doskey.csproj", "{DE7AE236-032E-4802-B5CD-55FFF6D7B9B6}"
