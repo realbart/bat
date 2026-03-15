@@ -39,6 +39,12 @@ public class EchoCommand : ICommand
             return;
         }
 
+        if (args.Length == 1 && args[0] == ".")
+        {
+            console.WriteLine();
+            return;
+        }
+
         console.WriteLine(string.Join(" ", args));
     }
 }

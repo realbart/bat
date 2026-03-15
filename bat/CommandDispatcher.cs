@@ -109,7 +109,7 @@ public class CommandDispatcher
         }
         else if (workingInput.StartsWith("echo.", StringComparison.OrdinalIgnoreCase))
         {
-            workingInput = "echo " + (workingInput.Length > 5 ? workingInput.Substring(5) : "");
+            workingInput = "echo .";
         }
 
         // Echo command if not suppressed and echo is on
