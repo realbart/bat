@@ -134,10 +134,18 @@ public class FileSystemService
             if (drive == "C:")
             {
                 path = path.Substring(2);
+                if (string.IsNullOrEmpty(path)) path = "/";
+                else if (!path.StartsWith("/")) path = "/" + path;
             }
             else if (_substMounts.TryGetValue(drive, out var substPath))
             {
-                path = substPath + path.Substring(2);
+                var relative = path.Substring(2);
+                if (string.IsNullOrEmpty(relative)) path = substPath;
+                else
+                {
+                    if (!relative.StartsWith("/")) relative = "/" + relative;
+                    path = substPath.TrimEnd('/') + relative;
+                }
             }
         }
         if (string.IsNullOrEmpty(path)) return "/";
@@ -334,11 +342,27 @@ public class FileSystemService
 
     public Result ChangeDirectory(string path)
     {
+        string? driveLetter = null;
+        if (path.Length >= 2 && path[1] == ':')
+        {
+            driveLetter = path.Substring(0, 1).ToUpper();
+        }
+
         var resolvedPath = ResolvePath(path);
         
         if (resolvedPath != null && _fileSystem.Directory.Exists(resolvedPath))
         {
-            _driveCurrentDirs[_currentDrive] = GetDosPath(resolvedPath);
+            if (driveLetter != null && !_driveCurrentDirs.ContainsKey(driveLetter))
+            {
+                 _driveCurrentDirs[driveLetter] = resolvedPath;
+            }
+
+            if (driveLetter != null)
+            {
+                _currentDrive = driveLetter;
+            }
+
+            _driveCurrentDirs[_currentDrive] = resolvedPath;
             return Result.Success();
         }
 
@@ -431,46 +455,44 @@ public class FileSystemService
         }
     }
 
-    public string GetDosPath(string? linuxPath = null)
+    public string GetDosPath(string? linuxPath = null, string? preferredDrive = null)
     {
         linuxPath ??= CurrentDirectory;
 
-        // Check if linuxPath is actually a substituted path
-        foreach (var kvp in _substMounts)
+        // If a preferred drive is specified, try that first
+        if (preferredDrive != null)
         {
-            if (linuxPath.StartsWith(kvp.Value, StringComparison.OrdinalIgnoreCase))
+            var drive = preferredDrive.ToUpper();
+            if (!drive.EndsWith(":")) drive += ":";
+
+            if (drive == "C:")
             {
-                var relative = linuxPath.Substring(kvp.Value.Length).Replace('/', '\\');
-                if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
-                var result = kvp.Key + relative;
-                if (result.Length == 2) result += "\\";
-                return result;
+                var dosPath = linuxPath.Replace('/', '\\');
+                if (dosPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) return dosPath;
+                if (dosPath.StartsWith("\\")) return "C:" + dosPath;
+                return "C:\\" + dosPath;
+            }
+
+            if (_substMounts.TryGetValue(drive, out var substPath))
+            {
+                if (linuxPath.StartsWith(substPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    var relative = linuxPath.Substring(substPath.Length).Replace('/', '\\');
+                    if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
+                    var result = drive + relative;
+                    if (result.Length == 2) result += "\\";
+                    return result;
+                }
             }
         }
-        
-        var dosPath = linuxPath.Replace('/', '\\');
-        if (dosPath.StartsWith("\\"))
-        {
-            dosPath = "C:" + dosPath;
-        }
-        else if (!dosPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
-        {
-             dosPath = "C:\\" + dosPath;
-        }
 
-        if (dosPath.Length == 2) dosPath += "\\";
-        
-        return dosPath;
-    }
-
-    public string GetCurrentDosPath()
-    {
-        var linuxPath = CurrentDirectory;
+        // Check if linuxPath is actually a substituted path, but only if it's not on C: or if we're on a subst drive
         foreach (var kvp in _substMounts)
         {
             if (linuxPath.StartsWith(kvp.Value, StringComparison.OrdinalIgnoreCase))
             {
-                if (_currentDrive == kvp.Key.TrimEnd(':'))
+                // Only return the subst path if the current drive is that subst drive
+                if (_currentDrive.Equals(kvp.Key.TrimEnd(':'), StringComparison.OrdinalIgnoreCase))
                 {
                     var relative = linuxPath.Substring(kvp.Value.Length).Replace('/', '\\');
                     if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
@@ -480,18 +502,16 @@ public class FileSystemService
                 }
             }
         }
-        // For C: or other
-        var dosPath = linuxPath.Replace('/', '\\');
-        if (dosPath.StartsWith("\\"))
-        {
-            dosPath = "C:" + dosPath;
-        }
-        else if (!dosPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
-        {
-            dosPath = "C:\\" + dosPath;
-        }
-        if (dosPath.Length == 2) dosPath += "\\";
-        return dosPath;
+        
+        var cPath = linuxPath.Replace('/', '\\');
+        if (cPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) return cPath;
+        if (cPath.StartsWith("\\")) return "C:" + cPath;
+        return "C:\\" + cPath;
+    }
+
+    public string GetCurrentDosPath()
+    {
+        return GetDosPath(CurrentDirectory, _currentDrive + ":");
     }
 
     public string FormatPrompt()
@@ -507,7 +527,7 @@ public class FileSystemService
                 var code = char.ToUpper(prompt[i + 1]);
                 switch (code)
                 {
-                    case 'P': sb.Append(CurrentDirectory); break;
+                    case 'P': sb.Append(GetCurrentDosPath()); break;
                     case 'G': sb.Append('>'); break;
                     case 'L': sb.Append('<'); break;
                     case 'B': sb.Append('|'); break;
@@ -585,9 +605,14 @@ public class FileSystemService
             // maar voor de meeste .NET executables staat het relatief aan het begin of einde.
             // Een AppHost executable is meestal klein (~100-200 KB).
             var buffer = new byte[1024 * 512]; // Scan de eerste 512 KB
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            int bytesRead = 0;
+            int n;
+            while (bytesRead < buffer.Length && (n = stream.Read(buffer, bytesRead, buffer.Length - bytesRead)) > 0)
+            {
+                bytesRead += n;
+            }
             
-            for (int i = 0; i < bytesRead - 4; i++)
+            for (int i = 0; i <= bytesRead - 4; i++)
             {
                 if (buffer[i] == 0x42 && buffer[i + 1] == 0x53 && buffer[i + 2] == 0x4A && buffer[i + 3] == 0x42)
                 {

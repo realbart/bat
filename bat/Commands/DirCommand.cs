@@ -77,9 +77,19 @@ public class DirCommand : ICommand
 
             if (!bare)
             {
+                string? preferredDrive = null;
+                if (pathArg.Length >= 2 && pathArg[1] == ':')
+                {
+                    preferredDrive = pathArg.Substring(0, 2);
+                }
+                else
+                {
+                    preferredDrive = fileSystem.GetCurrentDosPath().Substring(0, 2);
+                }
+
                 console.WriteLine($" Volume in drive C is OS");
                 console.WriteLine($" Volume Serial Number is 1234-5678"); // Dummy serial
-                console.WriteLine($" Directory of {fileSystem.GetDosPath(searchDir)}");
+                console.WriteLine($" Directory of {fileSystem.GetDosPath(searchDir, preferredDrive)}");
                 console.WriteLine();
             }
 
