@@ -127,12 +127,21 @@ public class FileSystemService
 
     public string GetLinuxPath(string dosPath)
     {
-        var path = dosPath;
-        if (path.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+        var path = dosPath.Replace('\\', '/');
+        if (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':')
         {
-            path = path.Substring(2);
+            var drive = path.Substring(0, 2).ToUpper();
+            if (drive == "C:")
+            {
+                path = path.Substring(2);
+            }
+            else if (_substMounts.TryGetValue(drive, out var substPath))
+            {
+                path = substPath + path.Substring(2);
+            }
         }
-        return path.Replace('\\', '/');
+        if (string.IsNullOrEmpty(path)) return "/";
+        return path;
     }
 
     public IDictionary<string, string> GetAllEnvironmentVariables() => _environmentVariables;
@@ -214,51 +223,22 @@ public class FileSystemService
 
     public string ResolvePath(string path)
     {
-        var targetPath = path.Replace('\\', '/');
+        if (string.IsNullOrEmpty(path)) return "/";
 
-        // Check for SUBST drives first (D:, E:, etc.)
-        if (targetPath.Length >= 2 && char.IsLetter(targetPath[0]) && targetPath[1] == ':')
-        {
-            var drive = targetPath.Substring(0, 2).ToUpper();
-
-            if (drive != "C:" && _substMounts.TryGetValue(drive, out var substPath))
-            {
-                // Replace drive with substituted path
-                if (targetPath.Length > 2)
-                {
-                    targetPath = substPath + targetPath.Substring(2);
-                }
-                else
-                {
-                    targetPath = substPath;
-                }
-            }
-            else if (drive == "C:")
-            {
-                targetPath = targetPath.Substring(2);
-            }
-        }
-
-        if (string.IsNullOrEmpty(targetPath))
-        {
-            targetPath = "/";
-        }
+        var targetPath = GetLinuxPath(path);
 
         string absolutePath;
         if (_fileSystem.Path.IsPathRooted(targetPath))
         {
-            // On Linux, GetFullPath("/") returns "/", but GetFullPath("C:/") might return something else depending on the FS implementation.
-            // Since we already stripped "C:", we should treat it as rooted.
             absolutePath = _fileSystem.Path.GetFullPath(targetPath);
         }
         else
         {
-            var linuxCurrent = ResolvePath(CurrentDirectory);
+            var linuxCurrent = GetLinuxPath(CurrentDirectory);
             absolutePath = _fileSystem.Path.GetFullPath(_fileSystem.Path.Combine(linuxCurrent, targetPath));
         }
 
         // Now we need to handle case preservation.
-        // We go through the parts of the path and find the matching case.
         return FindCasePreservedPath(absolutePath) ?? absolutePath;
     }
 

@@ -34,3 +34,4 @@ mv ./publish/bat/* ~/.local/bin/
 mv ./publish/doskey/* ~/.local/bin/
 mv ./publish/subst/* ~/.local/bin/
 mv ./publish/choice/* ~/.local/bin/
+cp ./autoexec.bat ~/.local/bin/autoexec.bat
