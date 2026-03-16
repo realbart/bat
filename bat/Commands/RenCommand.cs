@@ -36,28 +36,30 @@ public class RenCommand : ICommand
             return;
         }
 
+        var physicalSource = fileSystem.GetPhysicalPath(resolvedSource);
+
         var fs = fileSystem.FileSystem;
-        var parentDir = fs.Path.GetDirectoryName(resolvedSource) ?? ".";
+        var parentDir = fs.Path.GetDirectoryName(physicalSource) ?? ".";
         var destPath = fs.Path.Combine(parentDir, newName);
 
         Result result;
-        if (fs.File.Exists(resolvedSource))
+        if (fs.File.Exists(physicalSource))
         {
-            if (fs.File.Exists(destPath) && !resolvedSource.Equals(destPath, StringComparison.OrdinalIgnoreCase))
+            if (fs.File.Exists(destPath) && !physicalSource.Equals(destPath, StringComparison.OrdinalIgnoreCase))
             {
                 console.MarkupLine("[red]A duplicate file name exists, or the file cannot be found.[/]");
                 return;
             }
-            result = fileSystem.MoveFile(resolvedSource, destPath);
+            result = fileSystem.MoveFile(physicalSource, destPath);
         }
-        else if (fs.Directory.Exists(resolvedSource))
+        else if (fs.Directory.Exists(physicalSource))
         {
-            if (fs.Directory.Exists(destPath) && !resolvedSource.Equals(destPath, StringComparison.OrdinalIgnoreCase))
+            if (fs.Directory.Exists(destPath) && !physicalSource.Equals(destPath, StringComparison.OrdinalIgnoreCase))
             {
                 console.MarkupLine("[red]A duplicate file name exists, or the file cannot be found.[/]");
                 return;
             }
-            result = fileSystem.MoveDirectory(resolvedSource, destPath);
+            result = fileSystem.MoveDirectory(physicalSource, destPath);
         }
         else
         {

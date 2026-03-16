@@ -54,6 +54,7 @@ public class CommandDispatcher
         RegisterCommand(new AssocCommand());
         RegisterCommand(new FtypeCommand());
         RegisterCommand(new MklinkCommand());
+        RegisterCommand(new SubstCommand());
         RegisterCommand(new IfCommand());
         RegisterCommand(new GotoCommand());
         RegisterCommand(new CallCommand());
@@ -377,11 +378,12 @@ public class CommandDispatcher
                 }
             }
 
-            // IF handling
-            if (processedLine.ToUpper().StartsWith("IF ") || processedLine.ToUpper().StartsWith("@IF "))
-            {
-                bool suppressIfEcho = processedLine.ToUpper().StartsWith("@IF ");
-                string workingIfLine = suppressIfEcho ? processedLine.Substring(1).TrimStart() : processedLine;
+        // IF handling
+        if (processedLine.TrimStart().ToUpper().StartsWith("IF ") || processedLine.TrimStart().ToUpper().StartsWith("@IF "))
+        {
+            string lineToParse = processedLine.TrimStart();
+            bool suppressIfEcho = lineToParse.ToUpper().StartsWith("@IF ");
+            string workingIfLine = suppressIfEcho ? lineToParse.Substring(1).TrimStart() : lineToParse;
 
                 var (conditionMet, commands, nextIndex) = ParseIfCondition(workingIfLine, currentLineIndex, lines);
                 currentLineIndex = nextIndex;
@@ -438,13 +440,14 @@ public class CommandDispatcher
 
     private (bool conditionMet, List<string> commands, int nextIndex) ParseIfCondition(string line, int currentLineIndex, string[] allLines)
     {
+        // currentLineIndex is the index of the line AFTER the IF line in allLines
         var parts = ParseInput(line);
         if (parts.Length < 2 || parts[0].ToUpper() != "IF")
             return (false, new List<string>(), currentLineIndex);
 
         bool isNot = false;
         int index = 1;
-        if (parts[index].Equals("NOT", StringComparison.OrdinalIgnoreCase))
+        if (index < parts.Length && parts[index].Equals("NOT", StringComparison.OrdinalIgnoreCase))
         {
             isNot = true;
             index++;
@@ -477,10 +480,18 @@ public class CommandDispatcher
             index++;
             if (index < parts.Length)
             {
-                var path = _fileSystem.ResolvePath(parts[index]);
-                conditionMet = _fileSystem.FileSystem.File.Exists(path) || _fileSystem.FileSystem.Directory.Exists(path);
+                var path = parts[index];
+                var resolvedPath = _fileSystem.ResolvePath(path);
+                conditionMet = _fileSystem.FileSystem.File.Exists(resolvedPath) || _fileSystem.FileSystem.Directory.Exists(resolvedPath);
                 index++;
             }
+        }
+        else if (index + 2 < parts.Length && (parts[index+1] == "==" || parts[index+1].Equals("EQU", StringComparison.OrdinalIgnoreCase)))
+        {
+             var val1 = parts[index];
+             var val2 = parts[index+2];
+             conditionMet = val1.Equals(val2, StringComparison.OrdinalIgnoreCase);
+             index += 3;
         }
         else if (parts[index].Contains("=="))
         {
@@ -491,50 +502,103 @@ public class CommandDispatcher
                 index++;
             }
         }
-        else if (index + 2 < parts.Length && parts[index+1] == "==")
+        else if (index + 1 < parts.Length && parts[index+1] == "==")
         {
-             conditionMet = parts[index].Equals(parts[index+2], StringComparison.OrdinalIgnoreCase);
+             var val1 = parts[index];
+             var val2 = parts[index+2];
+             conditionMet = val1.Equals(val2, StringComparison.OrdinalIgnoreCase);
              index += 3;
+        }
+        else if (index < parts.Length)
+        {
+            // Maybe the comparison is like "a"=="b" (all one part)
+            if (parts[index].Contains("=="))
+            {
+                 var comparison = parts[index].Split(new[] { "==" }, StringSplitOptions.None);
+                 if (comparison.Length == 2)
+                 {
+                     conditionMet = comparison[0].Equals(comparison[1], StringComparison.OrdinalIgnoreCase);
+                     index++;
+                 }
+            }
         }
 
         if (isNot) conditionMet = !conditionMet;
 
+        // System.Console.WriteLine($"[DEBUG_LOG] conditionMet: {conditionMet}, isNot: {isNot}, parts: {string.Join("|", parts)}");
+        
         var commands = new List<string>();
-        int nextIndex = currentLineIndex + 1;
+        int nextIndex = currentLineIndex; // Use the index passed from ExecuteBatchFileAsync
 
-        // Check if it's a block with (
-        var remaining = string.Join(" ", parts.Skip(index)).Trim();
-        if (remaining.StartsWith("("))
+        if (conditionMet)
         {
-            // Collect lines until )
-            int parenCount = 1; // Already have one (
-            bool inBlock = true;
-            while (nextIndex < allLines.Length && inBlock)
+            // IF block
+            var remaining = string.Join(" ", parts.Skip(index)).Trim();
+            if (string.IsNullOrEmpty(remaining))
             {
-                var blockLine = allLines[nextIndex].Trim();
-                nextIndex++;
-                if (blockLine == ")")
+                 // Do nothing, just move on
+            }
+            else if (remaining.StartsWith("("))
+            {
+                // Collect lines until )
+                int parenCount = 1; // Already have one (
+                bool inBlock = true;
+                while (nextIndex < allLines.Length && inBlock)
                 {
-                    parenCount--;
-                    if (parenCount == 0)
+                    var blockLine = allLines[nextIndex].Trim();
+                    nextIndex++;
+                    if (blockLine == ")")
                     {
-                        inBlock = false;
+                        parenCount--;
+                        if (parenCount == 0)
+                        {
+                            inBlock = false;
+                        }
+                        else
+                        {
+                            commands.Add(blockLine);
+                        }
+                    }
+                    else if (blockLine.StartsWith("("))
+                    {
+                        parenCount++;
+                        commands.Add(blockLine);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(blockLine))
+                    {
+                        commands.Add(blockLine);
                     }
                 }
-                else if (blockLine.StartsWith("("))
-                {
-                    parenCount++;
-                }
-                else if (!string.IsNullOrWhiteSpace(blockLine))
-                {
-                    commands.Add(blockLine);
-                }
+            }
+            else
+            {
+                // Single command on the same line
+                commands.Add(remaining);
             }
         }
         else
         {
-            // Single command
-            commands.Add(remaining);
+            // Skip IF block
+            var remaining = string.Join(" ", parts.Skip(index)).Trim();
+            if (remaining.StartsWith("("))
+            {
+                int parenCount = 1;
+                bool inBlock = true;
+                while (nextIndex < allLines.Length && inBlock)
+                {
+                    var blockLine = allLines[nextIndex].Trim();
+                    nextIndex++;
+                    if (blockLine == ")")
+                    {
+                        parenCount--;
+                        if (parenCount == 0) inBlock = false;
+                    }
+                    else if (blockLine.StartsWith("("))
+                    {
+                        parenCount++;
+                    }
+                }
+            }
         }
 
         // Handle ELSE
@@ -543,14 +607,15 @@ public class CommandDispatcher
             var nextLine = allLines[nextIndex].Trim();
             if (nextLine.StartsWith("ELSE", StringComparison.OrdinalIgnoreCase))
             {
+                // Consume ELSE line always
                 nextIndex++;
                 var elseRemaining = nextLine.Substring(4).Trim();
+                var elseCommands = new List<string>();
                 if (elseRemaining.StartsWith("("))
                 {
                     // Else block
                     int parenCount = 1;
                     bool inBlock = true;
-                    var elseCommands = new List<string>();
                     while (nextIndex < allLines.Length && inBlock)
                     {
                         var blockLine = allLines[nextIndex].Trim();
@@ -562,30 +627,31 @@ public class CommandDispatcher
                             {
                                 inBlock = false;
                             }
+                            else
+                            {
+                                elseCommands.Add(blockLine);
+                            }
                         }
                         else if (blockLine.StartsWith("("))
                         {
                             parenCount++;
+                            elseCommands.Add(blockLine);
                         }
                         else if (!string.IsNullOrWhiteSpace(blockLine))
                         {
                             elseCommands.Add(blockLine);
                         }
                     }
-                    if (!conditionMet)
-                    {
-                        commands = elseCommands;
-                        conditionMet = true;
-                    }
                 }
-                else
+                else if (!string.IsNullOrWhiteSpace(elseRemaining))
                 {
                     // Single else command
-                    if (!conditionMet)
-                    {
-                        commands = new List<string> { elseRemaining };
-                        conditionMet = true;
-                    }
+                    elseCommands.Add(elseRemaining);
+                }
+
+                if (!conditionMet)
+                {
+                    commands.AddRange(elseCommands);
                 }
             }
         }
@@ -600,8 +666,8 @@ public class CommandDispatcher
         
         // Handshake: proberen voor programma's in de bat directory OF .NET assemblies
         var batDir = _fileSystem.GetBatDirectory();
-        var fullExePath = Path.GetFullPath(exePath);
-        var isInBatDir = fullExePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
+        // exePath is al een fysiek pad van FindExecutable
+        var isInBatDir = exePath.StartsWith(batDir, StringComparison.OrdinalIgnoreCase);
         var isDotNet = _fileSystem.IsDotNetAssembly(exePath);
         
         var shouldTryHandshake = isInBatDir || isDotNet;
@@ -615,7 +681,7 @@ public class CommandDispatcher
             RedirectStandardError = false,
             UseShellExecute = false, // Altijd false om WorkingDirectory en Environment te kunnen zetten
             CreateNoWindow = false,
-            WorkingDirectory = _fileSystem.ResolvePath(_fileSystem.CurrentDirectory)
+            WorkingDirectory = _fileSystem.GetPhysicalPath(_fileSystem.CurrentDirectory)
         };
 
         // Check for shebang

@@ -21,7 +21,7 @@ public class FileSystemService
         
         LoadEnvironmentVariables();
         var currentDir = System.IO.Directory.GetCurrentDirectory();
-        _driveCurrentDirs["C"] = GetDosPath(currentDir);
+        _driveCurrentDirs["C"] = GetDosPath(currentDir, "C:");
     }
 
     private void LoadEnvironmentVariables()
@@ -82,7 +82,7 @@ public class FileSystemService
 
     public Result PushDirectory(string path)
     {
-        _directoryStack.Push(_driveCurrentDirs[_currentDrive]);
+        _directoryStack.Push(CurrentDirectory);
         return ChangeDirectory(path);
     }
 
@@ -125,9 +125,16 @@ public class FileSystemService
         return Result.Success();
     }
 
-    public string GetLinuxPath(string dosPath)
+    /// <summary>
+    /// Internally translates a DOS path (e.g., C:\TEMP or D:\DATA) to a 
+    /// logical Linux path (e.g., /tmp or /home/user/data based on SUBST).
+    /// This is the "internal" mapping and does not necessarily reflect 
+    /// the final physical case-sensitive path on the host OS.
+    /// </summary>
+    private string GetLinuxPath(string dosPath)
     {
         var path = dosPath.Replace('\\', '/');
+        // System.Console.WriteLine($"[DEBUG_LOG] GetLinuxPath entry: {dosPath}, normalized: {path}");
         if (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':')
         {
             var drive = path.Substring(0, 2).ToUpper();
@@ -147,8 +154,66 @@ public class FileSystemService
                     path = substPath.TrimEnd('/') + relative;
                 }
             }
+            else
+            {
+                // Unrecognized drive, treat as C: anyway for now or just root
+                path = path.Substring(2);
+                if (string.IsNullOrEmpty(path)) path = "/";
+                else if (!path.StartsWith("/")) path = "/" + path;
+            }
         }
-        if (string.IsNullOrEmpty(path)) return "/";
+        else if (path.StartsWith("/"))
+        {
+             // If it starts with /, we assume it's already a linux path
+        }
+        else
+        {
+            // Relative path, prepend current drive's linux path
+            var currentDos = _driveCurrentDirs[_currentDrive];
+            // System.Console.WriteLine($"[DEBUG_LOG] GetLinuxPath relative path, currentDos for {_currentDrive}: {currentDos}");
+            
+            // Recursion alert! GetLinuxPath calls itself. 
+            // But if currentDos is DRIVE:\..., it will hit the first if and return.
+            var currentLinux = GetLinuxPath(currentDos);
+            // System.Console.WriteLine($"[DEBUG_LOG] GetLinuxPath relative path, currentLinux: {currentLinux}");
+            
+            if (path == "." || path == "./")
+            {
+                path = currentLinux;
+            }
+            else if (path == ".." || path == "../" || path == "..\\")
+            {
+                var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+                var normalized = currentLinux;
+                if (normalized.Length > 1 && normalized.EndsWith("/")) normalized = normalized.TrimEnd('/');
+                path = fs.Path.GetDirectoryName(normalized) ?? "/";
+            }
+            else if (path.StartsWith("../") || path.StartsWith("..\\"))
+            {
+                var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+                var normalized = currentLinux;
+                if (normalized.Length > 1 && normalized.EndsWith("/")) normalized = normalized.TrimEnd('/');
+                var parent = fs.Path.GetDirectoryName(normalized) ?? "/";
+                path = parent.TrimEnd('/') + "/" + path.Substring(3).Replace('\\', '/').TrimStart('/');
+            }
+            else
+            {
+                path = currentLinux.TrimEnd('/') + "/" + path.TrimStart('/');
+            }
+        }
+        
+        if (string.IsNullOrEmpty(path)) path = "/";
+        
+        // Remove trailing slash if it's not the root
+        if (path.Length > 1 && path.EndsWith("/"))
+        {
+            path = path.TrimEnd('/');
+        }
+        
+        // Final normalization: ensure no double slashes and correct separator
+        path = path.Replace("//", "/");
+        
+        // System.Console.WriteLine($"[DEBUG_LOG] GetLinuxPath result: {path}");
         return path;
     }
 
@@ -231,49 +296,88 @@ public class FileSystemService
 
     public string ResolvePath(string path)
     {
-        if (string.IsNullOrEmpty(path)) return "/";
+        var preserved = ResolveLinuxPath(path);
+        
+        // Convert back to DOS path for consistent communication
+        string preferredDrive = _currentDrive + ":";
+        if (path.Length >= 2 && path[1] == ':') preferredDrive = path.Substring(0, 2);
+        
+        var final = GetDosPath(preserved, preferredDrive);
+        // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath final: {final}");
+        return final;
+    }
+
+    private string ResolveLinuxPath(string path)
+    {
+        // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath input: {path}, currentDrive: {_currentDrive}");
+        if (string.IsNullOrEmpty(path)) return GetLinuxPath(CurrentDirectory);
+
+        // If it's a drive-only path like "C:", return that drive's current directory
+        if (path.Length == 2 && path[1] == ':' && char.IsLetter(path[0]))
+        {
+            var drive = path.ToUpper();
+            var res = _driveCurrentDirs.TryGetValue(drive.Substring(0, 1), out var dir) ? dir : drive + "\\";
+            return GetLinuxPath(res);
+        }
 
         var targetPath = GetLinuxPath(path);
+        // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath GetLinuxPath(path): {targetPath}");
 
         string absolutePath;
-        if (_fileSystem.Path.IsPathRooted(targetPath))
+        var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+        if (fs.Path.IsPathRooted(targetPath) || (path.Length >= 2 && path[1] == ':'))
         {
-            absolutePath = _fileSystem.Path.GetFullPath(targetPath);
+            absolutePath = fs.Path.GetFullPath(targetPath);
         }
         else
         {
             var linuxCurrent = GetLinuxPath(CurrentDirectory);
-            absolutePath = _fileSystem.Path.GetFullPath(_fileSystem.Path.Combine(linuxCurrent, targetPath));
+            // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath GetLinuxPath(CurrentDirectory): {linuxCurrent}");
+            absolutePath = fs.Path.GetFullPath(fs.Path.Combine(linuxCurrent, targetPath));
         }
+        // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath absolutePath: {absolutePath}");
 
         // Now we need to handle case preservation.
+        var preserved = FindCasePreservedPath(absolutePath) ?? absolutePath;
+        // System.Console.WriteLine($"[DEBUG_LOG] ResolvePath preserved: {preserved}");
+        
+        return preserved;
+    }
+
+    /// <summary>
+    /// Returns the absolute physical path on the host Linux system for a given DOS path.
+    /// This is the primary "escape hatch" to interact with the host OS (e.g., starting processes).
+    /// It handles:
+    /// 1. SUBST mapping (via GetLinuxPath)
+    /// 2. Absolute path resolution
+    /// 3. Case-preservation (finding the actual case of files on disk)
+    /// </summary>
+    public string GetPhysicalPath(string dosPath)
+    {
+        var linuxPath = GetLinuxPath(dosPath);
+        var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+        var absolutePath = fs.Path.GetFullPath(linuxPath);
         return FindCasePreservedPath(absolutePath) ?? absolutePath;
     }
 
-    public string GetCaseInsensitiveMatch(string path)
+    internal string GetCaseInsensitiveMatch(string path)
     {
-        // Use IFileSystem directly here to avoid recursion if DosFileSystem calls this
-        // But DosFileSystem is what's passed in.
-        // We need to use the RAW inner filesystem for matching.
+        // Internal helper to map a DOS path to a physical Linux path with case sensitivity handling
+        var linuxPath = GetLinuxPath(path);
+        
         var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
         
-        var dir = fs.Path.GetDirectoryName(path);
-        var fileName = fs.Path.GetFileName(path);
+        var dir = fs.Path.GetDirectoryName(linuxPath);
+        var fileName = fs.Path.GetFileName(linuxPath);
 
-        if (string.IsNullOrEmpty(dir)) dir = CurrentDirectory;
-        else
-        {
-            // ResolvePath uses _fileSystem which is DosFileSystem.
-            // We should be careful.
-            dir = ResolvePath(dir);
-        }
+        if (string.IsNullOrEmpty(dir)) dir = GetLinuxPath(CurrentDirectory);
 
-        if (!fs.Directory.Exists(dir)) return path;
+        if (!fs.Directory.Exists(dir)) return linuxPath;
 
         var entries = fs.Directory.GetFileSystemEntries(dir);
         var match = entries.FirstOrDefault(e => fs.Path.GetFileName(e).Equals(fileName, StringComparison.OrdinalIgnoreCase));
 
-        return match ?? path;
+        return match ?? linuxPath;
     }
 
     private string? FindCasePreservedPath(string path)
@@ -348,21 +452,24 @@ public class FileSystemService
             driveLetter = path.Substring(0, 1).ToUpper();
         }
 
-        var resolvedPath = ResolvePath(path);
+        // System.Console.WriteLine($"[DEBUG_LOG] ChangeDirectory input: {path}, currentDrive before: {_currentDrive}");
+        var resolvedDosPath = ResolvePath(path);
+        // System.Console.WriteLine($"[DEBUG_LOG] ChangeDirectory resolvedDosPath: {resolvedDosPath}");
         
-        if (resolvedPath != null && _fileSystem.Directory.Exists(resolvedPath))
+        var linuxPath = GetLinuxPath(resolvedDosPath);
+        // System.Console.WriteLine($"[DEBUG_LOG] ChangeDirectory linuxPath: {linuxPath}");
+        
+        var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+        if (fs.Directory.Exists(linuxPath))
         {
-            if (driveLetter != null && !_driveCurrentDirs.ContainsKey(driveLetter))
-            {
-                 _driveCurrentDirs[driveLetter] = resolvedPath;
-            }
-
             if (driveLetter != null)
             {
                 _currentDrive = driveLetter;
+                // System.Console.WriteLine($"[DEBUG_LOG] ChangeDirectory drive changed to: {_currentDrive}");
             }
 
-            _driveCurrentDirs[_currentDrive] = resolvedPath;
+            _driveCurrentDirs[_currentDrive] = resolvedDosPath;
+            // System.Console.WriteLine($"[DEBUG_LOG] ChangeDirectory updated _driveCurrentDirs[{_currentDrive}] = {resolvedDosPath}");
             return Result.Success();
         }
 
@@ -457,9 +564,18 @@ public class FileSystemService
 
     public string GetDosPath(string? linuxPath = null, string? preferredDrive = null)
     {
-        linuxPath ??= CurrentDirectory;
+        linuxPath ??= GetLinuxPath(CurrentDirectory);
 
-        // If a preferred drive is specified, try that first
+        // If it looks like it's already a DOS path, return it (but normalize it)
+        if (linuxPath.Length >= 2 && linuxPath[1] == ':' && char.IsLetter(linuxPath[0]))
+        {
+            return linuxPath.Replace('/', '\\');
+        }
+
+        // Normalize linuxPath: remove trailing slash if not root
+        if (linuxPath.Length > 1 && linuxPath.EndsWith("/")) linuxPath = linuxPath.TrimEnd('/');
+
+        // 1. Prioritize preferredDrive if specified
         if (preferredDrive != null)
         {
             var drive = preferredDrive.ToUpper();
@@ -470,14 +586,18 @@ public class FileSystemService
                 var dosPath = linuxPath.Replace('/', '\\');
                 if (dosPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) return dosPath;
                 if (dosPath.StartsWith("\\")) return "C:" + dosPath;
-                return "C:\\" + dosPath;
+                return "C:\\" + dosPath.TrimStart('\\');
             }
 
             if (_substMounts.TryGetValue(drive, out var substPath))
             {
-                if (linuxPath.StartsWith(substPath, StringComparison.OrdinalIgnoreCase))
+                var normalizedSubst = substPath;
+                if (normalizedSubst.Length > 1 && normalizedSubst.EndsWith("/")) normalizedSubst = normalizedSubst.TrimEnd('/');
+
+                if (linuxPath.Equals(normalizedSubst, StringComparison.OrdinalIgnoreCase) || 
+                    linuxPath.StartsWith(normalizedSubst + "/", StringComparison.OrdinalIgnoreCase))
                 {
-                    var relative = linuxPath.Substring(substPath.Length).Replace('/', '\\');
+                    var relative = linuxPath.Substring(normalizedSubst.Length).Replace('/', '\\');
                     if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
                     var result = drive + relative;
                     if (result.Length == 2) result += "\\";
@@ -486,15 +606,46 @@ public class FileSystemService
             }
         }
 
-        // Check if linuxPath is actually a substituted path, but only if it's not on C: or if we're on a subst drive
-        foreach (var kvp in _substMounts)
+        // 2. Prioritize currentDrive if it matches the path, 
+        // BUT ONLY if linuxPath is NOT equal to some other subst root 
+        // that is more specific. (Wait, subst paths are unique usually).
+        // Actually, the user's issue is specifically that they WANT to stay on the subst drive.
+        var currentDriveWithColon = _currentDrive + ":";
+        if (currentDriveWithColon != "C:" && _substMounts.TryGetValue(currentDriveWithColon, out var currentSubstPath))
         {
-            if (linuxPath.StartsWith(kvp.Value, StringComparison.OrdinalIgnoreCase))
+            var normalizedSubst = currentSubstPath;
+            if (normalizedSubst.Length > 1 && normalizedSubst.EndsWith("/")) normalizedSubst = normalizedSubst.TrimEnd('/');
+
+            if (linuxPath.Equals(normalizedSubst, StringComparison.OrdinalIgnoreCase) || 
+                linuxPath.StartsWith(normalizedSubst + "/", StringComparison.OrdinalIgnoreCase))
             {
-                // Only return the subst path if the current drive is that subst drive
-                if (_currentDrive.Equals(kvp.Key.TrimEnd(':'), StringComparison.OrdinalIgnoreCase))
+                var relative = linuxPath.Substring(normalizedSubst.Length).Replace('/', '\\');
+                if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
+                var result = currentDriveWithColon + relative;
+                if (result.Length == 2) result += "\\";
+                return result;
+            }
+        }
+
+        // 3. If we are on C:, we might match a subst drive, but we should prefer C: 
+        // UNLESS the path is ONLY accessible via subst (not really possible here since C: is root).
+        if (_currentDrive == "C")
+        {
+             // Do nothing here, let it fall through to C: default
+        }
+        else
+        {
+            // Check other subst drives
+            foreach (var kvp in _substMounts.OrderByDescending(k => k.Value.Length))
+            {
+                if (kvp.Key.Equals(currentDriveWithColon, StringComparison.OrdinalIgnoreCase)) continue; // Already checked
+
+                var normalizedSubst = kvp.Value;
+                if (normalizedSubst.Length > 1 && normalizedSubst.EndsWith("/")) normalizedSubst = normalizedSubst.TrimEnd('/');
+
+                if (linuxPath.StartsWith(normalizedSubst, StringComparison.OrdinalIgnoreCase))
                 {
-                    var relative = linuxPath.Substring(kvp.Value.Length).Replace('/', '\\');
+                    var relative = linuxPath.Substring(normalizedSubst.Length).Replace('/', '\\');
                     if (!relative.StartsWith("\\") && relative.Length > 0) relative = "\\" + relative;
                     var result = kvp.Key + relative;
                     if (result.Length == 2) result += "\\";
@@ -503,10 +654,11 @@ public class FileSystemService
             }
         }
         
+        // 4. Default to C:
         var cPath = linuxPath.Replace('/', '\\');
         if (cPath.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) return cPath;
         if (cPath.StartsWith("\\")) return "C:" + cPath;
-        return "C:\\" + cPath;
+        return "C:\\" + cPath.TrimStart('\\');
     }
 
     public string GetCurrentDosPath()
@@ -557,10 +709,10 @@ public class FileSystemService
         var extensions = new[] { "", ".exe", ".com", ".bat", ".cmd" };
         
         // 1. Zoek in huidige map
-        var linuxCurrent = ResolvePath(CurrentDirectory);
+        var physicalCurrent = GetPhysicalPath(CurrentDirectory);
         foreach (var ext in extensions)
         {
-            var fullPath = _fileSystem.Path.Combine(linuxCurrent, commandName + ext);
+            var fullPath = _fileSystem.Path.Combine(physicalCurrent, commandName + ext);
             if (IsExecutable(fullPath))
             {
                 return fullPath;
@@ -574,11 +726,11 @@ public class FileSystemService
             var paths = pathVar.Split(';', StringSplitOptions.RemoveEmptyEntries);
             foreach (var path in paths)
             {
-                // De path variabelen kunnen DOS-stijl zijn, dus we moeten ze resolven
-                var resolvedPath = ResolvePath(path);
+                // De path variabelen kunnen DOS-stijl zijn, dus we moeten ze resolven naar fysieke paden
+                var physicalPath = GetPhysicalPath(path);
                 foreach (var ext in extensions)
                 {
-                    var fullPath = _fileSystem.Path.Combine(resolvedPath, commandName + ext);
+                    var fullPath = _fileSystem.Path.Combine(physicalPath, commandName + ext);
                     if (IsExecutable(fullPath))
                     {
                         return fullPath;
@@ -700,15 +852,19 @@ public class FileSystemService
             return Result.Failure("Invalid drive specification.");
 
         // Resolve and validate path
-        var resolvedPath = ResolvePath(path);
-        if (!_fileSystem.Directory.Exists(resolvedPath))
-            return Result.Failure("Path not found.");
+        // Use ResolveLinuxPath to get the physical path on disk
+        var linuxPath = ResolveLinuxPath(path);
+        
+        var fs = (_fileSystem as DosFileSystem)?.InnerFileSystem ?? _fileSystem;
+        // System.Console.WriteLine($"[DEBUG_LOG] SetSubst drive: {drive}, path: {path}, resolvedLinux: {linuxPath}");
+        if (!fs.Directory.Exists(linuxPath))
+            return Result.Failure($"Path not found: {path} (resolved to {linuxPath})");
 
         // Check if drive is already substituted
         if (_substMounts.ContainsKey(drive))
             return Result.Failure("Drive already substituted.");
 
-        _substMounts[drive] = resolvedPath;
+        _substMounts[drive] = linuxPath;
         _driveCurrentDirs[drive.TrimEnd(':')] = drive + "\\";
         return Result.Success();
     }
@@ -742,7 +898,12 @@ public class FileSystemService
 
     public Dictionary<string, string> GetAllSubsts()
     {
-        return new Dictionary<string, string>(_substMounts, StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kvp in _substMounts)
+        {
+            result[kvp.Key] = GetDosPath(kvp.Value, "C:");
+        }
+        return result;
     }
 
     public string? GetSubstPath(string drive)

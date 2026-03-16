@@ -181,15 +181,15 @@ public class CommandTests
         await command.ExecuteAsync(new[] { "test" }, service, console, CancellationToken.None);
 
         // Assert
-        Assert.Equal("/test", service.CurrentDirectory);
+        Assert.Equal(@"C:\test", service.CurrentDirectory);
         
         // Act back
         await command.ExecuteAsync(new[] { ".." }, service, console, CancellationToken.None);
-        Assert.Equal("/", service.CurrentDirectory);
+        Assert.Equal(@"C:\", service.CurrentDirectory);
 
         // Act case-insensitive
         await command.ExecuteAsync(new[] { "TEST" }, service, console, CancellationToken.None);
-        Assert.Equal("/test", service.CurrentDirectory);
+        Assert.Equal(@"C:\test", service.CurrentDirectory);
     }
 
     [Fact]
@@ -367,10 +367,10 @@ public class CommandTests
 
         // Act
         await pushd.ExecuteAsync(new[] { "test" }, service, console, CancellationToken.None);
-        Assert.Equal("/test", service.CurrentDirectory);
+        Assert.Equal("C:\\test", service.CurrentDirectory);
 
         await popd.ExecuteAsync(Array.Empty<string>(), service, console, CancellationToken.None);
-        Assert.Equal("/", service.CurrentDirectory);
+        Assert.Equal("C:\\", service.CurrentDirectory);
     }
 
     [Fact]
@@ -441,7 +441,7 @@ public class CommandTests
         var result = service.ResolvePath("/TEST/CASE.TXT");
 
         // Assert
-        Assert.Equal("/Test/Case.txt", result);
+        Assert.Equal("C:\\Test\\Case.txt", result);
     }
     [Fact]
     public async Task DirCommand_Attributes_ShouldFilterCorrectly()

@@ -55,17 +55,19 @@ public class DirCommand : ICommand
             }
             else
             {
-                var targetPath = pathArg.Replace('\\', '/');
-                var lastSlash = targetPath.LastIndexOf('/');
+                // Try to split into directory and pattern
+                var lastSlash = pathArg.LastIndexOfAny(new[] { '/', '\\' });
                 if (lastSlash >= 0)
                 {
-                    searchDir = fileSystem.ResolvePath(targetPath.Substring(0, lastSlash));
-                    pattern = targetPath.Substring(lastSlash + 1);
+                    var dirPart = pathArg.Substring(0, lastSlash);
+                    if (dirPart.Length == 2 && dirPart[1] == ':') dirPart += "\\";
+                    searchDir = fileSystem.ResolvePath(dirPart);
+                    pattern = pathArg.Substring(lastSlash + 1);
                 }
                 else
                 {
                     searchDir = fileSystem.CurrentDirectory;
-                    pattern = targetPath;
+                    pattern = pathArg;
                 }
             }
 

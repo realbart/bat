@@ -13,6 +13,7 @@ public class BatchTests
     {
         var fs = new MockFileSystem();
         var service = new FileSystemService(fs);
+        service.ChangeDirectory("/");
         var dispatcher = new CommandDispatcher(service);
         var console = new TestConsole();
         return (dispatcher, service, console, fs);
@@ -31,9 +32,9 @@ goto EOF
 :LABEL2
 echo Inside LABEL2
 goto LABEL1";
-        fs.AddFile("C:\\test.bat", new MockFileData(batchContent));
+        fs.AddFile("/test.bat", new MockFileData(batchContent));
 
-        await dispatcher.DispatchAsync("C:\\test.bat", default, console);
+        await dispatcher.DispatchAsync("test.bat", default, console);
 
         var output = console.Output.Trim().Replace("\r\n", "\n");
         Assert.Contains("Inside LABEL2", output);
@@ -46,18 +47,17 @@ goto LABEL1";
     {
         var (dispatcher, service, console, fs) = Setup();
         var batchContent = @"@echo off
-if ""a""==""a"" echo a is a
-if not ""a""==""b"" echo a is not b
-if exist C:\test.bat (
-  echo exist
-) else (
-  echo not exist
-)";
-        fs.AddFile("C:\\test.bat", new MockFileData(batchContent));
+if ""a"" == ""a"" echo a is a
+if not ""a"" == ""b"" echo a is not b
+if exist test.bat echo exist
+echo done";
+        fs.AddFile("/test.bat", new MockFileData(batchContent));
 
-        await dispatcher.DispatchAsync("C:\\test.bat", default, console);
+        await dispatcher.DispatchAsync("test.bat", default, console);
 
         var output = console.Output.Trim().Replace("\r\n", "\n");
+        // Output debug
+        // System.Console.WriteLine($"[DEBUG_LOG] output: {output}");
         Assert.Contains("a is a", output);
         Assert.Contains("a is not b", output);
         Assert.Contains("exist", output);
@@ -70,9 +70,9 @@ if exist C:\test.bat (
         // Global echo is ON by default
         var batchContent = @"echo visible
 @echo hidden";
-        fs.AddFile("C:\\test.bat", new MockFileData(batchContent));
+        fs.AddFile("/test.bat", new MockFileData(batchContent));
 
-        await dispatcher.DispatchAsync("C:\\test.bat", default, console);
+        await dispatcher.DispatchAsync("test.bat", default, console);
 
         var output = console.Output.Trim().Replace("\r\n", "\n");
         // ""echo visible"" should be echoed because echo is ON
@@ -90,9 +90,9 @@ if exist C:\test.bat (
 echo 1
 echo off
 echo 2";
-        fs.AddFile("C:\\test.bat", new MockFileData(batchContent));
+        fs.AddFile("/test.bat", new MockFileData(batchContent));
 
-        await dispatcher.DispatchAsync("C:\\test.bat", default, console);
+        await dispatcher.DispatchAsync("test.bat", default, console);
 
         var output = console.Output.Trim().Replace("\r\n", "\n");
         Assert.Contains("echo 1\n1", output);

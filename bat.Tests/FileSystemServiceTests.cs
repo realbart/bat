@@ -16,14 +16,14 @@ public class FileSystemServiceTests
         });
         
         var service = new FileSystemService(fileSystem);
-        service.ChangeDirectory("/home/user");
+        service.ChangeDirectory("C:\\home\\user");
 
         // Act
         var result = service.ChangeDirectory("test");
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal("/home/user/test", service.CurrentDirectory);
+        Assert.Equal(@"C:\home\user\test", service.CurrentDirectory);
         Assert.Equal(@"C:\home\user\test", service.GetDosPath());
     }
 
@@ -34,14 +34,14 @@ public class FileSystemServiceTests
         var fileSystem = new MockFileSystem();
         fileSystem.Directory.CreateDirectory("/home/user");
         var service = new FileSystemService(fileSystem);
-        service.ChangeDirectory("/home/user");
+        service.ChangeDirectory("C:\\home\\user");
 
         // Act
         var result = service.ChangeDirectory("nonexistent");
 
         // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal("/home/user", service.CurrentDirectory);
+        Assert.Equal(@"C:\home\user", service.CurrentDirectory);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class FileSystemServiceTests
         var resolved = service.ResolvePath(@"D:\test.txt");
 
         // Assert
-        Assert.Equal("/home/user/temp/test.txt", resolved);
+        Assert.Equal(@"D:\test.txt", resolved);
     }
 
     [Fact]
@@ -331,5 +331,91 @@ public class FileSystemServiceTests
 
         // Act & Assert
         Assert.True(service.IsDotNetAssembly("/test/small.exe"));
+    }
+    [Fact]
+    public void GetPhysicalPath_ShouldReturnLinuxPath()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+        {
+            { "/home/user/TestDir/File.txt", new MockFileData("test content") }
+        });
+        var service = new FileSystemService(fileSystem);
+
+        // Act & Assert
+        // 1. C: Drive
+        Assert.Equal("/home/user/TestDir/File.txt", service.GetPhysicalPath(@"C:\home\user\TestDir\File.txt"));
+        
+        // 2. Relative path
+        service.ChangeDirectory(@"C:\home\user");
+        Assert.Equal("/home/user/TestDir/File.txt", service.GetPhysicalPath(@"TestDir\File.txt"));
+
+        // 3. Substituted drive
+        service.SetSubst("D:", "/home/user/TestDir");
+        Assert.Equal("/home/user/TestDir/File.txt", service.GetPhysicalPath(@"D:\File.txt"));
+    }
+
+    [Fact]
+    public void GetPhysicalPath_ShouldPreserveCaseIfFileExists()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+        {
+            { "/home/user/Project/Source.cs", new MockFileData("code") }
+        });
+        var service = new FileSystemService(fileSystem);
+
+        // Act & Assert
+        // Request with wrong case, should return correct case from filesystem
+        Assert.Equal("/home/user/Project/Source.cs", service.GetPhysicalPath(@"C:\home\USER\project\source.CS"));
+    }
+
+    [Fact]
+    public void ChangeDirectory_ShouldRemainOnSubstDrive_WhenGoingToParent()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/bart/Videos");
+        fs.Directory.CreateDirectory("/home/bart/snap");
+        var service = new FileSystemService(fs);
+        
+        // 1. D: points to /home/bart
+        service.SetSubst("D:", "/home/bart");
+        
+        // 2. Go to D:\Videos
+        service.ChangeDirectory("D:\\Videos");
+        Assert.Equal("D:\\Videos", service.GetCurrentDosPath());
+        
+        // 3. subst e: ..\  (from D:\Videos, this should be /home/bart)
+        service.SetSubst("E:", "..\\"); 
+        
+        // 4. switch to E:
+        service.ChangeDirectory("E:");
+        Assert.Equal("E:\\", service.GetCurrentDosPath());
+        
+        // 5. cd snap (where /home/bart/snap exists)
+        var resCd = service.ChangeDirectory("snap");
+        Assert.True(resCd.IsSuccess, "CD snap failed: " + resCd.ErrorMessage);
+        
+        // Assert
+        Assert.Equal("E:\\snap", service.GetCurrentDosPath());
+        Assert.Equal("E", service.GetType().GetField("_currentDrive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(service));
+    }
+
+    [Fact]
+    public void SubstOutput_ShouldShowDosPaths()
+    {
+        // Arrange
+        var fs = new MockFileSystem();
+        fs.Directory.CreateDirectory("/home/bart/Videos");
+        var service = new FileSystemService(fs);
+        service.ChangeDirectory("C:\\home\\bart");
+        
+        // Act
+        service.SetSubst("D:", "C:\\home\\bart");
+        
+        // Assert
+        var substs = service.GetAllSubsts();
+        Assert.Equal("C:\\home\\bart", substs["D:"]);
     }
 }
