@@ -1,6 +1,6 @@
 ﻿using Context;
 
-namespace Subst;
+namespace XCopy;
 
 public static class Program
 {
@@ -12,7 +12,7 @@ public static class Program
 
     public static async Task<int> Main(IContext context, params string[] args)
     {
-        Console.WriteLine("Subst main (through {0})", context);
+        Console.WriteLine("XCopy Main (through {0})", context);
         return 0;
     }
 }

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Bat/Bat.csproj" />
+  <Project Path="Context/Context.csproj" />
+  <Project Path="Subst/Subst.csproj" Id="3f6d6b27-6aaa-47a3-bb50-606d3a53dcfc" />
+  <Project Path="Xcopy/Xcopy.csproj" />
+</Solution>
