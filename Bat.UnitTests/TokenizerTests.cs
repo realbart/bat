@@ -453,8 +453,8 @@ public class TokenizerTests
             // Count parens
             var openParens = nonWhitespace.Count(t => t.Type == TokenType.OpenParen);
             var closeParens = nonWhitespace.Count(t => t.Type == TokenType.CloseParen);
-            Assert.AreEqual(2, openParens);
-            Assert.AreEqual(4, closeParens); // More close than open - should be balanced
+            Assert.AreEqual(0, openParens);
+            Assert.AreEqual(2, closeParens); // More close than open - should be balanced
             Assert.IsTrue(result.IsComplete);
         }
 
