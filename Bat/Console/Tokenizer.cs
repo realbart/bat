@@ -6,22 +6,40 @@ internal class Tokenizer : ITokenizer
 {
     private string _input = string.Empty;
     private int _position;
-    private readonly List<Token> _tokens = [];
-    private readonly List<string> _errors = [];
-
+    private List<Token> _tokens = default!;
+    private bool _expectingCommand;
+    private bool _inBlockCommand;
+    private int _blockNestingLevel;
     public TokenSet Tokenize(TokenSet tokens, string input)
     {
+        // todo: prevent tokensets from being copied all the time
+        // (probably best to modify the internal data structure of TokenSet to allow for efficient appending)
+        _blockNestingLevel = tokens.BlockNestingLevel;
+        if (tokens.Count < 2) return Tokenize(input);
+        _tokens = new();
+        if (tokens[^2].Type == TokenType.LineContinuation) 
+        {
+            _tokens.AddRange(tokens[..^2]);
+            return Tokenize(tokens[^2].Value + input);
+        }
         _tokens.AddRange(tokens[..^1]);
-        _errors.AddRange(tokens.Errors);
-        return Tokenize(input);
+        _expectingCommand = true;
+
+        return TokenizeInner(input);
     }
 
     public TokenSet Tokenize(string input)
     {
+        _tokens = new();
+        _blockNestingLevel = 0;
+        return TokenizeInner(input);
+    }
+
+    private TokenSet TokenizeInner(string input) 
+    {
         _input = input;
-        _tokens.Clear();
-        _errors.Clear();
         _position = 0;
+        _expectingCommand = true;
 
         while (_position < _input.Length)
         {
@@ -29,7 +47,7 @@ internal class Tokenizer : ITokenizer
         }
 
         _tokens.Add(Token.EndOfInput(_position));
-        return new TokenSet(_tokens, _errors);
+        return new TokenSet(_tokens, _blockNestingLevel);
     }
 
     private void TokenizeNext()
@@ -45,13 +63,32 @@ internal class Tokenizer : ITokenizer
             case '\r':
             case '\n':
                 TokenizeNewLine();
+                _expectingCommand = true; // New line = expect command
                 break;
             case '(':
-                _tokens.Add(Token.OpenParen(_position));
+                if (_inBlockCommand || _expectingCommand)
+                {
+                    _tokens.Add(Token.BlockStart(_position));
+                    _inBlockCommand = false; // Reset after first (
+                    _blockNestingLevel++;
+                }
+                else
+                {
+                    _tokens.Add(Token.OpenParen(_position));
+                }
                 _position++;
                 break;
             case ')':
-                _tokens.Add(Token.CloseParen(_position));
+                // Smart detection: is this closing a block?
+                if (_blockNestingLevel>0)
+                {
+                    _tokens.Add(Token.BlockEnd(_position));
+                    _blockNestingLevel--;
+                }
+                else
+                {
+                    _tokens.Add(Token.CloseParen(_position));
+                }
                 _position++;
                 break;
             case '"':
@@ -65,6 +102,7 @@ internal class Tokenizer : ITokenizer
                 break;
             case '&':
                 TokenizeCommandSeparator();
+                _expectingCommand = true; // After & expect new command
                 break;
             case '=':
                 TokenizeOperator();
@@ -85,7 +123,14 @@ internal class Tokenizer : ITokenizer
                 TokenizeEscapeSequence();
                 break;
             default:
-                TokenizeText();
+                if (!char.IsWhiteSpace(ch) && _expectingCommand)
+                {
+                    TokenizeCommand();
+                }
+                else
+                {
+                    TokenizeText();
+                }
                 break;
         }
     }
@@ -180,10 +225,8 @@ internal class Tokenizer : ITokenizer
                 _position++;
             }
         }
-
-        // Unclosed quote
-        _errors.Add($"Unclosed quoted string at position {start}");
-        _tokens.Add(Token.Error(sb.ToString(), start, $"Unclosed quoted string"));
+        // Unclosed quote = literal text including the quote
+        _tokens.Add(Token.Text($"{quote}{sb}", start));
     }
 
     private void TokenizeVariable()
@@ -206,9 +249,8 @@ internal class Tokenizer : ITokenizer
         }
         else
         {
-            // Unclosed variable
-            _errors.Add($"Unclosed variable reference at position {start}");
-            _tokens.Add(Token.Error($"%{sb}", start, "Unclosed variable reference"));
+            // Unclosed variable = literal text including the %
+            _tokens.Add(Token.Text($"%{sb}", start));
         }
     }
 
@@ -321,7 +363,7 @@ internal class Tokenizer : ITokenizer
         else
         {
             // ^ at end of input
-            _tokens.Add(Token.Text("^", start));
+            _tokens.Add(Token.LineContinuation("^", start));
         }
     }
 
@@ -355,4 +397,45 @@ internal class Tokenizer : ITokenizer
     private char Current() => _position < _input.Length ? _input[_position] : '\0';
     private char Current(int offset) => _position + offset < _input.Length && _position + offset >= 0 ? _input[_position + offset] : '\0';
     private char Peek() => _position + 1 < _input.Length ? _input[_position + 1] : '\0';
+
+    private void TokenizeCommand()
+    {
+        var start = _position;
+        var sb = new StringBuilder();
+
+        while (_position < _input.Length)
+        {
+            var ch = Current();
+
+            // Stop on special characters or whitespace
+            if (char.IsWhiteSpace(ch) || ch == '(' || ch == ')' || ch == '"' || ch == '\'' ||
+                ch == '%' || ch == '&' || ch == '=' || ch == '^' || ch == '>' || ch == '<' ||
+                ch == '|' || ch == '!')
+            {
+                break;
+            }
+
+            sb.Append(ch);
+            _position++;
+        }
+
+        if (sb.Length > 0)
+        {
+            var commandValue = sb.ToString();
+            _tokens.Add(Token.Command(commandValue, start));
+            _inBlockCommand = IsBlockCommand(commandValue);
+            _expectingCommand = false;
+        }
+    }
+
+    private static bool IsBlockCommand(string command) =>
+        command?.ToLower() switch
+        {
+            "if" => true,
+            "for" => true,
+            "while" => true,
+            "do" => true,
+            "else" => true,
+            _ => false
+        };
 }

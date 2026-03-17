@@ -4,14 +4,18 @@ namespace Bat.Console;
 
 internal class TokenSet : ReadOnlyCollection<Token>
 {
-    public bool HasErrors { get; }
-    public string[] Errors { get; }
+    public readonly bool HasErrors;
+    public readonly IReadOnlyCollection<string> Errors;
+    public bool HasLineContinuation;
+    public int BlockNestingLevel;
+    public bool IsComplete => BlockNestingLevel == 0 && !HasLineContinuation;
 
-    public TokenSet(List<Token> tokens, IEnumerable<string> errors) : base(tokens)
+    public TokenSet(List<Token> tokens, int blockNestingLevel) : base(tokens)
     {
-        var tokenErrors = this.Where(t => t.Type == TokenType.Error).Select(t => t.ErrorMessage).OfType<string>();
-        Errors = [.. errors, .. tokenErrors];
-        HasErrors = Errors.Any();
+        Errors = this.Where(t => t.Type == TokenType.Error).Select(t => t.ErrorMessage).OfType<string>().ToArray();
+        HasErrors = Errors.Count > 0;
+        HasLineContinuation = tokens.Count > 1 && tokens[^2].Type == TokenType.LineContinuation;
+        BlockNestingLevel = blockNestingLevel;
     }
 
     public IEnumerable<Token> GetTokensOfType(TokenType type) => this.Where(t => t.Type == type);

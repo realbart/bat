@@ -100,9 +100,9 @@ public class ParenthesesTokenizerTests
     public void NestedParens_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("((test))");
-        
+
         var tokens = result.GetNonWhitespaceTokens().ToArray();
-        Assert.HasCount(5, tokens); // ( ( test ) )
+        Assert.HasCount(5, tokens); // ( ( test ) ) (no EndOfInput)
         Assert.AreEqual(TokenType.OpenParen, tokens[0].Type);
         Assert.AreEqual(TokenType.OpenParen, tokens[1].Type);
         Assert.AreEqual(TokenType.Text, tokens[2].Type);
@@ -143,14 +143,14 @@ public class QuotedStringTokenizerTests
     }
 
     [TestMethod]
-    public void UnclosedQuotedString_ReturnsErrorToken()
+    public void UnclosedQuotedString_ReturnsTextToken()
     {
         var result = _tokenizer.Tokenize("\"hello world");
-        
-        Assert.IsTrue(result.HasErrors);
-        Assert.IsTrue(result.Errors.Any(e => e.Contains("Unclosed quoted string")));
-        var errorToken = result.First(t => t.Type == TokenType.Error);
-        Assert.AreEqual("hello world", errorToken.Value);
+
+        Assert.IsFalse(result.HasErrors); // No longer an error
+        Assert.HasCount(2, result);
+        Assert.AreEqual(TokenType.Text, result[0].Type); // Now Text, not Error
+        Assert.AreEqual("\"hello world", result[0].Value); // Includes the quote
     }
 
     [TestMethod]
@@ -216,21 +216,23 @@ public class VariableTokenizerTests
     }
 
     [TestMethod]
-    public void UnclosedVariable_ReturnsErrorToken()
+    public void UnclosedVariable_ReturnsTextToken()
     {
         var result = _tokenizer.Tokenize("%PATH");
-        
-        Assert.IsTrue(result.HasErrors);
-        Assert.IsTrue(result.Errors.Any(e => e.Contains("Unclosed variable reference")));
+
+        Assert.IsFalse(result.HasErrors); // No longer an error
+        Assert.HasCount(2, result);
+        Assert.AreEqual(TokenType.Text, result[0].Type); // Now Text, not Error
+        Assert.AreEqual("%PATH", result[0].Value); // Includes the %
     }
 
     [TestMethod]
     public void VariableInText_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("echo %PATH% done");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
-        Assert.HasCount(4, nonWhitespace);
+        Assert.HasCount(3, nonWhitespace); // echo, %PATH%, done (no EndOfInput)
         Assert.AreEqual("echo", nonWhitespace[0].Value);
         Assert.AreEqual(TokenType.Variable, nonWhitespace[1].Type);
         Assert.AreEqual("PATH", nonWhitespace[1].Value);
@@ -352,13 +354,14 @@ public class EscapeSequenceTokenizerTests
     }
 
     [TestMethod]
-    public void EscapeAtEndOfInput_ReturnsCaretAsText()
+    public void EscapeAtEndOfInput_ReturnsLineContinuation()
     {
         var result = _tokenizer.Tokenize("test^");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
-        Assert.HasCount(3, nonWhitespace);
+        Assert.HasCount(2, nonWhitespace); // test, ^ (no EndOfInput in non-whitespace)
         Assert.AreEqual("test", nonWhitespace[0].Value);
+        Assert.AreEqual(TokenType.LineContinuation, nonWhitespace[1].Type); // Now LineContinuation
         Assert.AreEqual("^", nonWhitespace[1].Value);
     }
 
@@ -366,9 +369,9 @@ public class EscapeSequenceTokenizerTests
     public void EscapeSequenceInMiddle_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("hello^>world");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
-        Assert.HasCount(4, nonWhitespace);
+        Assert.HasCount(3, nonWhitespace); // hello, >, world (no EndOfInput)
         Assert.AreEqual("hello", nonWhitespace[0].Value);
         Assert.AreEqual(">", nonWhitespace[1].Value);
         Assert.AreEqual("world", nonWhitespace[2].Value);
@@ -390,8 +393,9 @@ public class ComplexBatchCommandTests
     public void IfCommand_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("if %foo%==1 (echo test)");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
+        Assert.HasCount(8, nonWhitespace); // if, %foo%, ==, 1, (, echo, test, ) (no EndOfInput)
         Assert.AreEqual("if", nonWhitespace[0].Value);
         Assert.AreEqual(TokenType.Variable, nonWhitespace[1].Type);
         Assert.AreEqual("foo", nonWhitespace[1].Value);
@@ -408,8 +412,9 @@ public class ComplexBatchCommandTests
     public void ComplexCommandWithQuotesAndParens_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("if \"%foo%\"==\"1\" (echo \"test)\")");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
+        Assert.HasCount(8, nonWhitespace); // Updated count
         Assert.AreEqual("if", nonWhitespace[0].Value);
         Assert.AreEqual(TokenType.QuotedString, nonWhitespace[1].Type);
         Assert.AreEqual("%foo%", nonWhitespace[1].Value); // Variables inside quotes stay literal
@@ -417,14 +422,20 @@ public class ComplexBatchCommandTests
         Assert.AreEqual("==", nonWhitespace[2].Value);
         Assert.AreEqual(TokenType.QuotedString, nonWhitespace[3].Type);
         Assert.AreEqual("1", nonWhitespace[3].Value);
+        Assert.AreEqual(TokenType.OpenParen, nonWhitespace[4].Type);
+        Assert.AreEqual("echo", nonWhitespace[5].Value);
+        Assert.AreEqual(TokenType.QuotedString, nonWhitespace[6].Type);
+        Assert.AreEqual("test)", nonWhitespace[6].Value); // Paren inside quote is literal
+        Assert.AreEqual(TokenType.CloseParen, nonWhitespace[7].Type);
     }
 
     [TestMethod]
     public void CommandSeparator_ReturnsCorrectTokens()
     {
         var result = _tokenizer.Tokenize("echo hello & echo world");
-        
+
         var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
+        Assert.HasCount(5, nonWhitespace); // echo, hello, &, echo, world (no EndOfInput)
         Assert.AreEqual("echo", nonWhitespace[0].Value);
         Assert.AreEqual("hello", nonWhitespace[1].Value);
         Assert.AreEqual(TokenType.CommandSeparator, nonWhitespace[2].Type);
@@ -462,9 +473,15 @@ public class MultiLineTokenizerTests
     {
         var firstLine = _tokenizer.Tokenize("if \"unclosed");
         var result = _tokenizer.Tokenize(firstLine, "echo test");
-        
-        Assert.IsTrue(result.HasErrors);
-        Assert.IsTrue(result.Errors.Any(e => e.Contains("Unclosed quoted string")));
+
+        // Since unclosed quotes are no longer errors, this test should pass
+        Assert.IsFalse(result.HasErrors); // No errors anymore
+
+        var nonWhitespace = result.GetNonWhitespaceTokens().ToArray();
+        Assert.IsTrue(nonWhitespace.Any(t => t.Value == "if"));
+        Assert.IsTrue(nonWhitespace.Any(t => t.Value == "\"unclosed")); // Literal text token
+        Assert.IsTrue(nonWhitespace.Any(t => t.Value == "echo"));
+        Assert.IsTrue(nonWhitespace.Any(t => t.Value == "test"));
     }
 }
 
@@ -483,17 +500,16 @@ public class TokenSetExtensionTests
     public void IsBalanced_WithUnclosedQuote_ReturnsFalse()
     {
         var result = _tokenizer.Tokenize("echo \"hello");
-        
-        // This test reveals the syntax error in TokenSetExtensions.cs
-        // The extension method syntax is incorrect
+
+        // Since unclosed quotes are now literal text, this should be balanced
         try
         {
-            var isBalanced = result.IsBalanced();
-            Assert.IsFalse(isBalanced);
+            var isBalanced = result.IsComplete;
+            Assert.IsTrue(isBalanced); // Changed expectation
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 
@@ -501,15 +517,16 @@ public class TokenSetExtensionTests
     public void IsBalanced_WithUnclosedVariable_ReturnsFalse()
     {
         var result = _tokenizer.Tokenize("echo %PATH");
-        
+
+        // Since unclosed variables are now literal text, this should be balanced
         try
         {
-            var isBalanced = result.IsBalanced();
-            Assert.IsFalse(isBalanced);
+            var isBalanced = result.IsComplete;
+            Assert.IsTrue(isBalanced); // Changed expectation
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 
@@ -520,12 +537,12 @@ public class TokenSetExtensionTests
         
         try
         {
-            var isBalanced = result.IsBalanced();
+            var isBalanced = result.IsComplete;
             Assert.IsFalse(isBalanced);
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 
@@ -536,12 +553,12 @@ public class TokenSetExtensionTests
         
         try
         {
-            var isBalanced = result.IsBalanced();
+            var isBalanced = result.IsComplete;
             Assert.IsTrue(isBalanced);
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 
@@ -549,15 +566,15 @@ public class TokenSetExtensionTests
     public void IsBalanced_WithLineContinuation_ReturnsFalse()
     {
         var result = _tokenizer.Tokenize("echo hello ^");
-        
+
         try
         {
-            var isBalanced = result.IsBalanced();
-            Assert.IsFalse(isBalanced);
+            var isBalanced = result.IsComplete;
+            Assert.IsFalse(isBalanced); // Should still be false for LineContinuation
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 
@@ -568,12 +585,12 @@ public class TokenSetExtensionTests
         
         try
         {
-            var isBalanced = result.IsBalanced();
+            var isBalanced = result.IsComplete;
             Assert.IsTrue(isBalanced);
         }
         catch (Exception ex)
         {
-            Assert.Fail($"IsBalanced() extension method has syntax error: {ex.Message}");
+            Assert.Fail($"IsComplete extension method has syntax error: {ex.Message}");
         }
     }
 }

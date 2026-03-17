@@ -16,7 +16,7 @@ internal class Repl(ITokenizer tokenizer, IConsole console, IDispatcher dispatch
     {
         await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
         var tokens = tokenizer.Tokenize(await ReadLine(context));
-        while (tokens.IsBalanced())
+        while (tokens.IsComplete)
         {
             await console.Out.WriteAsync("More? ");
             tokens = tokenizer.Tokenize(tokens, await ReadLine(context));

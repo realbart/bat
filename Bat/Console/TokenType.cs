@@ -11,16 +11,37 @@ internal enum TokenType
     /// String enclosed in quotes
     /// </summary>
     QuotedString,
-    
+
+
+    /// <summary>
+    /// String preceeded by a quote but not closed before end of line
+    /// </summary>
+    UnclosedQuotedString,
+
+    /// <summary>
+    /// Command token (first non-whitespace after line start or command separator)
+    /// </summary>
+    Command,
+
     /// <summary>
     /// Opening parenthesis (
     /// </summary>
     OpenParen,
-    
+
     /// <summary>
     /// Closing parenthesis )
     /// </summary>
     CloseParen,
+
+    /// <summary>
+    /// Block start ( after structural commands like IF, FOR
+    /// </summary>
+    BlockStart,
+
+    /// <summary>
+    /// Block end ) matching BlockStart
+    /// </summary>
+    BlockEnd,
     
     /// <summary>
     /// Variable reference like %VAR%
@@ -71,7 +92,12 @@ internal enum TokenType
     /// End of input
     /// </summary>
     EndOfInput,
-    
+
+    /// <summary>
+    /// An Escape sequence that continues on a next line. 
+    /// </summary>
+    LineContinuation,
+
     /// <summary>
     /// Error token for invalid syntax
     /// </summary>

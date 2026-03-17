@@ -21,7 +21,7 @@ public class TokenSetExtensionsSyntaxTests
         var result = _tokenizer.Tokenize("(incomplete");
         
         // If this compiles and runs, the extension method syntax is correct
-        var isBalanced = result.IsBalanced();
+        var isBalanced = result.IsComplete;
         
         Assert.IsFalse(isBalanced); // Should be false due to unmatched paren
     }
@@ -32,7 +32,7 @@ public class TokenSetExtensionsSyntaxTests
         var result = _tokenizer.Tokenize("echo hello");
         
         // Test that the extension method is accessible and works
-        Assert.IsTrue(result.IsBalanced());
+        Assert.IsTrue(result.IsComplete);
     }
 
     [TestMethod]
@@ -43,8 +43,7 @@ public class TokenSetExtensionsSyntaxTests
         
         // These method calls will fail if TokenSet doesn't have the right interface
         var nonWhitespace = result.GetNonWhitespaceTokens();
-        var textTokens = result.GetTokensOfType(TokenType.Text);
-        var hasErrors = result.HasErrors;
+        var textTokens = result.Where(t=>t.Type == TokenType.Text);
         var errors = result.Errors;
         
         Assert.IsNotNull(nonWhitespace);
