@@ -2,18 +2,31 @@
 
 namespace Bat.Console;
 
-internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
+internal class Repl(ITokenizer tokenizer, IConsole console, IDispatcher dispatcher) : IRepl
 {
     public async Task StartAsync(IContext context)
     {
 #pragma warning disable S1116 // the code is not in the body
-        while (await dispatcher.ExecuteCommandAsync(context, console, await ReadLine(context))) ;
+        while (await dispatcher.ExecuteCommandAsync(context, console, await GetTokensAsync(context))) ;
 #pragma warning restore S1116
     }
 
-    public Task<string?> ReadLine(IContext context)
+
+    public async Task<TokenSet> GetTokensAsync(IContext context)
     {
-        console.Write(context.CurrentPathDisplayName + "> ");
-        return Task.FromResult(console.ReadLine());
+        await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
+        var tokens = tokenizer.Tokenize(await ReadLine(context));
+        while (tokens.IsBalanced())
+        {
+            await console.Out.WriteAsync("More? ");
+            tokens = tokenizer.Tokenize(tokens, await ReadLine(context));
+        }
+        return tokens;
+    }
+
+    public async Task<string> ReadLine(IContext context)
+    {
+        // todo: character for characer to support autocompletion and history
+        return (await console.In.ReadLineAsync())?? string.Empty;
     }
 }
