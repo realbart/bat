@@ -496,6 +496,20 @@ public class ComplexScenarios
     }
 
     [TestMethod]
+    public void Block_DoesNotAllowElse()
+    {
+        var result = Tokenizer.Tokenize(context, "(\r\necho 1\r\n) else (\r\necho2 )");
+
+        var tokens = result.RawTokens.ToList();
+
+        // Debug: Check what tokens we actually got
+        var elseCommands = tokens.OfType<BuiltInCommandToken<ElseCommand>>().Count();
+
+        Assert.IsTrue(tokens[0] is BlockStartToken);
+        Assert.AreEqual(0, elseCommands, "Should have NO else command tokens");
+    }
+
+    [TestMethod]
     [DataRow("")]
     [DataRow("echo hello world")]
     [DataRow("xcopy")]

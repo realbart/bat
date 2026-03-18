@@ -177,7 +177,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             // Parentheses
             if (ch == '(')
             {
-                if (_afterBlockCommand)
+                if (_afterBlockCommand || _expectingCommand)
                 {
                     line.Add(Token.BlockStart);
                     _expectingCommand = true;
