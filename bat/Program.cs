@@ -6,7 +6,7 @@ namespace Bat;
 
 public static class Program
 {
-    internal static IRepl Repl { get; } = new Repl(new Tokenizer(), new Console.Console(), new Dispatcher());
+    internal static IRepl Repl { get; } = new Repl(new Console.Console(), new Dispatcher());
 
     public static Task<int> Main(params string[] args) => Main(ContextFactory.CreateContext(), args);
 
