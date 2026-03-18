@@ -16,7 +16,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
     {
         await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
         var command = Tokenizer.Tokenize(context, await ReadLine(context));
-        while (!command.IsComplete)
+        while (command.HasContinuation || command.HasUnfinishedBlocks)
         {
             await console.Out.WriteAsync("More? ");
             command = Tokenizer.Tokenize(context, await ReadLine(context), command);

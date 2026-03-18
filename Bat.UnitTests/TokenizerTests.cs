@@ -98,9 +98,9 @@ public class QuotedStringTokenization
         var result = Tokenizer.Tokenize(context, "echo \"hello");
 
         var tokens = result.LastLine.ToList();
-        // Should treat unclosed quote as regular text
-        Assert.IsTrue(tokens.Any(t => t is TextToken));
-        Assert.IsFalse(result.IsComplete);
+        // Should treat unclosed quote as quoted text token with missing close quote
+        Assert.IsTrue(tokens.Any(t => t is QuotedTextToken));
+        Assert.IsFalse(result.HasContinuation);
     }
 
     [TestMethod]
@@ -111,7 +111,7 @@ public class QuotedStringTokenization
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
         Assert.AreEqual("", quoted.Value);
-        Assert.IsTrue(result.IsComplete);
+        Assert.IsFalse(result.HasContinuation);
     }
 }
 
@@ -321,8 +321,8 @@ public class MultilineTokenization
     {
         var result = Tokenizer.Tokenize(context, "echo hello^");
 
-        Assert.IsFalse(result.IsComplete);
-        Assert.IsTrue(result.LastLine[^1] is EscapeToken);
+        Assert.IsTrue(result.HasContinuation);
+        Assert.IsTrue(result.LastLine[^1] is ContinuationToken);
     }
 
     [TestMethod]
@@ -341,7 +341,7 @@ public class MultilineTokenization
     {
         var result = Tokenizer.Tokenize(context, "if 1==1 (");
 
-        Assert.IsFalse(result.IsComplete);
+        Assert.IsTrue(result.HasUnfinishedBlocks);
     }
 
     [TestMethod]
@@ -350,7 +350,7 @@ public class MultilineTokenization
         var firstLine = Tokenizer.Tokenize(context, "echo hello^");
         var secondLine = Tokenizer.Tokenize(context, "world", firstLine);
 
-        Assert.IsTrue(secondLine.IsComplete);
+        Assert.IsFalse(secondLine.HasContinuation);
         var allTokens = secondLine.RawTokens.ToList();
         // Should contain tokens from both lines
         Assert.IsTrue(allTokens.Any(t => t is BuiltInCommandToken<EchoCommand>));
@@ -417,7 +417,7 @@ public class SpecialTokenization
         // The ^> should be parsed as escaped > character
         var textTokens = tokens.OfType<TextToken>().ToList();
         Assert.IsTrue(textTokens.Any(t => t.Value.Contains(">")));
-        Assert.IsTrue(result.IsComplete);
+        Assert.IsFalse(result.HasContinuation);
     }
 }
 
@@ -474,7 +474,7 @@ public class ComplexScenarios
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
         Assert.AreEqual("test (with parens)", quoted.Value);
-        Assert.IsTrue(result.IsComplete);
+        Assert.IsFalse(result.HasContinuation);
     }
 
     [TestMethod]
@@ -483,9 +483,16 @@ public class ComplexScenarios
         var result = Tokenizer.Tokenize(context, "if 1==1 (if 2==2 (echo nested))");
 
         var tokens = result.LastLine.ToList();
+
+        // Debug: Check what tokens we actually got
+        var ifCommands = tokens.OfType<BuiltInCommandToken<IfCommand>>().Count();
+        var echoCommands = tokens.OfType<BuiltInCommandToken<EchoCommand>>().Count();
+
+        Assert.AreEqual(2, ifCommands, "Should have 2 IF command tokens");
+        Assert.AreEqual(1, echoCommands, "Should have 1 ECHO command token");
         Assert.AreEqual(2, tokens.Count(t => t is BlockStartToken));
         Assert.AreEqual(2, tokens.Count(t => t is CloseParenToken));
-        Assert.IsTrue(result.IsComplete);
+        Assert.IsFalse(result.HasContinuation);
     }
 
     [TestMethod]
@@ -983,7 +990,7 @@ public class MixedEscapeScenarios
     {
         var result = Tokenizer.Tokenize(context, "echo test^^");
 
-        Assert.IsTrue(result.IsComplete);
+        Assert.IsFalse(result.HasContinuation);
         Assert.AreEqual("echo test^^", result.ToString());
     }
 

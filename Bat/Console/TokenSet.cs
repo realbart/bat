@@ -9,7 +9,7 @@ internal class Line(List<IToken> tokens, EndOfLineToken? eol = null) : ReadOnlyC
 {
     public IEnumerable<IToken> RawTokens => this.Append(EndOfLine);
     public EndOfLineToken EndOfLine { get; } = eol ?? Token.EndOfLine();
-    public bool IsComplete => Count > 0 && this[^1] is not EscapeToken;
+    public bool HasContinuation => Count > 0 && this[^1] is ContinuationToken;
     public override string ToString() => string.Concat(this.Append(EndOfLine));
 }
 
@@ -26,8 +26,17 @@ internal class TokenSet(Line line, TokenSet? previous = null)
     public IEnumerable<TokenSet> Commands => previous?.Commands.Append(this) ?? [this];
     public IEnumerable<Line> Lines => previous?.Lines.Append(LastLine) ?? [LastLine];
     public IEnumerable<IToken> RawTokens => Lines.SelectMany(l => l.RawTokens);
-    public bool IsComplete => LastLine.IsComplete;
+    public bool HasContinuation => LastLine.HasContinuation;
     override public string ToString() => string.Concat(RawTokens);
+    public bool HasUnfinishedBlocks 
+        => RawTokens.Aggregate(1, 
+            (depth, token) =>
+            token switch
+            {
+                BlockStartToken => depth + 2,
+                CloseParenToken => Math.Abs(depth - 2),
+                _ => depth
+            }) > 1;
 }
 
 
@@ -48,7 +57,7 @@ internal static class Token
     // Constant tokens as static readonly fields
     public static readonly BlockStartToken BlockStart = new();
     public static readonly CloseParenToken CloseParen = new();
-    public static readonly EscapeToken Escape = new();
+    public static readonly ContinuationToken Escape = new();
     public static readonly PipeToken Pipe = new();
     public static readonly EchoSupressorToken EchoSupressor = new();
     public static readonly AppendRedirectionToken AppendRedirection = new();
@@ -107,7 +116,7 @@ internal class LabelToken(string value, string raw) : TokenBase(":" + raw)
     public string Value => value;
 }
 
-internal class EscapeToken() : TokenBase("^");
+internal class ContinuationToken() : TokenBase("^");
 
 internal class PipeToken() : TokenBase("|");
 
@@ -123,7 +132,7 @@ internal class StdErrRedirectionToken() : TokenBase("2>");
 
 internal class AppendStdErrRedirectionToken() : TokenBase("2>>");
 
-internal class StdOutToStdErrRedirectionToken() : TokenBase(">&1");
+internal class StdOutToStdErrRedirectionToken() : TokenBase("1>&2");
 
 internal class StdErrToStdOutRedirectionToken() : TokenBase("2>&1");
 
