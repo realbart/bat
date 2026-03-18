@@ -268,7 +268,7 @@ public class BlockCommandTokenization
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
         Assert.IsTrue(tokens.Any(t => t is BlockStartToken));
-        Assert.IsTrue(tokens.Any(t => t is CloseParenToken));
+        Assert.IsTrue(tokens.Any(t => t is BlockEndToken));
         Assert.AreEqual("if exist file.txt (echo found)", result.ToString());
     }
 
@@ -281,7 +281,7 @@ public class BlockCommandTokenization
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<ElseCommand>));
         Assert.AreEqual(2, tokens.Count(t => t is BlockStartToken));
-        Assert.AreEqual(2, tokens.Count(t => t is CloseParenToken));
+        Assert.AreEqual(2, tokens.Count(t => t is BlockEndToken));
         Assert.AreEqual("if 1==1 (echo yes) else (echo no)", result.ToString());
     }
 
@@ -491,7 +491,7 @@ public class ComplexScenarios
         Assert.AreEqual(2, ifCommands, "Should have 2 IF command tokens");
         Assert.AreEqual(1, echoCommands, "Should have 1 ECHO command token");
         Assert.AreEqual(2, tokens.Count(t => t is BlockStartToken));
-        Assert.AreEqual(2, tokens.Count(t => t is CloseParenToken));
+        Assert.AreEqual(2, tokens.Count(t => t is BlockEndToken));
         Assert.IsFalse(result.HasContinuation);
     }
 

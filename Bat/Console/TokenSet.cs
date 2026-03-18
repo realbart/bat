@@ -17,6 +17,11 @@ internal class EmptyLine(EndOfLineToken endOfLineToken) : Line([], endOfLineToke
 {
 }
 
+internal class  Error(string error, Line line, TokenSet? previous = null) : TokenSet(line, previous)
+{
+    public string Message => error;
+    // Line and positions may be inferred.
+}
 
 internal class TokenSet(Line line, TokenSet? previous = null)
 {
@@ -34,7 +39,7 @@ internal class TokenSet(Line line, TokenSet? previous = null)
             token switch
             {
                 BlockStartToken => depth + 2,
-                CloseParenToken => Math.Abs(depth - 2),
+                BlockEndToken => Math.Abs(depth - 2),
                 _ => depth
             }) > 1;
 }
@@ -56,7 +61,7 @@ internal static class Token
 
     // Constant tokens as static readonly fields
     public static readonly BlockStartToken BlockStart = new();
-    public static readonly CloseParenToken CloseParen = new();
+    public static readonly BlockEndToken BlockEnd = new();
     public static readonly ContinuationToken Escape = new();
     public static readonly PipeToken Pipe = new();
     public static readonly EchoSupressorToken EchoSupressor = new();
@@ -109,7 +114,7 @@ internal class BuiltInCommandToken<TCmd>(string value) : TokenBase(value)
 
 internal class BlockStartToken() : TokenBase("(");
 
-internal class CloseParenToken() : TokenBase(")");
+internal class BlockEndToken() : TokenBase(")");
 
 internal class LabelToken(string value, string raw) : TokenBase(":" + raw)
 {

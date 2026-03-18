@@ -6,13 +6,55 @@ namespace Bat.Console;
 
 internal class Tokenizer(IContext context, string input, string eol = "", TokenSet? command = null)
 {
+    [Flags]
+    public enum ExpectedTokenTypes
+    {
+        None = 0,
+        Command = 1,            // Command or block start
+        CommandSeparator = 2,   // &, &&, ||, |
+        Text = 4,               // Arguments to command
+        Whitespace = 8,
+        Redirection = 16,       // >, >>, <, 2>, etc.
+        BlockEnd = 32,          // )
+        Else = 64,              // Only after if block closes
+        ForInClause = 128,      // Expecting "in" after for %%i
+        ForDoClause = 256,      // Expecting "do" after for %%i in (...)
+        ForSet = 512,           // Expecting (...) after "in"
+        IfCondition = 1024,     // Expecting condition after if [not]
+        IfOperator = 2048,      // Expecting ==, EQU, etc.
+        IfRightSide = 4096,     // Expecting right side of comparison
+
+        // Common combinations
+        AfterCommand = Text | Whitespace | Redirection | CommandSeparator | BlockEnd,
+        AfterBlockEnd = Whitespace | CommandSeparator | Else | BlockEnd,
+        StartOfCommand = Command | Whitespace,
+    }
+
+    /// <summary>
+    /// Tracks what kind of block we're in for proper context handling.
+    /// Only IfBlock is special (allows else after close). All other blocks are Generic.
+    /// </summary>
+    private enum BlockContext
+    {
+        None,           // Not in a block
+        Generic,        // Any block where else is NOT allowed after close
+        If,             // After if keyword, parsing condition (not yet in block)
+        IfBlock,        // Inside if (...) - ONLY this allows else after close
+        For,            // After for keyword, before "in"
+        ForSet,         // Inside for ... in (...) - special: contains file patterns, not commands
+    }
+
+    private readonly record struct StackEntry(BlockContext Context, int Depth);
+
+    private ExpectedTokenTypes _expected = ExpectedTokenTypes.StartOfCommand;
+    private readonly Stack<StackEntry> _contextStack = new();
+    private int _blockDepth = 0;
+
     public static TokenSet Tokenize(IContext context, string input, TokenSet? command = null) => new Tokenizer(context, input, command: command).Tokenize();
     public static TokenSet Tokenize(IContext context, string input, string eol, TokenSet? command = null) => new Tokenizer(context, input, eol, command).Tokenize();
 
     private int _position = 0;
-    private readonly List<IToken> line = [];
-    private bool _expectingCommand = true;
-    private bool _afterBlockCommand = false;
+    private readonly List<IToken> _line = [];
 
     public TokenSet Tokenize()
     {
@@ -48,13 +90,20 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
         foreach (var (lineText, lineEol) in lines)
         {
             _position = 0;
-            line.Clear();
-            _expectingCommand = currentCommand == null || currentCommand.HasContinuation;
-            _afterBlockCommand = false;
+            _line.Clear();
+
+            // Reset expected types for each new line
+            // If previous line had continuation (^), we continue parsing; otherwise start fresh
+            bool isContinuation = currentCommand != null && currentCommand.HasContinuation;
+            if (!isContinuation)
+            {
+                _expected = ExpectedTokenTypes.StartOfCommand;
+            }
+            // If continuing, keep _expected as-is from previous line's state
 
             TokenizeLine(lineText);
 
-            var newLine = line.Count > 0 ? new Line(new List<IToken>(line), Token.EndOfLine(lineEol))
+            var newLine = _line.Count > 0 ? new Line(new List<IToken>(_line), Token.EndOfLine(lineEol))
                                          : new EmptyLine(Token.EndOfLine(lineEol));
             currentCommand = new TokenSet(newLine, currentCommand);
         }
@@ -116,11 +165,11 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             }
 
             // Check for special characters at start of line
-            if (_position == 0 || (_expectingCommand && line.All(t => t is WhitespaceToken)))
+            if (_position == 0 || IsExpectingCommand())
             {
                 if (ch == '@')
                 {
-                    line.Add(Token.EchoSupressor);
+                    _line.Add(Token.EchoSupressor);
                     _position++;
                     continue;
                 }
@@ -138,7 +187,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
                 if (_position == lineText.Length - 1)
                 {
                     // Escape at end of line = continuation
-                    line.Add(Token.Escape);
+                    _line.Add(Token.Escape);
                     _position++;
                     continue;
                 }
@@ -148,7 +197,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
                 if (_position < lineText.Length)
                 {
                     var escaped = Current(lineText);
-                    line.Add(Token.Text(escaped.ToString(), $"^{escaped}"));
+                    _line.Add(Token.Text(escaped.ToString(), $"^{escaped}"));
                     _position++;
                 }
                 continue;
@@ -177,25 +226,13 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             // Parentheses
             if (ch == '(')
             {
-                if (_afterBlockCommand || _expectingCommand)
-                {
-                    line.Add(Token.BlockStart);
-                    _expectingCommand = true;
-                    _afterBlockCommand = false;
-                }
-                else
-                {
-                    line.Add(Token.Text("(", "("));
-                }
-                _position++;
+                TokenizeBlockStart(lineText);
                 continue;
             }
 
             if (ch == ')')
             {
-                _afterBlockCommand = true;
-                line.Add(Token.CloseParen);
-                _position++;
+                TokenizeBlockEnd(lineText);
                 continue;
             }
 
@@ -208,7 +245,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
 
             if (ch == '<')
             {
-                line.Add(Token.InputRedirection);
+                _line.Add(Token.InputRedirection);
                 _position++;
                 continue;
             }
@@ -229,14 +266,14 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             if (ch == '&')
             {
                 TokenizeAmpersand(lineText);
-                _expectingCommand = true;
+                _expected = ExpectedTokenTypes.StartOfCommand;
                 continue;
             }
 
             if (ch == '|')
             {
                 TokenizePipe(lineText);
-                _expectingCommand = true;
+                _expected = ExpectedTokenTypes.StartOfCommand;
                 continue;
             }
 
@@ -251,6 +288,110 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
         }
     }
 
+    private bool IsExpectingCommand() =>
+        _expected.HasFlag(ExpectedTokenTypes.Command) && 
+        !HasCommandSinceLastSeparator();
+
+    /// <summary>
+    /// Checks if we've already seen a command since the last command separator
+    /// </summary>
+    private bool HasCommandSinceLastSeparator()
+    {
+        // Walk backwards to find last command separator or start
+        for (int i = _line.Count - 1; i >= 0; i--)
+        {
+            var token = _line[i];
+
+            // If we hit a command separator, pipe, or block start, we're at a command boundary
+            if (token is CommandSeparatorToken or ConditionalAndToken or ConditionalOrToken or PipeToken or BlockStartToken)
+                return false;
+
+            // If we hit a command token, we've already seen a command
+            if (token is CommandToken or BuiltInCommandToken<EchoCommand> or BuiltInCommandToken<IfCommand> or 
+                BuiltInCommandToken<ForCommand> or BuiltInCommandToken<SetCommand> or BuiltInCommandToken<CallCommand> or
+                BuiltInCommandToken<GotoCommand> or BuiltInCommandToken<RemCommand> or BuiltInCommandToken<ElseCommand>)
+                return true;
+        }
+
+        // No command found - we're at start
+        return false;
+    }
+
+    private void TokenizeBlockStart(string lineText)
+    {
+        // Block start is valid when:
+        // 1. We're expecting a command (after if condition, after else, after do, at start)
+        // 2. We're in a ForSet context (for ... in (...))
+        var currentContext = _contextStack.Count > 0 ? _contextStack.Peek().Context : BlockContext.None;
+
+        if (IsExpectingCommand() || 
+            _expected.HasFlag(ExpectedTokenTypes.ForSet) ||
+            currentContext == BlockContext.If)
+        {
+            _line.Add(Token.BlockStart);
+            _blockDepth++;
+
+            // Only IfBlock is special (allows else after). Everything else is Generic.
+            var newContext = currentContext switch
+            {
+                BlockContext.If => BlockContext.IfBlock,
+                BlockContext.For when _expected.HasFlag(ExpectedTokenTypes.ForSet) => BlockContext.ForSet,
+                _ => BlockContext.Generic
+            };
+
+            _contextStack.Push(new StackEntry(newContext, _blockDepth));
+
+            // After block start, we expect a command (unless in ForSet)
+            if (newContext == BlockContext.ForSet)
+            {
+                _expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.BlockEnd;
+            }
+            else
+            {
+                _expected = ExpectedTokenTypes.StartOfCommand;
+            }
+        }
+        else
+        {
+            // Treat as text - parenthesis in argument context
+            _line.Add(Token.Text("(", "("));
+        }
+        _position++;
+    }
+
+    private void TokenizeBlockEnd(string lineText)
+    {
+        if (_blockDepth > 0)
+        {
+            _line.Add(Token.BlockEnd);
+            _blockDepth--;
+
+            // Pop context and determine what's expected next
+            if (_contextStack.Count > 0)
+            {
+                var popped = _contextStack.Pop();
+
+                // Determine what's expected after this block closes
+                _expected = popped.Context switch
+                {
+                    BlockContext.IfBlock => ExpectedTokenTypes.AfterBlockEnd | ExpectedTokenTypes.Else,
+                    BlockContext.ForSet => ExpectedTokenTypes.ForDoClause | ExpectedTokenTypes.Whitespace,
+                    _ => ExpectedTokenTypes.AfterBlockEnd & ~ExpectedTokenTypes.Else // No else after generic/else blocks
+                };
+            }
+            else
+            {
+                _expected = ExpectedTokenTypes.AfterBlockEnd & ~ExpectedTokenTypes.Else;
+            }
+        }
+        else
+        {
+            // Unmatched ) - treat as text (like CMD does in some contexts)
+            _line.Add(Token.Text(")", ")"));
+        }
+        _position++;
+    }
+
     private void TokenizeWhitespace(string lineText)
     {
         var start = _position;
@@ -262,7 +403,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             _position++;
         }
 
-        line.Add(Token.Whitespace(sb.ToString()));
+        _line.Add(Token.Whitespace(sb.ToString()));
     }
 
     private void TokenizeLabel(string lineText)
@@ -286,7 +427,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             _position++;
         }
 
-        line.Add(Token.Label(sb.ToString().TrimEnd(), sb.ToString()));
+        _line.Add(Token.Label(sb.ToString().TrimEnd(), sb.ToString()));
     }
 
     private void TokenizeQuotedString(string lineText, char quote)
@@ -303,7 +444,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             if (ch == quote)
             {
                 _position++; // Skip closing quote
-                line.Add(Token.QuotedText(quote.ToString(), sb.ToString(), quote.ToString()));
+                _line.Add(Token.QuotedText(quote.ToString(), sb.ToString(), quote.ToString()));
                 return;
             }
 
@@ -314,7 +455,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
         }
 
         // Unclosed quote - treat as quoted text with empty close quote
-        line.Add(Token.QuotedText(quote.ToString(), sb.ToString(), ""));
+        _line.Add(Token.QuotedText(quote.ToString(), sb.ToString(), ""));
     }
 
     private void TokenizeVariable(string lineText)
@@ -332,12 +473,12 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             {
                 var param = Current(lineText).ToString();
                 _position++;
-                line.Add(Token.ForParameter(param, $"%%{param}"));
+                _line.Add(Token.ForParameter(param, $"%%{param}"));
                 return;
             }
 
             // Just %% - literal %
-            line.Add(Token.Text("%", "%%"));
+            _line.Add(Token.Text("%", "%%"));
             return;
         }
 
@@ -362,7 +503,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
                     }
                 }
 
-                line.Add(Token.Text(sb.ToString(), $"%{sb}"));
+                _line.Add(Token.Text(sb.ToString(), $"%{sb}"));
                 return;
             }
         }
@@ -383,12 +524,12 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             var name = varName.ToString();
             var value = context.EnvironmentVariables.TryGetValue(name, out var val) ? val : "";
 
-            line.Add(Token.Text(value, $"%{name}%"));
+            _line.Add(Token.Text(value, $"%{name}%"));
         }
         else
         {
             // Unclosed variable - treat as literal
-            line.Add(Token.Text($"%{varName}", $"%{varName}"));
+            _line.Add(Token.Text($"%{varName}", $"%{varName}"));
         }
     }
 
@@ -428,12 +569,12 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
         {
             rawSb.Append('!');
             _position++; // Skip closing !
-            line.Add(Token.DelayedExpansionVariable(sb.ToString(), rawSb.ToString()));
+            _line.Add(Token.DelayedExpansionVariable(sb.ToString(), rawSb.ToString()));
         }
         else
         {
             // Unclosed - treat as text
-            line.Add(Token.Text(rawSb.ToString(), rawSb.ToString()));
+            _line.Add(Token.Text(rawSb.ToString(), rawSb.ToString()));
         }
     }
 
@@ -441,22 +582,22 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
     {
         if (Peek(lineText) == '>')
         {
-            line.Add(Token.AppendRedirection);
+            _line.Add(Token.AppendRedirection);
             _position += 2;
         }
         else if (Peek(lineText) == '&' && PeekAhead(lineText, 2) == '1')
         {
-            line.Add(Token.StdOutToStdErrRedirection);
+            _line.Add(Token.StdOutToStdErrRedirection);
             _position += 3;
         }
-        else if (Peek(lineText) == '=' || IsComparisonContext())
+        else if (Peek(lineText) == '=' || IsInIfCondition())
         {
             // >= or comparison
             TokenizeComparison(lineText);
         }
         else
         {
-            line.Add(Token.OutputRedirection);
+            _line.Add(Token.OutputRedirection);
             _position++;
         }
     }
@@ -467,17 +608,17 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
         {
             if (PeekAhead(lineText, 2) == '>')
             {
-                line.Add(Token.AppendStdErrRedirection);
+                _line.Add(Token.AppendStdErrRedirection);
                 _position += 3;
             }
             else if (PeekAhead(lineText, 2) == '&' && PeekAhead(lineText, 3) == '1')
             {
-                line.Add(Token.StdErrToStdOutRedirection);
+                _line.Add(Token.StdErrToStdOutRedirection);
                 _position += 4;
             }
             else
             {
-                line.Add(Token.StdErrRedirection);
+                _line.Add(Token.StdErrRedirection);
                 _position += 2;
             }
         }
@@ -494,14 +635,14 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             if (PeekAhead(lineText, 2) == '&' && PeekAhead(lineText, 3) == '2')
             {
                 // 1>&2 - redirect stdout to stderr
-                line.Add(Token.StdOutToStdErrRedirection);
+                _line.Add(Token.StdOutToStdErrRedirection);
                 _position += 4;
             }
             else
             {
                 // 1>file.txt - treat as: "1" + ">" + "file.txt"
                 // Add the "1" as text
-                line.Add(Token.Text("1", "1"));
+                _line.Add(Token.Text("1", "1"));
                 _position++;
                 // The ">" will be handled on next iteration as OutputRedirection
             }
@@ -517,12 +658,12 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
     {
         if (Peek(lineText) == '&')
         {
-            line.Add(Token.ConditionalAnd);
+            _line.Add(Token.ConditionalAnd);
             _position += 2;
         }
         else
         {
-            line.Add(Token.CommandSeparator);
+            _line.Add(Token.CommandSeparator);
             _position++;
         }
     }
@@ -531,12 +672,12 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
     {
         if (Peek(lineText) == '|')
         {
-            line.Add(Token.ConditionalOr);
+            _line.Add(Token.ConditionalOr);
             _position += 2;
         }
         else
         {
-            line.Add(Token.Pipe);
+            _line.Add(Token.Pipe);
             _position++;
         }
     }
@@ -552,7 +693,7 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             _position++;
         }
 
-        line.Add(Token.ComparisonOperator(sb.ToString()));
+        _line.Add(Token.ComparisonOperator(sb.ToString()));
     }
 
     private void TokenizeComparison(string lineText)
@@ -566,13 +707,13 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             _position++;
         }
 
-        line.Add(Token.ComparisonOperator(sb.ToString()));
+        _line.Add(Token.ComparisonOperator(sb.ToString()));
     }
 
-    private bool IsComparisonContext()
+    private bool IsInIfCondition()
     {
         // Check if we're in an IF statement context
-        return line.Any(t => t is BuiltInCommandToken<IfCommand>);
+        return _line.Any(t => t is BuiltInCommandToken<IfCommand>);
     }
 
     private void TokenizeTextOrCommand(string lineText)
@@ -602,22 +743,50 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
             return;
 
         var text = sb.ToString();
+        var textLower = text.ToLower();
+
+        // Check if "else" is expected and valid
+        if (textLower == "else")
+        {
+            if (_expected.HasFlag(ExpectedTokenTypes.Else))
+            {
+                _line.Add(Token.BuiltInCommand<ElseCommand>(text));
+                // After else, we just expect a command - the block will be Generic
+                _expected = ExpectedTokenTypes.Command | ExpectedTokenTypes.Whitespace;
+                return;
+            }
+            else
+            {
+                // 'else' not expected - treat as text
+                _line.Add(Token.Text(text, text));
+                _expected = ExpectedTokenTypes.AfterCommand;
+                return;
+            }
+        }
+
+        // Check for FOR-specific keywords
+        if (_expected.HasFlag(ExpectedTokenTypes.ForInClause) && textLower == "in")
+        {
+            _line.Add(Token.Text(text, text));
+            _expected = ExpectedTokenTypes.ForSet | ExpectedTokenTypes.Whitespace;
+            return;
+        }
+
+        if (_expected.HasFlag(ExpectedTokenTypes.ForDoClause) && textLower == "do")
+        {
+            _line.Add(Token.Text(text, text));
+            // After "do", we just expect a command - any block will be Generic
+            _expected = ExpectedTokenTypes.StartOfCommand;
+            return;
+        }
 
         // Check if this should be a command
-        // Commands are recognized:
-        // 1. At start of line (_expectingCommand)
-        // 2. At start of line (only whitespace/echo suppressor before)
-        // 3. After a block command closed (to allow 'else')
-        // 4. If it's 'else' specifically and we just closed a block
-        var isElseAfterBlock = text.ToLower() == "else" && _afterBlockCommand;
-
-        if (_expectingCommand || line.Count == 0 || line.All(t => t is WhitespaceToken or EchoSupressorToken) || isElseAfterBlock)
+        if (IsExpectingCommand())
         {
-            var token = text.ToLower() switch
+            var token = textLower switch
             {
                 "echo" => Token.BuiltInCommand<EchoCommand>(text),
                 "if" => Token.BuiltInCommand<IfCommand>(text),
-                "else" => Token.BuiltInCommand<ElseCommand>(text),
                 "for" => Token.BuiltInCommand<ForCommand>(text),
                 "set" => Token.BuiltInCommand<SetCommand>(text),
                 "call" => Token.BuiltInCommand<CallCommand>(text),
@@ -626,23 +795,36 @@ internal class Tokenizer(IContext context, string input, string eol = "", TokenS
                 _ => (IToken)Token.Command(text, text)
             };
 
-            line.Add(token);
-            _expectingCommand = false;
+            _line.Add(token);
 
-            // Check if this is a block command
-            _afterBlockCommand = text.ToLower() is "if" or "else" or "for";
+            // Set expected and context based on command type
+            switch (textLower)
+            {
+                case "if":
+                    _contextStack.Push(new StackEntry(BlockContext.If, _blockDepth));
+                    _expected = ExpectedTokenTypes.IfCondition | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    break;
+                case "for":
+                    _contextStack.Push(new StackEntry(BlockContext.For, _blockDepth));
+                    _expected = ExpectedTokenTypes.ForInClause | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    break;
+                default:
+                    _expected = ExpectedTokenTypes.AfterCommand;
+                    break;
+            }
         }
         else
         {
             // Check for comparison operators in IF context
-            if (IsComparisonContext() && IsComparisonOperator(text))
+            if (IsInIfCondition() && IsComparisonOperator(text))
             {
-                line.Add(Token.ComparisonOperator(text));
+                _line.Add(Token.ComparisonOperator(text));
             }
             else
             {
-                line.Add(Token.Text(text, text));
+                _line.Add(Token.Text(text, text));
             }
+            _expected = ExpectedTokenTypes.AfterCommand;
         }
     }
 

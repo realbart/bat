@@ -2,6 +2,8 @@
 
 public interface IContext
 {
+    List<string> Parameters { get; }
+    bool DelayedExpansion { get; set; }
     char CurrentDrive { get; }
     string[] CurrentPath { get; }
     string CurrentPathDisplayName { get; }
