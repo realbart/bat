@@ -2,7 +2,7 @@
 using Bat.Context;
 using Context;
 
-namespace Bat;
+namespace Bat.Tokens;
 
 public static class Program
 {

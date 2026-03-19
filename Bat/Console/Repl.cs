@@ -12,16 +12,21 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
     }
 
 
-    public async Task<TokenSet> GetCommandAsync(IContext context)
+    public async Task<ParsedCommand> GetCommandAsync(IContext context)
     {
-        await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
-        var command = Tokenizer.Tokenize(context, await ReadLine(context));
-        while (command.HasContinuation || command.HasUnfinishedBlocks)
+        do
         {
-            await console.Out.WriteAsync("More? ");
-            command = Tokenizer.Tokenize(context, await ReadLine(context), command);
-        }
-        return command;
+            var parser = new Parser(context);
+            await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
+            parser.Append(await ReadLine(context));
+            while (parser.ErrorMessage is null && parser.IsIncomplete)
+            {
+                await console.Out.WriteAsync("More? ");
+                parser.Append(await ReadLine(context));
+            }
+            if (parser.ErrorMessage is null) return parser.ParseCommand();
+            await console.Error.WriteLineAsync(parser.ErrorMessage);
+        } while (true);
     }
 
     public async Task<string> ReadLine(IContext context)

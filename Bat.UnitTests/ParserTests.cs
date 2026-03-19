@@ -1,6 +1,7 @@
 using Bat.Commands;
 using Bat.Console;
 using Bat.Context;
+using Bat.Tokens;
 
 namespace Bat.UnitTests;
 
@@ -17,7 +18,7 @@ public class BasicTokenization
     [TestMethod]
     public void EmptyString_ReturnsOnlyEndOfInput()
     {
-        var result = Tokenizer.Tokenize(context, "");
+        var result = Parser.Parse(context, "");
 
         var tokens = result.RawTokens.ToList();
         var lines = result.Lines.ToList();
@@ -30,7 +31,7 @@ public class BasicTokenization
     [TestMethod]
     public void GenericCommand_ReturnsCommand()
     {
-        var result = Tokenizer.Tokenize(context, "xcopy");
+        var result = Parser.Parse(context, "xcopy");
 
         var tokens = result.RawTokens.ToList();
         var lines = result.Lines.ToList();
@@ -44,7 +45,7 @@ public class BasicTokenization
     [TestMethod]
     public void BuiltInCommand_ReturnsCommand()
     {
-        var result = Tokenizer.Tokenize(context, "echo 1");
+        var result = Parser.Parse(context, "echo 1");
 
         var tokens = result.RawTokens.ToList();
         var lines = result.Lines.ToList();
@@ -66,7 +67,7 @@ public class QuotedStringTokenization
     [TestMethod]
     public void DoubleQuotedString_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo \"hello world\"");
+        var result = Parser.Parse(context, "echo \"hello world\"");
 
         var tokens = result.LastLine.ToList();
         Assert.HasCount(3, tokens);
@@ -83,7 +84,7 @@ public class QuotedStringTokenization
     [TestMethod]
     public void SingleQuotedString_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo 'hello world'");
+        var result = Parser.Parse(context, "echo 'hello world'");
 
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
@@ -95,23 +96,23 @@ public class QuotedStringTokenization
     [TestMethod]
     public void UnclosedQuote_TreatsAsText()
     {
-        var result = Tokenizer.Tokenize(context, "echo \"hello");
+        var result = Parser.Parse(context, "echo \"hello");
 
         var tokens = result.LastLine.ToList();
         // Should treat unclosed quote as quoted text token with missing close quote
         Assert.IsTrue(tokens.Any(t => t is QuotedTextToken));
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
     }
 
     [TestMethod]
     public void EmptyQuotedString_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo \"\"");
+        var result = Parser.Parse(context, "echo \"\"");
 
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
         Assert.AreEqual("", quoted.Value);
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
     }
 }
 
@@ -131,7 +132,7 @@ public class VariableTokenization
     [TestMethod]
     public void EnvironmentVariable_ExpandsToText()
     {
-        var result = Tokenizer.Tokenize(context, "echo %TESTVAR%");
+        var result = Parser.Parse(context, "echo %TESTVAR%");
 
         var tokens = result.LastLine.ToList();
         var textToken = tokens.OfType<TextToken>().First();
@@ -142,7 +143,7 @@ public class VariableTokenization
     [TestMethod]
     public void DelayedExpansionVariable_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo !TEST^^VAR!");
+        var result = Parser.Parse(context, "echo !TEST^^VAR!");
 
         var tokens = result.LastLine.ToList();
         var delayedVar = tokens.OfType<DelayedExpansionVariableToken>().First();
@@ -153,7 +154,7 @@ public class VariableTokenization
     [TestMethod]
     public void UnclosedVariable_TreatsAsText()
     {
-        var result = Tokenizer.Tokenize(context, "echo %TESTVAR");
+        var result = Parser.Parse(context, "echo %TESTVAR");
 
         var tokens = result.LastLine.ToList();
         var textToken = tokens.OfType<TextToken>().First(t => t.Raw.Contains("%"));
@@ -169,7 +170,7 @@ public class RedirectionTokenization
     [TestMethod]
     public void OutputRedirection_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo hello > output.txt");
+        var result = Parser.Parse(context, "echo hello > output.txt");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is OutputRedirectionToken));
@@ -178,7 +179,7 @@ public class RedirectionTokenization
     [TestMethod]
     public void AppendRedirection_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo hello >> output.txt");
+        var result = Parser.Parse(context, "echo hello >> output.txt");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is AppendRedirectionToken));
@@ -187,7 +188,7 @@ public class RedirectionTokenization
     [TestMethod]
     public void InputRedirection_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "sort < input.txt");
+        var result = Parser.Parse(context, "sort < input.txt");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is InputRedirectionToken));
@@ -196,7 +197,7 @@ public class RedirectionTokenization
     [TestMethod]
     public void StdErrRedirection_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command 2> error.log");
+        var result = Parser.Parse(context, "command 2> error.log");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is StdErrRedirectionToken));
@@ -205,7 +206,7 @@ public class RedirectionTokenization
     [TestMethod]
     public void StdErrToStdOut_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command 2>&1");
+        var result = Parser.Parse(context, "command 2>&1");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is StdErrToStdOutRedirectionToken));
@@ -220,7 +221,7 @@ public class CommandSeparatorTokenization
     [TestMethod]
     public void CommandSeparator_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo hello & echo world");
+        var result = Parser.Parse(context, "echo hello & echo world");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is CommandSeparatorToken));
@@ -230,7 +231,7 @@ public class CommandSeparatorTokenization
     [TestMethod]
     public void ConditionalAnd_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "dir && echo success");
+        var result = Parser.Parse(context, "dir && echo success");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is ConditionalAndToken));
@@ -239,7 +240,7 @@ public class CommandSeparatorTokenization
     [TestMethod]
     public void ConditionalOr_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "dir || echo failed");
+        var result = Parser.Parse(context, "dir || echo failed");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is ConditionalOrToken));
@@ -248,7 +249,7 @@ public class CommandSeparatorTokenization
     [TestMethod]
     public void Pipe_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "dir | find \"txt\"");
+        var result = Parser.Parse(context, "dir | find \"txt\"");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is PipeToken));
@@ -263,7 +264,7 @@ public class BlockCommandTokenization
     [TestMethod]
     public void IfCommand_ParsesBlockStart()
     {
-        var result = Tokenizer.Tokenize(context, "if exist file.txt (echo found)");
+        var result = Parser.Parse(context, "if exist file.txt (echo found)");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
@@ -275,7 +276,7 @@ public class BlockCommandTokenization
     [TestMethod]
     public void IfElseCommand_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if 1==1 (echo yes) else (echo no)");
+        var result = Parser.Parse(context, "if 1==1 (echo yes) else (echo no)");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
@@ -288,7 +289,7 @@ public class BlockCommandTokenization
     [TestMethod]
     public void ForCommand_ParsesWithParameter()
     {
-        var result = Tokenizer.Tokenize(context, "for %%i in (*.txt) do echo %%i");
+        var result = Parser.Parse(context, "for %%i in (*.txt) do echo %%i");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<ForCommand>));
@@ -302,7 +303,7 @@ public class BlockCommandTokenization
     [TestMethod]
     public void ParenthesesInNonBlockCommand_TreatedAsText()
     {
-        var result = Tokenizer.Tokenize(context, "xcopy (file.txt)");
+        var result = Parser.Parse(context, "xcopy (file.txt)");
 
         var tokens = result.LastLine.ToList();
         // ( should be treated as text when not following a block command
@@ -319,16 +320,16 @@ public class MultilineTokenization
     [TestMethod]
     public void EscapeAtEndOfLine_ContinuesNextLine()
     {
-        var result = Tokenizer.Tokenize(context, "echo hello^");
+        var result = Parser.Parse(context, "echo hello^");
 
-        Assert.IsTrue(result.HasContinuation);
+        Assert.IsTrue(result.IsIncomplete);
         Assert.IsTrue(result.LastLine[^1] is ContinuationToken);
     }
 
     [TestMethod]
     public void MultipleLines_ParsesSeparately()
     {
-        var result = Tokenizer.Tokenize(context, "echo line1\r\necho line2");
+        var result = Parser.Parse(context, "echo line1\r\necho line2");
 
         var lines = result.Lines.ToList();
         Assert.HasCount(2, lines);
@@ -339,18 +340,18 @@ public class MultilineTokenization
     [TestMethod]
     public void UnfinishedIfBlock_NotComplete()
     {
-        var result = Tokenizer.Tokenize(context, "if 1==1 (");
+        var result = Parser.Parse(context, "if 1==1 (");
 
-        Assert.IsTrue(result.HasUnfinishedBlocks);
+        Assert.IsTrue(result.IsIncomplete);
     }
 
     [TestMethod]
     public void ContinuedCommand_PreservesContext()
     {
-        var firstLine = Tokenizer.Tokenize(context, "echo hello^");
-        var secondLine = Tokenizer.Tokenize(context, "world", firstLine);
+        var firstLine = Parser.Parse(context, "echo hello^");
+        var secondLine = Parser.Parse(context, "world", firstLine);
 
-        Assert.IsFalse(secondLine.HasContinuation);
+        Assert.IsFalse(secondLine.IsIncomplete);
         var allTokens = secondLine.RawTokens.ToList();
         // Should contain tokens from both lines
         Assert.IsTrue(allTokens.Any(t => t is BuiltInCommandToken<EchoCommand>));
@@ -365,7 +366,7 @@ public class SpecialTokenization
     [TestMethod]
     public void EchoSuppressor_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "@echo off");
+        var result = Parser.Parse(context, "@echo off");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens[0] is EchoSupressorToken);
@@ -375,7 +376,7 @@ public class SpecialTokenization
     [TestMethod]
     public void Label_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, ":mylabel");
+        var result = Parser.Parse(context, ":mylabel");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens[0] is LabelToken);
@@ -387,7 +388,7 @@ public class SpecialTokenization
     [TestMethod]
     public void CommentLabel_ParsesAsLabel()
     {
-        var result = Tokenizer.Tokenize(context, ":: This is a comment");
+        var result = Parser.Parse(context, ":: This is a comment");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens[0] is LabelToken);
@@ -400,7 +401,7 @@ public class SpecialTokenization
     [TestMethod]
     public void ComparisonOperator_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if 1==1 echo yes");
+        var result = Parser.Parse(context, "if 1==1 echo yes");
 
         var tokens = result.LastLine.ToList();
         var compOp = tokens.OfType<ComparisonOperatorToken>().FirstOrDefault();
@@ -411,13 +412,13 @@ public class SpecialTokenization
     [TestMethod]
     public void EscapedCharacter_ParsesAsText()
     {
-        var result = Tokenizer.Tokenize(context, "echo ^>test");
+        var result = Parser.Parse(context, "echo ^>test");
 
         var tokens = result.LastLine.ToList();
         // The ^> should be parsed as escaped > character
         var textTokens = tokens.OfType<TextToken>().ToList();
         Assert.IsTrue(textTokens.Any(t => t.Value.Contains(">")));
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
     }
 }
 
@@ -436,7 +437,7 @@ public class ComplexScenarios
     [TestMethod]
     public void ComplexIfCommand_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if \"%PATH%\"==\"C:\\Windows\\System32\" (echo correct path)");
+        var result = Parser.Parse(context, "if \"%PATH%\"==\"C:\\Windows\\System32\" (echo correct path)");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
@@ -448,7 +449,7 @@ public class ComplexScenarios
     [TestMethod]
     public void MultipleRedirections_ParseCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command > output.txt 2> error.log");
+        var result = Parser.Parse(context, "command > output.txt 2> error.log");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is OutputRedirectionToken));
@@ -458,7 +459,7 @@ public class ComplexScenarios
     [TestMethod]
     public void ChainedCommands_ParseCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "dir && echo success || echo failed");
+        var result = Parser.Parse(context, "dir && echo success || echo failed");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is ConditionalAndToken));
@@ -469,20 +470,20 @@ public class ComplexScenarios
     [TestMethod]
     public void QuotedStringWithParentheses_DoesNotAffectBlocks()
     {
-        var result = Tokenizer.Tokenize(context, "echo \"test (with parens)\"");
+        var result = Parser.Parse(context, "echo \"test (with parens)\"");
 
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
         Assert.AreEqual("test (with parens)", quoted.Value);
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
     }
 
     [TestMethod]
     public void NestedBlocks_TrackCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if 1==1 (if 2==2 (echo nested))");
+        var result = Parser.Parse(context, "if 1==1 (if 2==2 (echo nested))");
 
-        var tokens = result.LastLine.ToList();
+        var tokens = result.RawTokens.ToList();
 
         // Debug: Check what tokens we actually got
         var ifCommands = tokens.OfType<BuiltInCommandToken<IfCommand>>().Count();
@@ -492,21 +493,21 @@ public class ComplexScenarios
         Assert.AreEqual(1, echoCommands, "Should have 1 ECHO command token");
         Assert.AreEqual(2, tokens.Count(t => t is BlockStartToken));
         Assert.AreEqual(2, tokens.Count(t => t is BlockEndToken));
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
     }
 
     [TestMethod]
     public void Block_DoesNotAllowElse()
     {
-        var result = Tokenizer.Tokenize(context, "(\r\necho 1\r\n) else (\r\necho2 )");
+        var parser = new Parser(context);
+        parser.Append("(\r\necho 1\r\n) else (\r\necho2 )");
 
-        var tokens = result.RawTokens.ToList();
+        Assert.IsNotNull(parser.ErrorMessage);
 
-        // Debug: Check what tokens we actually got
-        var elseCommands = tokens.OfType<BuiltInCommandToken<ElseCommand>>().Count();
+        var result = parser.ParseCommand();
 
-        Assert.IsTrue(tokens[0] is BlockStartToken);
-        Assert.AreEqual(0, elseCommands, "Should have NO else command tokens");
+        var elses = result.RawTokens.OfType<BuiltInCommandToken<ElseCommand>>();
+        Assert.IsEmpty(elses);
     }
 
     [TestMethod]
@@ -550,7 +551,7 @@ public class ComplexScenarios
     [DataRow("@echo off\r\n@echo Processing...")]
     public void ToString_EqualsParsedData(string data)
     {
-        var tokens = Tokenizer.Tokenize(context, data);
+        var tokens = Parser.Parse(context, data);
         Assert.AreEqual(data, tokens.ToString());
     }
 }
@@ -563,7 +564,7 @@ public class BatchParameterTokenization
     [TestMethod]
     public void SimpleParameter_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo %1 %2 %3");
+        var result = Parser.Parse(context, "echo %1 %2 %3");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<EchoCommand>));
@@ -574,7 +575,7 @@ public class BatchParameterTokenization
     [TestMethod]
     public void ModifiedParameter_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo %~1");
+        var result = Parser.Parse(context, "echo %~1");
 
         Assert.AreEqual("echo %~1", result.ToString());
     }
@@ -582,7 +583,7 @@ public class BatchParameterTokenization
     [TestMethod]
     public void ParameterWithModifiers_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo %~dp1 %~nx2");
+        var result = Parser.Parse(context, "echo %~dp1 %~nx2");
 
         Assert.AreEqual("echo %~dp1 %~nx2", result.ToString());
     }
@@ -590,7 +591,7 @@ public class BatchParameterTokenization
     [TestMethod]
     public void AllParameters_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo %*");
+        var result = Parser.Parse(context, "echo %*");
 
         Assert.AreEqual("echo %*", result.ToString());
     }
@@ -604,7 +605,7 @@ public class SetCommandTokenization
     [TestMethod]
     public void SimpleSet_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set VAR=value");
+        var result = Parser.Parse(context, "set VAR=value");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<SetCommand>));
@@ -614,7 +615,7 @@ public class SetCommandTokenization
     [TestMethod]
     public void SetWithSpaces_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set \"VAR=value with spaces\"");
+        var result = Parser.Parse(context, "set \"VAR=value with spaces\"");
 
         Assert.AreEqual("set \"VAR=value with spaces\"", result.ToString());
     }
@@ -622,7 +623,7 @@ public class SetCommandTokenization
     [TestMethod]
     public void SetArithmetic_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set /A RESULT=5+3");
+        var result = Parser.Parse(context, "set /A RESULT=5+3");
 
         Assert.AreEqual("set /A RESULT=5+3", result.ToString());
     }
@@ -630,7 +631,7 @@ public class SetCommandTokenization
     [TestMethod]
     public void SetPrompt_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set /P VAR=Enter value: ");
+        var result = Parser.Parse(context, "set /P VAR=Enter value: ");
 
         Assert.AreEqual("set /P VAR=Enter value: ", result.ToString());
     }
@@ -644,7 +645,7 @@ public class IfVariantsTokenization
     [TestMethod]
     public void IfExist_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if exist file.txt echo found");
+        var result = Parser.Parse(context, "if exist file.txt echo found");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<IfCommand>));
@@ -654,7 +655,7 @@ public class IfVariantsTokenization
     [TestMethod]
     public void IfNotExist_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if not exist file.txt echo not found");
+        var result = Parser.Parse(context, "if not exist file.txt echo not found");
 
         Assert.AreEqual("if not exist file.txt echo not found", result.ToString());
     }
@@ -662,7 +663,7 @@ public class IfVariantsTokenization
     [TestMethod]
     public void IfDefined_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if defined VAR echo variable is set");
+        var result = Parser.Parse(context, "if defined VAR echo variable is set");
 
         Assert.AreEqual("if defined VAR echo variable is set", result.ToString());
     }
@@ -670,7 +671,7 @@ public class IfVariantsTokenization
     [TestMethod]
     public void IfErrorLevel_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if errorlevel 1 echo error occurred");
+        var result = Parser.Parse(context, "if errorlevel 1 echo error occurred");
 
         Assert.AreEqual("if errorlevel 1 echo error occurred", result.ToString());
     }
@@ -678,7 +679,7 @@ public class IfVariantsTokenization
     [TestMethod]
     public void IfCaseInsensitive_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "if /I \"%VAR%\"==\"test\" echo match");
+        var result = Parser.Parse(context, "if /I \"%VAR%\"==\"test\" echo match");
 
         Assert.AreEqual("if /I \"%VAR%\"==\"test\" echo match", result.ToString());
     }
@@ -698,7 +699,7 @@ public class IfVariantsTokenization
 
         foreach (var test in tests)
         {
-            var result = Tokenizer.Tokenize(context, test);
+            var result = Parser.Parse(context, test);
             Assert.AreEqual(test, result.ToString(), $"Failed for: {test}");
         }
     }
@@ -712,7 +713,7 @@ public class ForLoopVariantsTokenization
     [TestMethod]
     public void ForDirectories_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "for /D %%i in (*.*) do echo %%i");
+        var result = Parser.Parse(context, "for /D %%i in (*.*) do echo %%i");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<ForCommand>));
@@ -722,7 +723,7 @@ public class ForLoopVariantsTokenization
     [TestMethod]
     public void ForRecursive_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "for /R %%i in (*.txt) do echo %%i");
+        var result = Parser.Parse(context, "for /R %%i in (*.txt) do echo %%i");
 
         Assert.AreEqual("for /R %%i in (*.txt) do echo %%i", result.ToString());
     }
@@ -730,7 +731,7 @@ public class ForLoopVariantsTokenization
     [TestMethod]
     public void ForLoop_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "for /L %%i in (1,1,10) do echo %%i");
+        var result = Parser.Parse(context, "for /L %%i in (1,1,10) do echo %%i");
 
         Assert.AreEqual("for /L %%i in (1,1,10) do echo %%i", result.ToString());
     }
@@ -738,7 +739,7 @@ public class ForLoopVariantsTokenization
     [TestMethod]
     public void ForFileProcessing_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "for /F \"tokens=1,2 delims=,\" %%i in (file.txt) do echo %%i %%j");
+        var result = Parser.Parse(context, "for /F \"tokens=1,2 delims=,\" %%i in (file.txt) do echo %%i %%j");
 
         Assert.AreEqual("for /F \"tokens=1,2 delims=,\" %%i in (file.txt) do echo %%i %%j", result.ToString());
     }
@@ -746,7 +747,7 @@ public class ForLoopVariantsTokenization
     [TestMethod]
     public void ForWithCommand_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "for /F %%i in ('dir /b') do echo %%i");
+        var result = Parser.Parse(context, "for /F %%i in ('dir /b') do echo %%i");
 
         Assert.AreEqual("for /F %%i in ('dir /b') do echo %%i", result.ToString());
     }
@@ -760,7 +761,7 @@ public class SpecialCharactersTokenization
     [TestMethod]
     public void EmailAddress_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo test@example.com");
+        var result = Parser.Parse(context, "echo test@example.com");
 
         Assert.AreEqual("echo test@example.com", result.ToString());
     }
@@ -768,7 +769,7 @@ public class SpecialCharactersTokenization
     [TestMethod]
     public void PercentSign_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo 100%% complete");
+        var result = Parser.Parse(context, "echo 100%% complete");
 
         Assert.AreEqual("echo 100%% complete", result.ToString());
     }
@@ -786,7 +787,7 @@ public class SpecialCharactersTokenization
 
         foreach (var test in tests)
         {
-            var result = Tokenizer.Tokenize(context, test);
+            var result = Parser.Parse(context, test);
             Assert.AreEqual(test, result.ToString(), $"Failed for: {test}");
         }
     }
@@ -794,7 +795,7 @@ public class SpecialCharactersTokenization
     [TestMethod]
     public void EqualsSignInArgument_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set VAR=value");
+        var result = Parser.Parse(context, "set VAR=value");
 
         Assert.AreEqual("set VAR=value", result.ToString());
     }
@@ -802,7 +803,7 @@ public class SpecialCharactersTokenization
     [TestMethod]
     public void Ampersand_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo This ^& That");
+        var result = Parser.Parse(context, "echo This ^& That");
 
         Assert.AreEqual("echo This ^& That", result.ToString());
     }
@@ -816,10 +817,10 @@ public class WhitespaceAndEmptyLinesTokenization
     [TestMethod]
     public void EmptyLine_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo line1\r\n\r\necho line2");
+        var result = Parser.Parse(context, "echo line1\r\n\r\necho line2");
 
         var lines = result.Lines.ToList();
-        Assert.AreEqual(3, lines.Count);
+        Assert.HasCount(3, lines);
         Assert.IsTrue(lines[1] is EmptyLine);
         Assert.AreEqual("echo line1\r\n\r\necho line2", result.ToString());
     }
@@ -827,7 +828,7 @@ public class WhitespaceAndEmptyLinesTokenization
     [TestMethod]
     public void WhitespaceOnlyLine_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo line1\r\n   \r\necho line2");
+        var result = Parser.Parse(context, "echo line1\r\n   \r\necho line2");
 
         Assert.AreEqual("echo line1\r\n   \r\necho line2", result.ToString());
     }
@@ -835,7 +836,7 @@ public class WhitespaceAndEmptyLinesTokenization
     [TestMethod]
     public void TabsAndSpacesMixed_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo \t  mixed \t whitespace");
+        var result = Parser.Parse(context, "echo \t  mixed \t whitespace");
 
         Assert.AreEqual("echo \t  mixed \t whitespace", result.ToString());
     }
@@ -843,7 +844,7 @@ public class WhitespaceAndEmptyLinesTokenization
     [TestMethod]
     public void TrailingWhitespace_PreservedCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo test   ");
+        var result = Parser.Parse(context, "echo test   ");
 
         Assert.AreEqual("echo test   ", result.ToString());
     }
@@ -857,7 +858,7 @@ public class NestedQuotesTokenization
     [TestMethod]
     public void SingleInsideDouble_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo \"outer 'inner' outer\"");
+        var result = Parser.Parse(context, "echo \"outer 'inner' outer\"");
 
         var tokens = result.LastLine.ToList();
         var quoted = tokens.OfType<QuotedTextToken>().First();
@@ -868,7 +869,7 @@ public class NestedQuotesTokenization
     [TestMethod]
     public void DoubleInsideSingle_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo 'outer \"inner\" outer'");
+        var result = Parser.Parse(context, "echo 'outer \"inner\" outer'");
 
         Assert.AreEqual("echo 'outer \"inner\" outer'", result.ToString());
     }
@@ -876,7 +877,7 @@ public class NestedQuotesTokenization
     [TestMethod]
     public void EscapedQuote_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo ^\"escaped quote^\"");
+        var result = Parser.Parse(context, "echo ^\"escaped quote^\"");
 
         Assert.AreEqual("echo ^\"escaped quote^\"", result.ToString());
     }
@@ -890,7 +891,7 @@ public class SpecialFilenamesTokenization
     [TestMethod]
     public void RedirectToNul_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo test > NUL");
+        var result = Parser.Parse(context, "echo test > NUL");
 
         Assert.AreEqual("echo test > NUL", result.ToString());
     }
@@ -898,7 +899,7 @@ public class SpecialFilenamesTokenization
     [TestMethod]
     public void TypeCon_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "type CON");
+        var result = Parser.Parse(context, "type CON");
 
         Assert.AreEqual("type CON", result.ToString());
     }
@@ -916,7 +917,7 @@ public class SpecialFilenamesTokenization
 
         foreach (var test in tests)
         {
-            var result = Tokenizer.Tokenize(context, test);
+            var result = Parser.Parse(context, test);
             Assert.AreEqual(test, result.ToString(), $"Failed for: {test}");
         }
     }
@@ -930,7 +931,7 @@ public class CallCommandTokenization
     [TestMethod]
     public void CallSubroutine_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "call :subroutine arg1 arg2");
+        var result = Parser.Parse(context, "call :subroutine arg1 arg2");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<CallCommand>));
@@ -940,7 +941,7 @@ public class CallCommandTokenization
     [TestMethod]
     public void CallExternalBatch_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "call otherbatch.bat %1 %2");
+        var result = Parser.Parse(context, "call otherbatch.bat %1 %2");
 
         Assert.AreEqual("call otherbatch.bat %1 %2", result.ToString());
     }
@@ -948,7 +949,7 @@ public class CallCommandTokenization
     [TestMethod]
     public void CallWithQuotes_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "call \"path with spaces.bat\" arg");
+        var result = Parser.Parse(context, "call \"path with spaces.bat\" arg");
 
         Assert.AreEqual("call \"path with spaces.bat\" arg", result.ToString());
     }
@@ -962,7 +963,7 @@ public class GotoCommandTokenization
     [TestMethod]
     public void GotoLabel_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "goto :label");
+        var result = Parser.Parse(context, "goto :label");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<GotoCommand>));
@@ -972,7 +973,7 @@ public class GotoCommandTokenization
     [TestMethod]
     public void GotoEof_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "goto :EOF");
+        var result = Parser.Parse(context, "goto :EOF");
 
         Assert.AreEqual("goto :EOF", result.ToString());
     }
@@ -986,7 +987,7 @@ public class MixedEscapeScenarios
     [TestMethod]
     public void TripleEscape_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo ^^^>test");
+        var result = Parser.Parse(context, "echo ^^^>test");
 
         Assert.AreEqual("echo ^^^>test", result.ToString());
     }
@@ -994,7 +995,7 @@ public class MixedEscapeScenarios
     [TestMethod]
     public void EscapeInPath_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "set \"path=C:\\Path\\^(with parens^)\"");
+        var result = Parser.Parse(context, "set \"path=C:\\Path\\^(with parens^)\"");
 
         Assert.AreEqual("set \"path=C:\\Path\\^(with parens^)\"", result.ToString());
     }
@@ -1002,16 +1003,16 @@ public class MixedEscapeScenarios
     [TestMethod]
     public void EscapeBeforeNewline_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo test^^");
+        var result = Parser.Parse(context, "echo test^^");
 
-        Assert.IsFalse(result.HasContinuation);
+        Assert.IsFalse(result.IsIncomplete);
         Assert.AreEqual("echo test^^", result.ToString());
     }
 
     [TestMethod]
     public void MultipleEscapedCharacters_ParseCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo ^<^>^|^&");
+        var result = Parser.Parse(context, "echo ^<^>^|^&");
 
         Assert.AreEqual("echo ^<^>^|^&", result.ToString());
     }
@@ -1025,7 +1026,7 @@ public class FileHandleRedirectionTokenization
     [TestMethod]
     public void ExplicitStdOut_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command 1>out.txt");
+        var result = Parser.Parse(context, "command 1>out.txt");
 
         Assert.AreEqual("command 1>out.txt", result.ToString());
     }
@@ -1033,7 +1034,7 @@ public class FileHandleRedirectionTokenization
     [TestMethod]
     public void StdOutToStdErr_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command 1>&2");
+        var result = Parser.Parse(context, "command 1>&2");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is StdOutToStdErrRedirectionToken));
@@ -1043,7 +1044,7 @@ public class FileHandleRedirectionTokenization
     [TestMethod]
     public void MultipleFileHandles_ParseCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command 1>out.txt 2>err.txt");
+        var result = Parser.Parse(context, "command 1>out.txt 2>err.txt");
 
         Assert.AreEqual("command 1>out.txt 2>err.txt", result.ToString());
     }
@@ -1051,7 +1052,7 @@ public class FileHandleRedirectionTokenization
     [TestMethod]
     public void CombinedRedirection_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "command >out.txt 2>&1");
+        var result = Parser.Parse(context, "command >out.txt 2>&1");
 
         Assert.AreEqual("command >out.txt 2>&1", result.ToString());
     }
@@ -1065,7 +1066,7 @@ public class RemCommandTokenization
     [TestMethod]
     public void RemComment_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "rem This is a comment");
+        var result = Parser.Parse(context, "rem This is a comment");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<RemCommand>));
@@ -1075,7 +1076,7 @@ public class RemCommandTokenization
     [TestMethod]
     public void RemAfterCommand_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, "echo test & rem comment");
+        var result = Parser.Parse(context, "echo test & rem comment");
 
         Assert.AreEqual("echo test & rem comment", result.ToString());
     }
@@ -1083,11 +1084,81 @@ public class RemCommandTokenization
     [TestMethod]
     public void ColonColonComment_ParsesCorrectly()
     {
-        var result = Tokenizer.Tokenize(context, ":: This is also a comment");
+        var result = Parser.Parse(context, ":: This is also a comment");
 
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens[0] is LabelToken);
         Assert.AreEqual(":: This is also a comment", result.ToString());
     }
 }
+
+[TestClass]
+public class ErrorDetection
+{
+    private readonly global::Context.IContext context = new DosContext(new DosFileSystem());
+
+    [TestMethod]
+    public void IncompleteIfCondition_WithBlockStart_ShowsError()
+    {
+        var result = Parser.Parse(context, "if 1 (");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("( was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void IncompleteIfCondition_WithAmpersand_ShowsError()
+    {
+        var result = Parser.Parse(context, "if 1 & echo 1");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("& was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void DoubleElse_ShowsError()
+    {
+        var result = Parser.Parse(context, "if 1==1 (\r\necho 1\r\n) else (\r\necho 2\r\n) else (");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("else was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void UnmatchedClosingParen_ShowsError()
+    {
+        var result = Parser.Parse(context, ")");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual(") was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void StandaloneAmpersand_ShowsError()
+    {
+        var result = Parser.Parse(context, "&");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("& was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void AmpersandWithSpace_ShowsError()
+    {
+        var result = Parser.Parse(context, " &");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("& was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void StandalonePipe_ShowsError()
+    {
+        var result = Parser.Parse(context, "|");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("| was unexpected at this time.", result.ErrorMessage);
+    }
+}
+
 
