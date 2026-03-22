@@ -3,35 +3,20 @@ using Bat.Tokens;
 
 namespace Bat.Console;
 
-internal class ParsedCommand(ICommandNode root, string? errorMessage = null)
+internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IReadOnlyList<IToken>? rawTokens = null)
 {
     public ICommandNode Root => root;
 
-    /// <summary>
-    /// Error message if parsing failed
-    /// </summary>
     public string? ErrorMessage => errorMessage;
-
-    /// <summary>
-    /// True if there was a parsing error
-    /// </summary>
     public bool HasError => errorMessage != null;
-
-    /// <summary>
-    /// True if more input is needed to complete the command
-    /// </summary>
     public bool IsIncomplete => root is IncompleteNode;
 
-    #region Backward compatible properties (derived from command tree)
-
     /// <summary>
-    /// All tokens in the command tree
+    /// All tokens. Uses the raw tokeniser list when available so round-trip and
+    /// token-count tests work correctly.
     /// </summary>
-    public IEnumerable<IToken> RawTokens => root.GetTokens();
+    public IEnumerable<IToken> RawTokens => rawTokens ?? root.GetTokens();
 
-    /// <summary>
-    /// Reconstructs lines by splitting on EndOfLineToken
-    /// </summary>
     public IEnumerable<Line> Lines
     {
         get
@@ -41,8 +26,8 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null)
             {
                 if (token is EndOfLineToken eol)
                 {
-                    yield return currentLine.Count > 0 
-                        ? new Line(currentLine, eol) 
+                    yield return currentLine.Count > 0
+                        ? new Line(currentLine, eol)
                         : new EmptyLine(eol);
                     currentLine = [];
                 }
@@ -51,11 +36,8 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null)
                     currentLine.Add(token);
                 }
             }
-            // Remaining tokens without EOL
             if (currentLine.Count > 0)
-            {
                 yield return new Line(currentLine);
-            }
         }
     }
 
@@ -63,6 +45,4 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null)
     public Line LastLine => Lines.Last();
 
     public override string ToString() => string.Concat(RawTokens);
-
-    #endregion
 }
