@@ -296,12 +296,12 @@ internal class Tokenizer(IContext context, TokenSet tokenSet, string input, stri
         // Block start is valid when:
         // 1. We're expecting a command (after if condition, after else, after do, at start)
         // 2. We're in a ForSet context (for ... in (...))
-        // 3. We're in an If context (completing the condition)
+        // 3. We're in an If context and the condition appears complete (Command flag is set)
         var currentContext = _contextStack.Count > 0 ? _contextStack.Peek() : BlockContext.None;
 
         if (IsExpectingCommand() ||
             _expected.HasFlag(ExpectedTokenTypes.ForSet) ||
-            currentContext == BlockContext.If)
+            (currentContext == BlockContext.If && _expected.HasFlag(ExpectedTokenTypes.Command)))
         {
             _line.Add(Token.BlockStart);
 
@@ -333,6 +333,15 @@ internal class Tokenizer(IContext context, TokenSet tokenSet, string input, stri
         }
         else
         {
+            // Check if we're in an incomplete If condition
+            if (currentContext == BlockContext.If)
+            {
+                // We're in an If context but not expecting a command - the condition is incomplete
+                tokenSet.ErrorMessage = "( was unexpected at this time.";
+                _position++;
+                return;
+            }
+
             // Treat as text - parenthesis in argument context
             _line.Add(Token.Text("(", "("));
         }
@@ -713,6 +722,14 @@ internal class Tokenizer(IContext context, TokenSet tokenSet, string input, stri
         }
 
         _line.Add(Token.ComparisonOperator(sb.ToString()));
+
+        // If we're in an If condition, mark that we've seen a comparison operator
+        // and the condition is progressing toward completion
+        var currentContext = _contextStack.Count > 0 ? _contextStack.Peek() : BlockContext.None;
+        if (currentContext == BlockContext.If)
+        {
+            _expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.Command;
+        }
     }
 
     private void TokenizeComparison(string lineText)
@@ -779,7 +796,8 @@ internal class Tokenizer(IContext context, TokenSet tokenSet, string input, stri
                 _expected = ExpectedTokenTypes.Command | ExpectedTokenTypes.Whitespace;
                 return;
             }
-            else if (_expected.HasFlag(ExpectedTokenTypes.Command))
+            else if (_expected.HasFlag(ExpectedTokenTypes.Command) || 
+                     _expected.HasFlag(ExpectedTokenTypes.CommandSeparator))
             {
                 // 'else' appears where a command would be expected, but Else flag is not set
                 // This means we're not in an argument context - it's an error
@@ -850,12 +868,57 @@ internal class Tokenizer(IContext context, TokenSet tokenSet, string input, stri
             if (IsInIfCondition() && IsComparisonOperator(text))
             {
                 _line.Add(Token.ComparisonOperator(text));
+                // After seeing a comparison operator, we're waiting for the right operand,
+                // but the condition is syntactically progressing toward completion
+                _expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.Command;
             }
             else
             {
                 _line.Add(Token.Text(text, text));
+
+                // If we're in an If condition, update expected based on the text we just saw
+                var currentContext = _contextStack.Count > 0 ? _contextStack.Peek() : BlockContext.None;
+                if (currentContext == BlockContext.If && _expected.HasFlag(ExpectedTokenTypes.IfCondition))
+                {
+                    // Check if this is a special If keyword
+                    var textUpper = text.ToUpper();
+                    if (textUpper == "NOT")
+                    {
+                        // NOT is followed by another condition keyword
+                        _expected = ExpectedTokenTypes.IfCondition | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    }
+                    else if (textUpper is "EXIST" or "DEFINED" or "ERRORLEVEL")
+                    {
+                        // These keywords require arguments, so continue expecting text
+                        // But also allow Command in case arguments have been provided
+                        _expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.Command;
+                    }
+                    else if (text.StartsWith('/'))
+                    {
+                        // This is likely a flag (like /I for case-insensitive)
+                        // Keep expecting the condition
+                        _expected = ExpectedTokenTypes.IfCondition | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    }
+                    else
+                    {
+                        // Regular text in If condition - could be start of a comparison
+                        // Continue expecting text (for right operand) but don't allow Command yet
+                        // (unless a comparison operator is encountered)
+                        _expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    }
+                }
+                else if (currentContext == BlockContext.If && (_expected.HasFlag(ExpectedTokenTypes.Text) || _expected.HasFlag(ExpectedTokenTypes.Command)))
+                {
+                    // We're still in an If context and processing text
+                    // Keep the current expected state (might include Command if we saw a comparison or special keyword)
+                    // This allows multiple text tokens (like "file.txt" after "exist")
+                    // _expected remains unchanged - explicitly do nothing here
+                }
+                else
+                {
+                    _expected = ExpectedTokenTypes.AfterCommand;
+                }
             }
-            _expected = ExpectedTokenTypes.AfterCommand;
         }
     }
 
