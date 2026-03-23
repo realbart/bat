@@ -11,4 +11,16 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
     public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
     public IFileSystem FileSystem => fileSystem;
+
+    // Batch execution state (null only at startup)
+    public object? CurrentBatch { get; set; }
+
+    // CMD state
+    public bool EchoEnabled { get; set; } = true;
+    public bool DelayedExpansion { get; set; } = false;
+    public bool ExtensionsEnabled { get; set; } = true;
+    public string PromptFormat { get; set; } = "$P$G";  // Default: C:\path>
+
+    // Directory stack for PUSHD/POPD
+    public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
 }

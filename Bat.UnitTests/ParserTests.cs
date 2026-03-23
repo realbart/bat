@@ -136,7 +136,7 @@ public class VariableTokenization
 
         var tokens = result.LastLine.ToList();
         var textToken = tokens.OfType<TextToken>().First();
-        Assert.AreEqual("TestValue", textToken.Value);
+        Assert.AreEqual("%TESTVAR%", textToken.Value);
         Assert.AreEqual("%TESTVAR%", textToken.Raw);
     }
 
@@ -549,6 +549,12 @@ public class ComplexScenarios
     [DataRow("if \"%PATH%\"==\"value\" (echo match)")]
     [DataRow("echo test & dir & pause")]
     [DataRow("@echo off\r\n@echo Processing...")]
+    [DataRow("for %%i in (*.txt) do (echo %%i)")]
+    [DataRow("if else == foo echo match")]
+    [DataRow("setlocal")]
+    [DataRow("endlocal")]
+    [DataRow("exit")]
+    [DataRow("quit")]
     public void ToString_EqualsParsedData(string data)
     {
         var tokens = Parser.Parse(context, data);
@@ -1158,6 +1164,71 @@ public class ErrorDetection
 
         Assert.IsTrue(result.HasError);
         Assert.AreEqual("| was unexpected at this time.", result.ErrorMessage);
+    }
+}
+
+[TestClass]
+public class TextOrCommandTokenization
+{
+    private readonly global::Context.IContext context = new DosContext(new DosFileSystem());
+
+    [TestMethod]
+    public void ForWithBlockBody_ParsesCorrectly()
+    {
+        var result = Parser.Parse(context, "for %%i in (*.txt) do (echo %%i)");
+
+        var tokens = result.LastLine.ToList();
+        Assert.IsFalse(result.HasError);
+        Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<ForCommand>));
+        Assert.IsTrue(tokens.Any(t => t is BuiltInCommandToken<EchoCommand>));
+        Assert.AreEqual(2, tokens.Count(t => t is BlockStartToken));
+        Assert.AreEqual(2, tokens.Count(t => t is BlockEndToken));
+        Assert.AreEqual("for %%i in (*.txt) do (echo %%i)", result.ToString());
+    }
+
+    [TestMethod]
+    public void ElseAtCommandBoundary_ShowsError()
+    {
+        // After '&', a command is expected; 'else' without a preceding if-block is an error
+        var result = Parser.Parse(context, "echo a & else echo b");
+
+        Assert.IsTrue(result.HasError);
+        Assert.AreEqual("else was unexpected at this time.", result.ErrorMessage);
+    }
+
+    [TestMethod]
+    public void ElseInIfCondition_IsText()
+    {
+        // 'else' in an IF condition (not at a command boundary) is treated as a plain text token
+        var result = Parser.Parse(context, "if else == foo echo match");
+
+        Assert.IsFalse(result.HasError);
+        var tokens = result.LastLine.ToList();
+        Assert.IsTrue(tokens.OfType<TextToken>().Any(t => t.Raw == "else"));
+        Assert.AreEqual("if else == foo echo match", result.ToString());
+    }
+
+    [TestMethod]
+    public void ElseAsArgument_IsText()
+    {
+        var result = Parser.Parse(context, "echo hello else world");
+
+        Assert.IsFalse(result.HasError);
+        var tokens = result.LastLine.ToList();
+        Assert.IsTrue(tokens.OfType<TextToken>().Any(t => t.Raw == "else"));
+        Assert.AreEqual("echo hello else world", result.ToString());
+    }
+
+    [TestMethod]
+    public void GreaterThanInIfCondition_IsComparison()
+    {
+        var result = Parser.Parse(context, "if 5 > 3 echo greater");
+
+        Assert.IsFalse(result.HasError);
+        var tokens = result.LastLine.ToList();
+        Assert.IsTrue(tokens.Any(t => t is ComparisonOperatorToken { Raw: ">" }));
+        Assert.IsFalse(tokens.Any(t => t is OutputRedirectionToken));
+        Assert.AreEqual("if 5 > 3 echo greater", result.ToString());
     }
 }
 

@@ -21,7 +21,7 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
-| 1 | 🔴 TODO | Repareer ontwerpkeuzes | [STEP_01_REPAIR_DESIGN.md](steps/STEP_01_REPAIR_DESIGN.md) |
+| 1 | 🟢 DONE | Repareer ontwerpkeuzes | [STEP_01_REPAIR_DESIGN.md](steps/STEP_01_REPAIR_DESIGN.md) |
 | 2 | 🔴 TODO | PROMPT environment variabele expansie | [STEP_02_PROMPT_EXPANSION.md](steps/STEP_02_PROMPT_EXPANSION.md) |
 | 3 | 🔴 TODO | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
 | 4 | 🔴 TODO | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
