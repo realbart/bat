@@ -1,4 +1,5 @@
-﻿using Context;
+﻿#pragma warning disable CS8892, IDE0060
+using Context;
 
 namespace Subst;
 
@@ -16,3 +17,4 @@ public static class Program
         return 0;
     }
 }
+#pragma warning restore CS8892, IDE0060

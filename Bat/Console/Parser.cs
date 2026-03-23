@@ -1,7 +1,7 @@
 using Bat.Commands;
 using Bat.Nodes;
+using Bat.Tokenizing;
 using Bat.Tokens;
-using Context;
 
 namespace Bat.Console;
 
@@ -21,7 +21,7 @@ namespace Bat.Console;
 /// Whitespace preservation: all whitespace/EOL tokens are threaded through the AST
 /// so that GetTokens() round-trips to the exact original string.
 /// </summary>
-internal class Parser(IContext context)
+internal class Parser()
 {
     // ── tokenised flat list produced by the tokeniser ──────────────────────
     private readonly TokenSet _tokenSet = [];
@@ -35,7 +35,7 @@ internal class Parser(IContext context)
     // ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Append a line of batch source (may be called multiple times for continuations).</summary>
-    public void Append(string input) => Tokenizer.AppendTokens(_tokenSet, input);
+    public void Append(string input) => Tokenizing.Tokenizer.AppendTokens(_tokenSet, input);
 
     public string? ErrorMessage => _tokenSet.ErrorMessage ?? _parseError;
 
@@ -250,7 +250,7 @@ internal class Parser(IContext context)
     // ParseBlock  —  ( subcommands… )
     // ─────────────────────────────────────────────────────────────────────
 
-    private ICommandNode? ParseBlock(List<Redirection> outerRedirs)
+    private BlockNode? ParseBlock(List<Redirection> outerRedirs)
     {
         Consume(); // eat (
         var subcommands = new List<ICommandNode>();
@@ -345,7 +345,7 @@ internal class Parser(IContext context)
     }
 
     // Consume all tokens until EOL / block-end (and optionally also operators)
-    private IReadOnlyList<IToken> ConsumeTailTokens(bool stopAtOperators)
+    private List<IToken> ConsumeTailTokens(bool stopAtOperators)
     {
         var list = new List<IToken>();
         while (!AtEnd && Current is not EndOfLineToken and not BlockEndToken)
@@ -363,7 +363,7 @@ internal class Parser(IContext context)
     // if [/I] [NOT] operator arg [arg2] (then) [else (else)]
     // ─────────────────────────────────────────────────────────────────────
 
-    private ICommandNode? ParseIf(List<Redirection> outerRedirs, List<IToken> leadingWs)
+    private IfCommandNode? ParseIf(List<Redirection> outerRedirs, List<IToken> leadingWs)
     {
         // Put leading whitespace inside the IF node's LeftArg so round-trip works
         var flags = IfFlags.None;
@@ -390,7 +390,7 @@ internal class Parser(IContext context)
         // ── determine operator ──────────────────────────────────────────
         IfOperator op;
         List<IToken> leftArg = [];
-        List<IToken> rightArg = [];
+        List<IToken> rightArg;
 
         var txt = CurrentText?.ToUpperInvariant();
 
@@ -510,7 +510,7 @@ internal class Parser(IContext context)
     // for [/D|/R [root]|/L|/F [params]] %%var in (list) do command
     // ─────────────────────────────────────────────────────────────────────
 
-    private ICommandNode? ParseFor(List<Redirection> outerRedirs, List<IToken> leadingWs)
+    private ForCommandNode? ParseFor(List<Redirection> outerRedirs, List<IToken> leadingWs)
     {
         var switches = ForSwitches.None;
         var forParams = new List<IToken>(leadingWs);
@@ -550,10 +550,10 @@ internal class Parser(IContext context)
             }
             forParams.AddRange(ConsumeWhitespace());
         }
-        doneWithSwitches:
+    doneWithSwitches:
 
         // Variable: %%i
-        char variable = ' ';
+        char variable;
         if (Current is ForParameterToken fpt)
         {
             variable = fpt.Parameter.Length > 0 ? fpt.Parameter[0] : ' ';
@@ -632,12 +632,9 @@ internal class Parser(IContext context)
             var target = new List<IToken>();
             target.AddRange(wsBeforeTarget);
 
-            // Collect filename tokens
-            while (Current is TextToken or CommandToken or QuotedTextToken)
+            if (Current is TextToken or CommandToken or QuotedTextToken)
             {
                 target.Add(Consume());
-                // filename is a single token
-                break;
             }
 
             list.Add(new Redirection(redirToken, target));
@@ -659,7 +656,7 @@ internal class Parser(IContext context)
         Current?.Raw.Equals(text, StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>Consume a single "word" — possibly multiple adjacent tokens with no whitespace.</summary>
-    private IEnumerable<IToken> ConsumeOneWord()
+    private List<IToken> ConsumeOneWord()
     {
         var collected = new List<IToken>();
         while (Current is not null and not WhitespaceToken and not EndOfLineToken

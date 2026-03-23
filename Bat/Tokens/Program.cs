@@ -1,4 +1,6 @@
-﻿using Bat.Console;
+﻿#pragma warning disable CS0028
+#pragma warning disable IDE0060
+using Bat.Console;
 using Bat.Context;
 using Context;
 
@@ -16,3 +18,5 @@ public static class Program
         return context.ErrorCode;
     }
 }
+#pragma warning restore IDE0060
+#pragma warning restore CS0028

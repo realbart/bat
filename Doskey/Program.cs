@@ -1,4 +1,5 @@
-﻿namespace Doskey;
+﻿#pragma warning disable CS8892, IDE0060
+namespace Doskey;
 
 using Context;
 
@@ -16,3 +17,4 @@ public static class Program
         return 0;
     }
 }
+#pragma warning restore CS8892, IDE0060

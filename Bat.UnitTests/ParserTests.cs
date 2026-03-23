@@ -119,7 +119,7 @@ public class QuotedStringTokenization
 [TestClass]
 public class VariableTokenization
 {
-    private readonly global::Context.IContext context;
+    private readonly DosContext context;
 
     public VariableTokenization()
     {
@@ -157,7 +157,7 @@ public class VariableTokenization
         var result = Parser.Parse(context, "echo %TESTVAR");
 
         var tokens = result.LastLine.ToList();
-        var textToken = tokens.OfType<TextToken>().First(t => t.Raw.Contains("%"));
+        var textToken = tokens.OfType<TextToken>().First(t => t.Raw.Contains('%'));
         Assert.AreEqual("%TESTVAR", textToken.Raw);
     }
 }
@@ -417,7 +417,7 @@ public class SpecialTokenization
         var tokens = result.LastLine.ToList();
         // The ^> should be parsed as escaped > character
         var textTokens = tokens.OfType<TextToken>().ToList();
-        Assert.IsTrue(textTokens.Any(t => t.Value.Contains(">")));
+        Assert.IsTrue(textTokens.Any(t => t.Value.Contains('>')));
         Assert.IsFalse(result.IsIncomplete);
     }
 }
@@ -425,7 +425,7 @@ public class SpecialTokenization
 [TestClass]
 public class ComplexScenarios
 {
-    private readonly global::Context.IContext context;
+    private readonly DosContext context;
 
     public ComplexScenarios()
     {
@@ -499,7 +499,7 @@ public class ComplexScenarios
     [TestMethod]
     public void Block_DoesNotAllowElse()
     {
-        var parser = new Parser(context);
+        var parser = new Parser();
         parser.Append("(\r\necho 1\r\n) else (\r\necho2 )");
 
         Assert.IsNotNull(parser.ErrorMessage);

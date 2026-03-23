@@ -1,4 +1,3 @@
-using Bat.Console;
 using Bat.Tokens;
 
 namespace Bat.Nodes;

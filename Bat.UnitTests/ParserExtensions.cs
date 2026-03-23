@@ -8,7 +8,7 @@ internal static class ParserExtensions
     {
         public static ParsedCommand Parse(IContext context, params string[] input)
         {
-            var parser = new Parser(context);
+            var parser = new Parser();
             foreach(var line in input)
             {
                 parser.Append(line);
@@ -18,7 +18,7 @@ internal static class ParserExtensions
 
         public static ParsedCommand Parse(IContext context, string input, ParsedCommand? previousCommand = null)
         {
-            var parser = new Parser(context);
+            var parser = new Parser();
             if (previousCommand != null)
             {
                 parser.Append(previousCommand.ToString());

@@ -16,7 +16,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
     {
         do
         {
-            var parser = new Parser(context);
+            var parser = new Parser();
             await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
             parser.Append(await ReadLine(context));
             while (parser.ErrorMessage is null && parser.IsIncomplete)

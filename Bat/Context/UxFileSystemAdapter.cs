@@ -1,6 +1,4 @@
-﻿using Context;
-
-namespace Bat.Context;
+﻿namespace Bat.Context;
 
 internal class UxFileSystemAdapter : FileSystem
 {

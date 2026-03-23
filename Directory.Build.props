@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- Suppress MSBuild informational messages -->
+    <MSBuildLoggerVerbosity>minimal</MSBuildLoggerVerbosity>
+    
+    <!-- Suppress specific analyzer warnings globally -->
+    <NoWarn>$(NoWarn);MSTEST0001;MSTEST0037</NoWarn>
+  </PropertyGroup>
+</Project>
