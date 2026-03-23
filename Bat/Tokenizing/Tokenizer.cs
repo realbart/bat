@@ -98,14 +98,14 @@ internal static partial class Tokenizer
         if (scanner.IsAtEnd) return null;
         var escaped = scanner.Ch0;
         scanner.Advance();
-        return Token.Text(escaped.ToString(), $"^{escaped}");
+        return Token.Text($"^{escaped}");
     }
 
     private static WhitespaceToken TokenizeWhitespace(ref Scanner scanner)
     {
         var sb = new StringBuilder();
 
-        while (!scanner.IsAtEnd && (scanner.Ch0 == ' ' || scanner.Ch0 == '\t'))
+        while (!scanner.IsAtEnd && scanner.Ch0 is ' ' or '\t')
         {
             sb.Append(scanner.Ch0);
             scanner.Advance();
@@ -132,7 +132,7 @@ internal static partial class Tokenizer
             scanner.Advance();
         }
 
-        return Token.Label(sb.ToString().TrimEnd(), sb.ToString());
+        return Token.Label(sb.ToString());
     }
 
     private static bool IsAtStartOfLine(TokenSet tokenSet)
@@ -181,7 +181,7 @@ internal static partial class Tokenizer
             return Yield(ref scanner, 1, new ErrorToken("( was unexpected at this time."))!;
         }
 
-        return Yield(ref scanner, 1, Token.Text("(", "("))!;
+        return Yield(ref scanner, 1, Token.Text("("))!;
     }
 
     private static IToken TokenizeBlockEnd(ref Scanner scanner)
@@ -204,9 +204,9 @@ internal static partial class Tokenizer
 
     private static QuotedTextToken TokenizeQuotedString(ref Scanner scanner, char quote)
     {
-        scanner.Advance();
-
         var sb = new StringBuilder();
+        sb.Append(quote);
+        scanner.Advance();
 
         while (!scanner.IsAtEnd)
         {
@@ -214,59 +214,63 @@ internal static partial class Tokenizer
 
             if (ch == quote)
             {
+                sb.Append(quote);
                 scanner.Advance();
-                return Token.QuotedText(quote.ToString(), sb.ToString(), quote.ToString());
+                return Token.QuotedText(sb.ToString());
             }
 
             sb.Append(ch);
             scanner.Advance();
         }
 
-        return Token.QuotedText(quote.ToString(), sb.ToString(), "");
+        return Token.QuotedText(sb.ToString());
     }
 
     private static IToken TokenizeVariable(ref Scanner scanner)
     {
-        var raw = new StringBuilder("%");
         scanner.Advance();
 
-        if (!scanner.IsAtEnd && scanner.Ch0 == '%')
+        if (scanner.Ch0 == '%') return TokenizeDoublePercent(ref scanner);
+        if (char.IsDigit(scanner.Ch0) || scanner.Ch0 is '*' or '~') return TokenizeBatchParameter(ref scanner);
+        return TokenizeEnvironmentVariable(ref scanner);
+    }
+
+    private static IToken TokenizeDoublePercent(ref Scanner scanner)
+    {
+        scanner.Advance();
+
+        if (!scanner.IsAtEnd && char.IsLetter(scanner.Ch0))
         {
-            raw.Append('%');
+            var param = scanner.Ch0;
             scanner.Advance();
-
-            if (!scanner.IsAtEnd && char.IsLetter(scanner.Ch0))
-            {
-                var param = scanner.Ch0.ToString();
-                raw.Append(param);
-                scanner.Advance();
-                return Token.ForParameter(param, raw.ToString());
-            }
-
-            return Token.Text("%", raw.ToString());
+            return Token.ForParameter($"%%{param}");
         }
 
-        if (!scanner.IsAtEnd)
+        return Token.Text("%%");
+    }
+
+    private static TextToken TokenizeBatchParameter(ref Scanner scanner)
+    {
+        var raw = new StringBuilder("%");
+        raw.Append(scanner.Ch0);
+        var firstChar = scanner.Ch0;
+        scanner.Advance();
+
+        if (firstChar == '~')
         {
-            var ch = scanner.Ch0;
-
-            if (char.IsDigit(ch) || ch == '*' || ch == '~')
+            while (!scanner.IsAtEnd && (char.IsLetter(scanner.Ch0) || char.IsDigit(scanner.Ch0)))
             {
-                raw.Append(ch);
+                raw.Append(scanner.Ch0);
                 scanner.Advance();
-
-                if (ch == '~' && !scanner.IsAtEnd)
-                {
-                    while (!scanner.IsAtEnd && (char.IsLetter(scanner.Ch0) || char.IsDigit(scanner.Ch0)))
-                    {
-                        raw.Append(scanner.Ch0);
-                        scanner.Advance();
-                    }
-                }
-
-                return Token.Text(raw.ToString(), raw.ToString());
             }
         }
+
+        return Token.Text(raw.ToString());
+    }
+
+    private static TextToken TokenizeEnvironmentVariable(ref Scanner scanner)
+    {
+        var raw = new StringBuilder("%");
 
         while (!scanner.IsAtEnd && scanner.Ch0 != '%')
         {
@@ -274,51 +278,35 @@ internal static partial class Tokenizer
             scanner.Advance();
         }
 
-        if (!scanner.IsAtEnd && scanner.Ch0 == '%')
-        {
-            raw.Append('%');
-            scanner.Advance();
-            return Token.Text(raw.ToString(), raw.ToString());
-        }
+        if (scanner.IsAtEnd) return Token.Text(raw.ToString());
 
-        return Token.Text(raw.ToString(), raw.ToString());
+        raw.Append('%');
+        scanner.Advance();
+        return Token.Text(raw.ToString());
     }
 
     private static IToken TokenizeDelayedExpansion(ref Scanner scanner)
     {
+        var raw = new StringBuilder("!");
         scanner.Advance();
-
-        var sb = new StringBuilder();
-        var rawSb = new StringBuilder("!");
 
         while (!scanner.IsAtEnd && scanner.Ch0 != '!')
         {
-            var ch = scanner.Ch0;
+            raw.Append(scanner.Ch0);
+            var isEscape = scanner.Ch0 == '^' && scanner.Ch1 != '\0';
+            scanner.Advance();
 
-            if (ch == '^' && scanner.Ch1 != '\0')
+            if (isEscape && !scanner.IsAtEnd && scanner.Ch0 != '!')
             {
-                rawSb.Append(ch);
-                scanner.Advance();
-                if (!scanner.IsAtEnd)
-                {
-                    var escaped = scanner.Ch0;
-                    rawSb.Append(escaped);
-                    sb.Append(escaped);
-                    scanner.Advance();
-                }
-            }
-            else
-            {
-                rawSb.Append(ch);
-                sb.Append(ch);
+                raw.Append(scanner.Ch0);
                 scanner.Advance();
             }
         }
 
-        if (scanner.IsAtEnd || scanner.Ch0 != '!') return Token.Text(rawSb.ToString(), rawSb.ToString());
-        rawSb.Append('!');
+        if (scanner.IsAtEnd || scanner.Ch0 != '!') return Token.Text(raw.ToString());
+        raw.Append('!');
         scanner.Advance();
-        return Token.DelayedExpansionVariable(sb.ToString(), rawSb.ToString());
+        return Token.DelayedExpansionVariable(raw.ToString());
     }
 
     private static IToken? TokenizeGreaterThan(ref Scanner scanner)
@@ -346,7 +334,7 @@ internal static partial class Tokenizer
         if (scanner.Ch1 != '>') return null;
         if (scanner.Ch2 == '&' && scanner.Ch3 == '2') return Yield(ref scanner, 4, Token.StdOutToStdErrRedirection);
         scanner.Advance();
-        return Token.Text("1", "1");
+        return Token.Text("1");
     }
 
     private static IToken TokenizeAmpersand(ref Scanner scanner)
@@ -399,7 +387,7 @@ internal static partial class Tokenizer
     private static ComparisonOperatorToken TokenizeComparison(ref Scanner scanner)
     {
         var sb = new StringBuilder();
-        while (!scanner.IsAtEnd && !char.IsWhiteSpace(scanner.Ch0) && ">=<!=".Contains(scanner.Ch0))
+        while (!scanner.IsAtEnd && scanner.Ch0 is '>' or '<' or '=' or '!')
         {
             sb.Append(scanner.Ch0);
             scanner.Advance();
@@ -420,8 +408,6 @@ internal static partial class Tokenizer
         return token;
     }
 
-    private const string SpecialCharacters = "()\"'%!&|<>=^";
-
     private static IToken? TokenizeTextOrCommand(ref Scanner scanner)
     {
         var text = ReadWord(ref scanner);
@@ -438,7 +424,9 @@ internal static partial class Tokenizer
     private static string ReadWord(ref Scanner scanner)
     {
         var sb = new StringBuilder();
-        while (!scanner.IsAtEnd && !char.IsWhiteSpace(scanner.Ch0) && !SpecialCharacters.Contains(scanner.Ch0))
+        while (!scanner.IsAtEnd && scanner.Ch0 is not ' ' and not '\t' and not '\r' and not '\n'
+               and not '(' and not ')' and not '"' and not '\'' and not '%' and not '!' 
+               and not '&' and not '|' and not '<' and not '>' and not '=' and not '^')
         {
             sb.Append(scanner.Ch0);
             scanner.Advance();
@@ -466,19 +454,19 @@ internal static partial class Tokenizer
         }
 
         scanner.Expected = ExpectedTokenTypes.AfterCommand;
-        return Token.Text(text, text);
+        return Token.Text(text);
     }
 
     private static TextToken HandleForIn(ref Scanner scanner, string text)
     {
         scanner.Expected = ExpectedTokenTypes.ForSet | ExpectedTokenTypes.Whitespace;
-        return Token.Text(text, text);
+        return Token.Text(text);
     }
 
     private static TextToken HandleForDo(ref Scanner scanner, string text)
     {
         scanner.Expected = ExpectedTokenTypes.StartOfCommand;
-        return Token.Text(text, text);
+        return Token.Text(text);
     }
 
     private static IToken HandleCommandToken(ref Scanner scanner, string text, string lower)
@@ -486,7 +474,7 @@ internal static partial class Tokenizer
         var commandType = BuiltInCommandRegistry.GetCommandType(lower);
         var token = commandType != null
             ? CreateBuiltInCommandToken(commandType, text)
-            : Token.Command(text, text);
+            : Token.Command(text);
 
         UpdateStateForCommand(ref scanner, commandType);
         scanner.HasCommand = true;
@@ -525,7 +513,7 @@ internal static partial class Tokenizer
             return Token.ComparisonOperator(text);
         }
         UpdateExpectedAfterText(ref scanner, text);
-        return Token.Text(text, text);
+        return Token.Text(text);
     }
 
     private static void UpdateExpectedAfterText(ref Scanner scanner, string text)

@@ -1,12 +1,12 @@
-using Context;
+using Bat.Console;
 
-namespace Bat.Console;
+namespace Bat.UnitTests;
 
 internal static class ParserExtensions
 {
     extension(Parser)
     {
-        public static ParsedCommand Parse(IContext context, params string[] input)
+        public static ParsedCommand Parse(params string[] input)
         {
             var parser = new Parser();
             foreach(var line in input)
@@ -16,7 +16,7 @@ internal static class ParserExtensions
             return parser.ParseCommand();
         }
 
-        public static ParsedCommand Parse(IContext context, string input, ParsedCommand? previousCommand = null)
+        public static ParsedCommand Parse(string input, ParsedCommand? previousCommand = null)
         {
             var parser = new Parser();
             if (previousCommand != null)

@@ -21,7 +21,7 @@ internal class TextToken : TokenBase
     private static string Unescape(string raw)
     {
         // Fast path: no escape sequences
-        if (raw.IndexOf('^') == -1) return raw;
+        if (!raw.Contains('^')) return raw;
 
         var sb = new StringBuilder(raw.Length);
         for (int i = 0; i < raw.Length; i++)

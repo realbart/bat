@@ -4,20 +4,18 @@ namespace Bat.Tokens;
 
 internal static class Token
 {
-    // Factory methods for tokens with parameters
     public static EndOfLineToken EndOfLine(string raw = "") => new(raw);
-    public static QuotedTextToken QuotedText(string openQuote, string text, string closeQuote) => new(openQuote, text, closeQuote);
-    public static TextToken Text(string value, string raw) => new(value, raw);
-    public static CommandToken Command(string value, string raw) => new(value, raw);
+    public static QuotedTextToken QuotedText(string raw) => new(raw);
+    public static TextToken Text(string raw) => new(raw);
+    public static CommandToken Command(string raw) => new(raw);
     public static BuiltInCommandToken<TCmd> BuiltInCommand<TCmd>(string value) where TCmd : ICommand => new(value);
-    public static LabelToken Label(string value, string raw) => new(value, raw);
+    public static LabelToken Label(string raw) => new(raw);
     public static WhitespaceToken Whitespace(string raw) => new(raw);
-    public static DelayedExpansionVariableToken DelayedExpansionVariable(string name, string raw) => new(name, raw);
+    public static DelayedExpansionVariableToken DelayedExpansionVariable(string raw) => new(raw);
     public static ComparisonOperatorToken ComparisonOperator(string raw) => new(raw);
-    public static ForParameterToken ForParameter(string parameter, string raw) => new(parameter, raw);
+    public static ForParameterToken ForParameter(string raw) => new(raw);
     public static ContinuationToken Continuation(string raw) => new(raw);
 
-    // Constant tokens as static readonly fields
     public static readonly BlockStartToken BlockStart = new();
     public static readonly BlockEndToken BlockEnd = new();
     public static readonly ContinuationToken Escape = new();

@@ -20,6 +20,7 @@ internal static partial class Tokenizer
         public readonly char Ch3 => Position + 3 < _text.Length ? _text[Position + 3] : '\0';
 
         public void Advance(int count = 1) => Position += count;
+
         public readonly bool IsAtEnd => Position >= _text.Length;
     }
 }

@@ -38,16 +38,13 @@ internal class DelayedExpansionVariableToken : TokenBase
 
     private static string UnescapeDelayedExpansion(string content)
     {
-        // Within delayed expansion, ^^ becomes ^
-        if (content.IndexOf('^') == -1)
-            return content;
+        if (!content.Contains('^')) return content;
 
         var sb = new StringBuilder(content.Length);
         for (int i = 0; i < content.Length; i++)
         {
             if (content[i] == '^' && i + 1 < content.Length)
             {
-                // Skip the caret, take the next character
                 i++;
             }
             sb.Append(content[i]);
