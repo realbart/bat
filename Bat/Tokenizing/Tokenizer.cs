@@ -116,9 +116,8 @@ internal static partial class Tokenizer
 
     private static LabelToken TokenizeLabel(ref Scanner scanner)
     {
+        var sb = new StringBuilder(":");
         scanner.Advance();
-
-        var sb = new StringBuilder();
 
         if (!scanner.IsAtEnd && scanner.Ch0 == ':')
         {
