@@ -143,6 +143,17 @@ public class VariableTokenization
     }
 
     [TestMethod]
+    public void DelayedExpansionWithEscapedExclamation_ParsesCorrectly()
+    {
+        var result = Parser.Parse("echo !foo^!bar!");
+
+        var tokens = result.LastLine.ToList();
+        var delayedVar = tokens.OfType<DelayedExpansionVariableToken>().First();
+        Assert.AreEqual("foo!bar", delayedVar.Name);
+        Assert.AreEqual("!foo^!bar!", delayedVar.Raw);
+    }
+
+    [TestMethod]
     public void UnclosedVariable_TreatsAsText()
     {
         var result = Parser.Parse("echo %TESTVAR");
