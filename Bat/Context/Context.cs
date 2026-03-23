@@ -11,6 +11,4 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
     public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
     public IFileSystem FileSystem => fileSystem;
-    public List<string> Parameters { get; } = [];
-    public bool DelayedExpansion { get; set; } // enables !VAR! expansion
 }
