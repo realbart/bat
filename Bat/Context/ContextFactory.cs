@@ -8,7 +8,7 @@ internal static class ContextFactory
     {
         if (OperatingSystem.IsWindows())
         {
-            return new DosContext(new DosFileSystem());
+            return new DosContext();
         }
         else
         {

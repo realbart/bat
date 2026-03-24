@@ -1,4 +1,5 @@
-﻿using Bat.Parsing;
+﻿using Bat.Execution;
+using Bat.Parsing;
 using Context;
 
 namespace Bat.Console;
@@ -18,7 +19,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
         do
         {
             var parser = new Parser();
-            await console.Out.WriteAsync(context.CurrentPathDisplayName + ">");
+            await console.Out.WriteAsync(PromptExpander.Expand(context));
             parser.Append(await ReadLine(context));
             while (parser.ErrorMessage is null && parser.IsIncomplete)
             {

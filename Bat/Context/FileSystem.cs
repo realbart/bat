@@ -8,7 +8,10 @@ internal abstract class FileSystem : IFileSystem
 
     public Dictionary<string, char> Joins { get; } = [];
 
-    public string GetFullPathDisplayName(char drive, string[] path) => $"{drive}:{string.Join("\\", path.Select(GetDisplayName))}";
+    public string GetFullPathDisplayName(char drive, string[] path) =>
+        path.Length == 0
+            ? $"{drive}:\\"
+            : $"{drive}:\\{string.Join("\\", path.Select(GetDisplayName))}";
 
     public string GetDisplayName(string segment)
         => string.Create(segment.Length, segment, (span, input) =>

@@ -6,8 +6,8 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
 {
     public int ErrorCode { get; set; } = 0;
     public Dictionary<string, string> EnvironmentVariables { get; } = [];
-    private readonly Dictionary<char, string[]> CurrentFolders = [];
-    public char CurrentDrive { get; } = 'C'; // todo: configuable in the command line arguments
+    protected readonly Dictionary<char, string[]> CurrentFolders = [];
+    public char CurrentDrive { get; protected set; } = 'C';
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
     public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
     public IFileSystem FileSystem => fileSystem;
@@ -23,4 +23,27 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
 
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
+
+    protected void InitializeFromEnvironment()
+    {
+        // Copy all process environment variables into the context
+        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string key && entry.Value is string value)
+                EnvironmentVariables[key] = value;
+        }
+
+        // PROMPT: if not provided by the environment, default to $P$G
+        if (!EnvironmentVariables.ContainsKey("PROMPT"))
+            EnvironmentVariables["PROMPT"] = "$P$G";
+
+        // Current drive + path: platform-specific
+        InitializeCurrentDirectory();
+    }
+
+    /// <summary>
+    /// Platform-specific: map the process working directory into drive + path.
+    /// Override in platform subclasses.
+    /// </summary>
+    protected virtual void InitializeCurrentDirectory() { }
 }
