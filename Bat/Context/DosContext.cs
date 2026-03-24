@@ -14,7 +14,9 @@ internal class DosContext : Context
         var dir = System.Environment.CurrentDirectory;
         if (dir.Length >= 2 && dir[1] == ':')
         {
-            CurrentDrive = char.ToUpperInvariant(dir[0]);
+            // C:\ is mapped to Z: — reflect that in the context's current drive
+            var nativeDrive = char.ToUpperInvariant(dir[0]);
+            CurrentDrive = nativeDrive == 'C' ? 'Z' : nativeDrive;
             var segments = dir.Length > 3
                 ? dir[3..].Split('\\', System.StringSplitOptions.RemoveEmptyEntries)
                 : [];

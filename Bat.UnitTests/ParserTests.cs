@@ -469,7 +469,7 @@ public class ComplexScenarios
         var tokens = result.LastLine.ToList();
         Assert.IsTrue(tokens.Any(t => t is ConditionalAndToken));
         Assert.IsTrue(tokens.Any(t => t is ConditionalOrToken));
-        Assert.AreEqual(3, tokens.OfType<CommandToken>().Count() + tokens.OfType<BuiltInCommandToken<EchoCommand>>().Count());
+        Assert.AreEqual(3, tokens.OfType<CommandToken>().Count() + tokens.OfType<IBuiltInCommandToken>().Count());
     }
 
     [TestMethod]

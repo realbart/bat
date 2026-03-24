@@ -56,7 +56,7 @@ internal static class CommandTokenizer
 
         var isCommandBoundary = scanner.Expected.HasFlag(ExpectedTokenTypes.Command);
         var isAfterNonIfBlock = scanner.Expected.HasFlag(ExpectedTokenTypes.CommandSeparator)
-                              && !scanner.Expected.HasFlag(ExpectedTokenTypes.Text);
+            && !scanner.Expected.HasFlag(ExpectedTokenTypes.Text);
 
         if (isCommandBoundary || isAfterNonIfBlock)
         {

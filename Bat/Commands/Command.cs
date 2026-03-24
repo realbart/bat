@@ -1,6 +1,5 @@
 ﻿using Bat.Execution;
 using Bat.Nodes;
-using Bat.Tokens;
 using Context;
 
 namespace Bat.Commands;
@@ -8,8 +7,7 @@ namespace Bat.Commands;
 internal interface ICommand
 {
     Task<int> ExecuteAsync(
-        IContext context,
-        IReadOnlyList<IToken> arguments,
+        IArgumentSet arguments,
         BatchContext batchContext,
         IReadOnlyList<Redirection> redirections
     );

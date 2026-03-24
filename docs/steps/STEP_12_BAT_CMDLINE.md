@@ -90,12 +90,14 @@ Standaard: platform-native (UTF-8 op Unix, systeemcodepage op Windows).
 Wijs een schijfletter toe aan een extern pad. Meerdere `/M`-opties zijn mogelijk.
 
 **Standaardgedrag zonder /M:**
-- Windows-modus: alle echte Windows-drives (`C:`, `D:`, ...) worden 1-op-1 doorgegeven.
-- Unix-modus: `/` wordt standaard gemapped als `C:`.
+- Windows-modus: `Z:` → `C:\` (alleen de systeemschijf; geen andere drives automatisch).
+- Unix-modus: `Z:` → `/` (rootdirectory).
 
 **Met /M:**
-- Vervangt de standaard `/`→`C:` mapping op Unix.
-- Kan ook op Windows worden gebruikt om extra drives te definiëren.
+- **Vervangt** de volledige standaardmapping — voegt niet toe.
+- De eerste `/M` gooit de standaard `Z:`-mapping weg; alleen de expliciet opgegeven
+  mappings zijn daarna geldig.
+- Meerdere `/M`-opties zijn mogelijk om meerdere drives te definiëren.
 
 ```
 # Voorbeeld Unix:
@@ -123,15 +125,86 @@ wordt naar een intern Bat-commando zodat het werkt binnen de virtuele filesystee
 Na het parsen van de parameters wordt `IContext` geïnitialiseerd in deze volgorde:
 
 1. Maak `IFileSystem` aan (DosFileSystem of UxFileSystemAdapter op basis van modus)
-2. Verwijs alle `/M`-mappings als substs
-3. Stel beginwaarden in op `IContext`:
+2. Verwijs alle `/M`-mappings als roots in de filesystem
+3. **Stel de initiële werkdirectory in** (zie hieronder)
+4. Stel beginwaarden in op `IContext`:
    - `EchoEnabled = !hasQ`
    - `DelayedExpansion = /V:ON`
    - `ExtensionsEnabled = /E:ON | default true`
    - `FilenameCompletion = /F:ON`
    - Uitvoercodering = `/A` of `/U` of default
-4. Pas `/T:fg` toe op de console
-5. Voer `/C` of `/K` string uit, of start REPL
+5. Pas `/T:fg` toe op de console
+6. Voer `/C` of `/K` string uit, of start REPL
+
+### Initiële werkdirectory
+
+Bat start altijd met de **native werkdirectory** van het host-proces
+(`Environment.CurrentDirectory`). Die wordt omgezet naar een virtuele drive + pad
+via de geconfigureerde `/M`-mappings.
+
+**Algoritme:**
+
+1. Haal native CWD op: bijv. `/home/bart/projects`
+2. Doorloop alle gedefinieerde drive-mappings, langste native root eerst.
+3. Als de native CWD begint met de root van een mapping:
+   - Bereken het relatieve deel: `/home/bart/projects` onder `/home/bart` → `projects`
+   - Stel in: drive = die schijfletter, pad = `["projects"]`
+   - Stop.
+4. Als geen enkele mapping de CWD dekt:
+   - Stel in: drive = eerste schijfletter (op volgorde van opgave), pad = `[]` (root)
+
+**Voorbeeld (Unix, `-M C=/ -M D=/home/bart`):**
+
+| Native CWD | Langste overeenkomende root | Virtueel |  |
+|---|---|---|---|
+| `/home/bart/projects` | `D=/home/bart` | `D:\projects` | ✓ eerste match |
+| `/usr/bin` | `C=/` | `C:\usr\bin` | ✓ via C: want geen D-match |
+| `/mnt/data` | (geen) | `C:\` (fallback root van C:) | geen match |
+
+**Voorbeeld (Windows, `/M C=C:\Windows /M D=C:\Users\Bart`):**
+
+| Native CWD | Match | Virtueel |
+|---|---|---|
+| `C:\Users\Bart\projects` | `D=C:\Users\Bart` | `D:\projects` |
+| `C:\Windows\System32` | `C=C:\Windows` | `C:\System32` |
+| `C:\Temp` | (geen) | `C:\` (fallback) |
+
+> De **langste root eerst** (longest prefix match) voorkomt dat een korte mapping
+> zoals `C=/` voorrang heeft op een specifiekere `D=/home/bart`.
+
+### Test 9: Initiële werkdirectory bij opstarten
+
+```csharp
+[Fact]
+public void BuildContext_CwdMappedToLongestMatchingDrive()
+{
+    var args = new BatArguments
+    {
+        DriveMappings = new() { ['C'] = "/", ['D'] = "/home/bart" },
+        NativeCwd = "/home/bart/projects",
+        Mode = BatMode.Unix
+    };
+    var ctx = BatContextFactory.Create(args);
+
+    Assert.Equal('D', ctx.CurrentDrive);
+    CollectionAssert.AreEqual(new[] { "projects" }, ctx.CurrentPath);
+}
+
+[Fact]
+public void BuildContext_CwdUnmapped_FallsBackToFirstDriveRoot()
+{
+    var args = new BatArguments
+    {
+        DriveMappings = new() { ['C'] = "/home/bart" },
+        NativeCwd = "/mnt/data",
+        Mode = BatMode.Unix
+    };
+    var ctx = BatContextFactory.Create(args);
+
+    Assert.Equal('C', ctx.CurrentDrive);
+    Assert.Empty(ctx.CurrentPath);
+}
+```
 
 ## TDD — Stap voor stap
 
@@ -280,5 +353,7 @@ public void BuildContext_AppliesMappingsToFileSystem()
 - [ ] `/M:driveletter path` mapt een drive in de filesysteemlaag
 - [ ] Meerdere `/M`-opties worden alle verwerkt
 - [ ] Standaardmapping `/`→`C:` geldt op Unix zonder `/M`
+- [ ] Initiële werkdirectory wordt gezet via longest-prefix-match op de `/M`-mappings
+- [ ] Fallback naar root van eerste drive als CWD niet mappeerbaar is
 - [ ] `/T` markeert vertaalverzoek van hostcommando (implementatie mag stub zijn)
 - [ ] Alle bestaande tests slagen nog steeds

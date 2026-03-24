@@ -20,4 +20,8 @@ public interface IContext
 
     // Directory stack for PUSHD/POPD
     Stack<(char Drive, string[] Path)> DirectoryStack { get; }
+
+    void SetPath(char drive, string[] path);
+    void SetCurrentDrive(char drive);
+    string[] GetPathForDrive(char drive);
 }

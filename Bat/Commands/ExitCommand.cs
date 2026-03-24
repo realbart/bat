@@ -1,15 +1,29 @@
 ﻿using Bat.Execution;
 using Bat.Nodes;
-using Bat.Tokens;
 using Context;
 
 namespace Bat.Commands;
 
-[BuiltInCommand("exit")]
-[BuiltInCommand("quit")]
+[BuiltInCommand("exit", Flags = "B")]
+[BuiltInCommand("quit", Flags = "B")]
 internal class ExitCommand : ICommand
 {
-    public Task<int> ExecuteAsync(IContext context, IReadOnlyList<IToken> arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections) =>
-        // TODO: Implement in Step 4
-        throw new NotImplementedException("ExitCommand - to be implemented in Step 4");
+    internal const int ExitSentinel = int.MinValue;
+
+    public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    {
+        var context = batchContext.Context!;
+
+        bool batchOnly = arguments.HasFlag('B');
+
+        if (int.TryParse(arguments.Positionals.FirstOrDefault(), out int code))
+            context.ErrorCode = code;
+
+        // /B in batch context returns from batch but keeps interpreter running;
+        // in REPL (or when not in batch), treat identical to EXIT.
+        if (batchOnly && batchContext.IsBatchFile)
+            return Task.FromResult(0);
+
+        return Task.FromResult(ExitSentinel);
+    }
 }

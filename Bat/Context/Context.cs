@@ -24,6 +24,10 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
 
+    public void SetPath(char drive, string[] path) => CurrentFolders[drive] = path;
+    public void SetCurrentDrive(char drive) => CurrentDrive = drive;
+    public string[] GetPathForDrive(char drive) => CurrentFolders.TryGetValue(drive, out var p) ? p : [];
+
     protected void InitializeFromEnvironment()
     {
         // Copy all process environment variables into the context

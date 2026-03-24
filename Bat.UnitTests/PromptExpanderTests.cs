@@ -32,6 +32,9 @@ public class PromptExpanderTests
         public bool ExtensionsEnabled { get; set; } = true;
         public string PromptFormat { get; set; } = "$P$G";
         public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
+        public void SetPath(char drive, string[] path) { }
+        public void SetCurrentDrive(char drive) { }
+        public string[] GetPathForDrive(char drive) => [];
     }
 
     // ── tests ────────────────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 ﻿using Bat.Execution;
 using Bat.Nodes;
-using Bat.Tokens;
 using Context;
 
 namespace Bat.Commands;
@@ -8,7 +7,28 @@ namespace Bat.Commands;
 [BuiltInCommand("echo")]
 internal class EchoCommand : ICommand
 {
-    public Task<int> ExecuteAsync(IContext context, IReadOnlyList<IToken> arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections) =>
-        // TODO: Implement in Step 4
-        throw new NotImplementedException("EchoCommand - to be implemented in Step 4");
+    public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    {
+        var context = batchContext.Context!;
+        var console = batchContext.Console!;
+        string args = arguments.FullArgument;
+
+        if (args.Equals("on", StringComparison.OrdinalIgnoreCase))
+        {
+            context.EchoEnabled = true;
+            return 0;
+        }
+        if (args.Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+            context.EchoEnabled = false;
+            return 0;
+        }
+        if (args.Length == 0)
+        {
+            await console.Out.WriteLineAsync($"ECHO is {(context.EchoEnabled ? "on" : "off")}.");
+            return 0;
+        }
+        await console.Out.WriteLineAsync(args);
+        return 0;
+    }
 }

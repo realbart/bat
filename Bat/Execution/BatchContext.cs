@@ -1,3 +1,6 @@
+using Bat.Console;
+using Context;
+
 namespace Bat.Execution;
 
 /// <summary>
@@ -6,6 +9,9 @@ namespace Bat.Execution;
 /// </summary>
 public class BatchContext
 {
+    internal IConsole? Console { get; set; }
+    internal IContext? Context { get; set; }
+
     // File state (null for REPL)
     public string? BatchFilePath { get; set; }
     public string? FileContent { get; set; }

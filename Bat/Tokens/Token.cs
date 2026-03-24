@@ -8,7 +8,7 @@ internal static class Token
     public static QuotedTextToken QuotedText(string raw) => new(raw);
     public static TextToken Text(string raw) => new(raw);
     public static CommandToken Command(string raw) => new(raw);
-    public static BuiltInCommandToken<TCmd> BuiltInCommand<TCmd>(string value) where TCmd : ICommand => new(value);
+    public static BuiltInCommandToken<TCmd> BuiltInCommand<TCmd>(string value) where TCmd : ICommand, new() => new(value);
     public static LabelToken Label(string raw) => new(raw);
     public static WhitespaceToken Whitespace(string raw) => new(raw);
     public static DelayedExpansionVariableToken DelayedExpansionVariable(string raw) => new(raw);

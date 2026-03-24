@@ -26,9 +26,10 @@ internal record BuiltInCommandNode<TCommand>(
         }
     }
 
-    public async Task<int> ExecuteAsync(IContext ctx, BatchContext bc)
+    public async Task<int> ExecuteAsync(BatchContext bc)
     {
         var command = new TCommand();
-        return await command.ExecuteAsync(ctx, Arguments, bc, Redirections);
+        var args = ArgumentSet.Parse(Arguments, CommandToken.Spec);
+        return await command.ExecuteAsync(args, bc, Redirections);
     }
 }

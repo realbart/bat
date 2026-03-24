@@ -48,7 +48,7 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IRe
     }
 
     public Line FirstLine => Lines.First();
-    public Line LastLine  => Lines.Last();
+    public Line LastLine => Lines.Last();
 
     public override string ToString() => string.Concat(RawTokens);
 }

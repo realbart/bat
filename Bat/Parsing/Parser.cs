@@ -1,3 +1,4 @@
+using Bat.Console;
 using Bat.Nodes;
 using Bat.Tokenizing;
 using Bat.Tokens;
@@ -29,9 +30,10 @@ internal class Parser()
     /// <summary>
     /// True when the token stream ends inside an open block or on a continuation line,
     /// meaning more input is required before the command can be parsed.
+    /// IF and FOR contexts without open parentheses are complete at end of line.
     /// </summary>
     public bool IsIncomplete =>
-        _tokenSet.ContextStack.Count > 0 ||
+        _tokenSet.ContextStack.Any(c => c is BlockContext.IfBlock or BlockContext.ForSet or BlockContext.Generic) ||
         _tokenSet.LastOrDefault(t => t is not EndOfLineToken and not WhitespaceToken) is ContinuationToken;
 
     /// <summary>

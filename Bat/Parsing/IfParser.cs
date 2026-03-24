@@ -38,10 +38,10 @@ internal static class IfParser
     {
         "==" or "EQU" => IfOperator.StringEqual,
         "NEQ" => IfOperator.Neq,
-        "LSS" => IfOperator.Lss,
-        "LEQ" => IfOperator.Leq,
-        "GTR" => IfOperator.Gtr,
-        "GEQ" => IfOperator.Geq,
+        "LSS" or "<" => IfOperator.Lss,
+        "LEQ" or "<=" => IfOperator.Leq,
+        "GTR" or ">" => IfOperator.Gtr,
+        "GEQ" or ">=" => IfOperator.Geq,
         _ => null
     };
 
@@ -61,9 +61,9 @@ internal static class IfParser
         if (reader.Current is null or EndOfLineToken)
         { reader.ParseError ??= "IF: missing condition."; return null; }
 
-        IfOperator      op;
-        List<IToken>    leftArg  = [];
-        List<IToken>    rightArg;
+        IfOperator op;
+        List<IToken> leftArg = [];
+        List<IToken> rightArg;
 
         var unary = UnaryOperator(reader.CurrentText);
         if (unary.HasValue)

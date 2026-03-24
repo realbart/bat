@@ -60,12 +60,12 @@ internal ref struct ParseReader(TokenSet tokens)
     {
         var word = new List<IToken>();
         while (Current is not (null or WhitespaceToken or EndOfLineToken
-                               or CommandSeparatorToken or ConditionalAndToken
-                               or ConditionalOrToken or PipeToken
-                               or BlockStartToken or BlockEndToken
-                               or OutputRedirectionToken or AppendRedirectionToken
-                               or InputRedirectionToken or StdErrRedirectionToken
-                               or AppendStdErrRedirectionToken))
+            or CommandSeparatorToken or ConditionalAndToken
+            or ConditionalOrToken or PipeToken
+            or BlockStartToken or BlockEndToken
+            or OutputRedirectionToken or AppendRedirectionToken
+            or InputRedirectionToken or StdErrRedirectionToken
+            or AppendStdErrRedirectionToken))
         {
             word.Add(Consume());
         }

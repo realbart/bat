@@ -22,10 +22,10 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
 | 1 | 🟢 DONE | Repareer ontwerpkeuzes | [STEP_01_REPAIR_DESIGN.md](steps/STEP_01_REPAIR_DESIGN.md) |
-| 2 | 🔴 TODO | PROMPT environment variabele expansie | [STEP_02_PROMPT_EXPANSION.md](steps/STEP_02_PROMPT_EXPANSION.md) |
-| 3 | 🔴 TODO | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
-| 4 | 🔴 TODO | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
-| 5 | 🔴 TODO | CD en DIR commands | [STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md) |
+| 2 | � DONE | PROMPT environment variabele expansie | [STEP_02_PROMPT_EXPANSION.md](steps/STEP_02_PROMPT_EXPANSION.md) |
+| 3 | 🟢 DONE | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
+| 4 | 🟢 DONE | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
+| 5 | 🟢 DONE | CD en DIR commands | [STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md) |
 | 6 | 🔴 TODO | Native executables uitvoeren | [STEP_06_EXECUTE_NATIVE.md](steps/STEP_06_EXECUTE_NATIVE.md) |
 | 7 | 🔴 TODO | .NET library executables | [STEP_07_EXECUTE_DOTNET.md](steps/STEP_07_EXECUTE_DOTNET.md) |
 | 8 | 🔴 TODO | Batchbestanden uitvoeren | [STEP_08_BATCH_EXECUTE.md](steps/STEP_08_BATCH_EXECUTE.md) |
@@ -40,7 +40,7 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 De volgende commando's worden geïmplementeerd volgens de **[Generieke implementatieregels](#generieke-implementatieregels-voor-commandos)** — geen apart instructiebestand.
 
 Commando's die al gedekt worden door infrastructuurstappen (niet hieronder):
-- Stap 4: `ECHO`, `SET`, `REM`, `EXIT`, `CLS`
+- Stap 4: `ECHO`, `SET`, `REM`, `EXIT`, `CLS` (basaal, nog uit te breiden volgens de Generieke implementatieregels)
 - Stap 5: `CD` / `CHDIR`, `DIR`
 - Stap 8: `GOTO`, `CALL`, `SHIFT`
 - Stap 10: `SUBST`, drive switching (`D:`)
@@ -129,14 +129,13 @@ Dit voorkomt dat je features implementeert die niet matchen met CMD gedrag!
 Voor elk commando zonder eigen instructiebestand (stap 14 t/m 41):
 
 **Stap 1 — Verken het echte gedrag**
-```cmd
-COMMAND /?
+```cmd /C «COMMAND» /? > «COMMAND»-help.txt
 ```
 Kopieer de volledige `/?` output als inline commentaar in de command-klasse (documentatie bij de bron).
 
 **Stap 2 — Zoek de referenties op**
 - Microsoft docs: `https://learn.microsoft.com/windows-server/administration/windows-commands/COMMAND`
-- ReactOS implementatie: zoek op commando-naam in de ReactOS source browser
+- ReactOS implementatie: zoek op commando-naam in de ReactOS source browser op `https://doxygen.reactos.org/dir_b985591bf7ce7fa90b55f1035a6cc4ab.html`
 
 **Stap 3 — Schrijf tests (TDD)**
 - Test de happy path (normaal gebruik)

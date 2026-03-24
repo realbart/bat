@@ -11,7 +11,7 @@ public static class Program
         return 1;
     }
 
-    public static async Task<int> Main(IContext context, params string[] args)
+    public static async Task<int> Main(IContext context, IArgumentSet args)
     {
         Console.WriteLine("Subst main (through {0})", context);
         return 0;
