@@ -90,9 +90,21 @@ public class QuotedStringTokenization
         var result = Parser.Parse("echo \"hello");
 
         var tokens = result.LastLine.ToList();
-        // Should treat unclosed quote as quoted text token with missing close quote
         Assert.IsTrue(tokens.Any(t => t is QuotedTextToken));
         Assert.IsFalse(result.IsIncomplete);
+    }
+
+    [TestMethod]
+    public void UnclosedQuoteInDirCommand_ParsesCorrectly()
+    {
+        var result = Parser.Parse("dir \"__azu*");
+
+        var tokens = result.LastLine.ToList();
+        var quoted = tokens.OfType<QuotedTextToken>().First();
+        Assert.AreEqual("\"", quoted.OpenQuote);
+        Assert.AreEqual("__azu*", quoted.Value);
+        Assert.AreEqual("", quoted.CloseQuote);
+        Assert.AreEqual("\"__azu*", quoted.Raw);
     }
 
     [TestMethod]

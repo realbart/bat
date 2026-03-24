@@ -3,6 +3,10 @@ using Bat.Tokens;
 
 namespace Bat.Tokenizing;
 
+/// <summary>
+/// Main tokenizer coordinator. Dispatches character-by-character to specialized tokenizers
+/// and maintains the main tokenization loop.
+/// </summary>
 internal static class Tokenizer
 {
     internal static void Tokenize(TokenSet tokenSet, string input)
@@ -22,6 +26,10 @@ internal static class Tokenizer
         }
     }
 
+    /// <summary>
+    /// Main tokenization loop. Uses a switch expression to dispatch each character
+    /// to the appropriate specialized tokenizer based on batch syntax rules.
+    /// </summary>
     private static void TokenizeLine(ref Scanner scanner, TokenSet tokenSet)
     {
         while (!scanner.IsAtEnd)
@@ -32,8 +40,8 @@ internal static class Tokenizer
             {
                 '\r' or '\n' => LiteralTokenizer.TokenizeLineEnd(ref scanner, tokenSet),
                 ' ' or '\t' => LiteralTokenizer.TokenizeWhitespace(ref scanner),
-                '@' when (IsAtStartOfLine(tokenSet) || IsExpectingCommand(ref scanner)) => Yield(ref scanner, 1, Token.EchoSupressor),
-                ':' when (IsAtStartOfLine(tokenSet) || IsExpectingCommand(ref scanner)) => LiteralTokenizer.TokenizeLabel(ref scanner),
+                '@' when (TokenizerHelpers.IsAtStartOfLine(tokenSet) || TokenizerHelpers.IsExpectingCommand(ref scanner)) => TokenizerHelpers.Yield(ref scanner, 1, Token.EchoSupressor),
+                ':' when (TokenizerHelpers.IsAtStartOfLine(tokenSet) || TokenizerHelpers.IsExpectingCommand(ref scanner)) => LiteralTokenizer.TokenizeLabel(ref scanner),
                 '^' => LiteralTokenizer.TokenizeEscape(ref scanner),
                 '"' or '\'' => LiteralTokenizer.TokenizeQuotedString(ref scanner, scanner.Ch0),
                 '%' => LiteralTokenizer.TokenizeVariable(ref scanner),
@@ -41,7 +49,7 @@ internal static class Tokenizer
                 '(' => OperatorTokenizer.TokenizeBlockStart(ref scanner),
                 ')' => OperatorTokenizer.TokenizeBlockEnd(ref scanner),
                 '>' => OperatorTokenizer.TokenizeGreaterThan(ref scanner),
-                '<' => Yield(ref scanner, 1, Token.InputRedirection),
+                '<' => TokenizerHelpers.Yield(ref scanner, 1, Token.InputRedirection),
                 '2' => OperatorTokenizer.TokenizeStdErrRedirection(ref scanner),
                 '1' => OperatorTokenizer.TokenizeStdOutRedirection(ref scanner) ?? CommandTokenizer.TokenizeTextOrCommand(ref scanner),
                 '&' => OperatorTokenizer.TokenizeAmpersand(ref scanner),
@@ -62,25 +70,6 @@ internal static class Tokenizer
                     break;
             }
         }
-    }
-
-    private static bool IsAtStartOfLine(TokenSet tokenSet)
-        => tokenSet.Count == 0 || tokenSet[^1] is EndOfLineToken;
-
-    public static bool IsExpectingCommand(ref Scanner scanner)
-        => scanner.Expected.HasFlag(ExpectedTokenTypes.Command) && !scanner.HasCommand;
-
-    public static bool IsInIfCondition(ref Scanner scanner)
-    {
-        if (scanner.ContextStack.Count == 0) return false;
-        var ctx = scanner.ContextStack.Peek();
-        return ctx == BlockContext.If || ctx == BlockContext.IfBlock;
-    }
-
-    public static IToken? Yield(ref Scanner scanner, int advance, IToken token)
-    {
-        scanner.Advance(advance);
-        return token;
     }
 }
 

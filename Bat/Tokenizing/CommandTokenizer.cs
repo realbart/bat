@@ -6,6 +6,10 @@ namespace Bat.Tokenizing;
 
 internal static class CommandTokenizer
 {
+    /// <summary>
+    /// Reads a word and determines if it's a command, special keyword (else/in/do), or text argument.
+    /// Command detection only happens at command boundaries; elsewhere words become text tokens.
+    /// </summary>
     public static IToken? TokenizeTextOrCommand(ref Scanner scanner)
     {
         var text = ReadWord(ref scanner);
@@ -16,9 +20,13 @@ internal static class CommandTokenizer
         if (lower == "else") return HandleElse(ref scanner, text);
         if (scanner.Expected.HasFlag(ExpectedTokenTypes.ForInClause) && lower == "in") return HandleForIn(ref scanner, text);
         if (scanner.Expected.HasFlag(ExpectedTokenTypes.ForDoClause) && lower == "do") return HandleForDo(ref scanner, text);
-        return Tokenizer.IsExpectingCommand(ref scanner) ? HandleCommandToken(ref scanner, text, lower) : HandleTextToken(ref scanner, text);
+        return TokenizerHelpers.IsExpectingCommand(ref scanner) ? HandleCommandToken(ref scanner, text, lower) : HandleTextToken(ref scanner, text);
     }
 
+    /// <summary>
+    /// Reads characters until a special character or whitespace is encountered.
+    /// Forms the basis for command names and text arguments.
+    /// </summary>
     private static string ReadWord(ref Scanner scanner)
     {
         var start = scanner.Position;
@@ -31,6 +39,11 @@ internal static class CommandTokenizer
         return scanner.Substring(start);
     }
 
+    /// <summary>
+    /// Else only becomes an ElseCommand token immediately after an IF block.
+    /// At command boundaries or after non-IF blocks it's an error.
+    /// Within command arguments it's treated as regular text.
+    /// </summary>
     private static IToken HandleElse(ref Scanner scanner, string text)
     {
         if (scanner.Expected.HasFlag(ExpectedTokenTypes.Else))
@@ -54,18 +67,30 @@ internal static class CommandTokenizer
         return Token.Text(text);
     }
 
+    /// <summary>
+    /// The IN keyword only has special meaning in FOR loops between the variable and the set.
+    /// Updates parser state to expect the opening parenthesis of the FOR set.
+    /// </summary>
     private static TextToken HandleForIn(ref Scanner scanner, string text)
     {
         scanner.Expected = ExpectedTokenTypes.ForSet | ExpectedTokenTypes.Whitespace;
         return Token.Text(text);
     }
 
+    /// <summary>
+    /// The DO keyword only has special meaning in FOR loops after the set specification.
+    /// Signals the start of the FOR body (which can be a single command or block).
+    /// </summary>
     private static TextToken HandleForDo(ref Scanner scanner, string text)
     {
         scanner.Expected = ExpectedTokenTypes.StartOfCommand;
         return Token.Text(text);
     }
 
+    /// <summary>
+    /// Creates either a built-in command token or a generic command token.
+    /// Built-in commands (IF, FOR, etc.) get special handling and update parser state accordingly.
+    /// </summary>
     private static IToken HandleCommandToken(ref Scanner scanner, string text, string lower)
     {
         var commandType = BuiltInCommandRegistry.GetCommandType(lower);
@@ -78,6 +103,10 @@ internal static class CommandTokenizer
         return token;
     }
 
+    /// <summary>
+    /// Uses reflection to create a generic BuiltInCommandToken with the appropriate command type.
+    /// Preserves the original casing from the source code.
+    /// </summary>
     private static IToken CreateBuiltInCommandToken(Type commandType, string text)
     {
         var factoryMethod = typeof(Token).GetMethod(nameof(Token.BuiltInCommand))!;
@@ -85,6 +114,11 @@ internal static class CommandTokenizer
         return (IToken)genericFactory.Invoke(null, [text])!;
     }
 
+    /// <summary>
+    /// Updates scanner state when a command is recognized.
+    /// IF and FOR commands push context onto the stack and change what tokens are expected next.
+    /// Other commands simply expect arguments or command separators.
+    /// </summary>
     private static void UpdateStateForCommand(ref Scanner scanner, Type? commandType)
     {
         if (commandType == typeof(IfCommand))
@@ -102,9 +136,13 @@ internal static class CommandTokenizer
         scanner.Expected = ExpectedTokenTypes.AfterCommand;
     }
 
+    /// <summary>
+    /// Processes text that appears as a command argument.
+    /// Within IF conditions, certain words become comparison operators instead of text.
+    /// </summary>
     private static IToken HandleTextToken(ref Scanner scanner, string text)
     {
-        if (Tokenizer.IsInIfCondition(ref scanner) && IsComparisonOperator(text))
+        if (TokenizerHelpers.IsInIfCondition(ref scanner) && IsComparisonOperator(text))
         {
             scanner.Expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.Command;
             return Token.ComparisonOperator(text);
@@ -113,6 +151,11 @@ internal static class CommandTokenizer
         return Token.Text(text);
     }
 
+    /// <summary>
+    /// Adjusts parser expectations after seeing a text token.
+    /// In IF conditions, certain keywords (NOT, EXIST, etc.) influence what can follow.
+    /// Outside IF contexts, text is simply treated as command arguments.
+    /// </summary>
     private static void UpdateExpectedAfterText(ref Scanner scanner, string text)
     {
         var ctx = scanner.ContextStack.Count > 0 ? scanner.ContextStack.Peek() : BlockContext.None;
@@ -132,6 +175,11 @@ internal static class CommandTokenizer
         }
     }
 
+    /// <summary>
+    /// Determines what tokens can follow specific IF condition keywords.
+    /// NOT allows another condition keyword, EXIST/DEFINED/ERRORLEVEL expect their argument,
+    /// and switches (/I) allow more condition keywords.
+    /// </summary>
     private static ExpectedTokenTypes ExpectedAfterIfWord(string text)
         => text.ToUpper() switch
         {
@@ -141,6 +189,10 @@ internal static class CommandTokenizer
             _ => ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace
         };
 
+    /// <summary>
+    /// Checks if a word should be treated as a comparison operator in IF conditions.
+    /// Includes both symbolic (EQU, NEQ, etc.) and semantic operators (EXIST, DEFINED, etc.).
+    /// </summary>
     private static bool IsComparisonOperator(string text)
         => text.ToUpper() is "EQU" or "NEQ" or "LSS" or "LEQ" or "GTR" or "GEQ" or "EXIST" or "DEFINED" or "ERRORLEVEL" or "NOT";
 }
