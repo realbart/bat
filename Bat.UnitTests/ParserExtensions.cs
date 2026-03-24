@@ -1,4 +1,4 @@
-using Bat.Console;
+using Bat.Parsing;
 
 namespace Bat.UnitTests;
 
