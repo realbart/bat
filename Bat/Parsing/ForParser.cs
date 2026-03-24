@@ -22,7 +22,7 @@ internal static class ForParser
     internal static ForCommandNode? ParseFor(
         ref ParseReader reader, List<Redirection> outerRedirs, List<IToken> leadingWs)
     {
-        var switches  = ForSwitches.None;
+        var switches = ForSwitches.None;
         var forParams = new List<IToken>(leadingWs);
 
         ParseForSwitches(ref reader, ref switches, forParams);
@@ -78,11 +78,11 @@ internal static class ForParser
         {
             bool recognised = reader.CurrentText.ToUpperInvariant() switch
             {
-                "/D" => AccumulateSimple(ref reader, ref switches, ForSwitches.Dirs,      forParams),
-                "/R" => AccumulateR     (ref reader, ref switches,                        forParams),
-                "/L" => AccumulateSimple(ref reader, ref switches, ForSwitches.Loop,      forParams),
-                "/F" => AccumulateF     (ref reader, ref switches,                        forParams),
-                _    => false
+                "/D" => AccumulateSimple(ref reader, ref switches, ForSwitches.Dirs, forParams),
+                "/R" => AccumulateR(ref reader, ref switches, forParams),
+                "/L" => AccumulateSimple(ref reader, ref switches, ForSwitches.Loop, forParams),
+                "/F" => AccumulateF(ref reader, ref switches, forParams),
+                _ => false
             };
 
             if (!recognised) break;

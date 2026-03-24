@@ -23,11 +23,11 @@ internal static class IfParser
     /// </summary>
     private static IfOperator? UnaryOperator(string? text) => text?.ToUpperInvariant() switch
     {
-        "ERRORLEVEL"    => IfOperator.ErrorLevel,
-        "EXIST"         => IfOperator.Exist,
-        "DEFINED"       => IfOperator.Defined,
+        "ERRORLEVEL" => IfOperator.ErrorLevel,
+        "EXIST" => IfOperator.Exist,
+        "DEFINED" => IfOperator.Defined,
         "CMDEXTVERSION" => IfOperator.CmdExtVersion,
-        _               => null
+        _ => null
     };
 
     /// <summary>
@@ -37,12 +37,12 @@ internal static class IfParser
     private static IfOperator? BinaryOperator(string? raw) => raw?.ToUpperInvariant() switch
     {
         "==" or "EQU" => IfOperator.StringEqual,
-        "NEQ"         => IfOperator.Neq,
-        "LSS"         => IfOperator.Lss,
-        "LEQ"         => IfOperator.Leq,
-        "GTR"         => IfOperator.Gtr,
-        "GEQ"         => IfOperator.Geq,
-        _             => null
+        "NEQ" => IfOperator.Neq,
+        "LSS" => IfOperator.Lss,
+        "LEQ" => IfOperator.Leq,
+        "GTR" => IfOperator.Gtr,
+        "GEQ" => IfOperator.Geq,
+        _ => null
     };
 
     /// <summary>
@@ -55,8 +55,8 @@ internal static class IfParser
     {
         var flags = IfFlags.None;
 
-        if (reader.CurrentIs("/I"))   { flags |= IfFlags.IgnoreCase; reader.Consume(); reader.ConsumeWhitespace(); }
-        if (reader.CurrentIs("NOT")) { flags |= IfFlags.Negate;     reader.Consume(); reader.ConsumeWhitespace(); }
+        if (reader.CurrentIs("/I")) { flags |= IfFlags.IgnoreCase; reader.Consume(); reader.ConsumeWhitespace(); }
+        if (reader.CurrentIs("NOT")) { flags |= IfFlags.Negate; reader.Consume(); reader.ConsumeWhitespace(); }
 
         if (reader.Current is null or EndOfLineToken)
         { reader.ParseError ??= "IF: missing condition."; return null; }

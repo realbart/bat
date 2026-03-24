@@ -84,27 +84,27 @@ internal static class SequenceParser
         out IToken op, out List<IToken> separator)
     {
         var leadingWs = reader.ConsumeWhitespace();
-        var current   = reader.Current;
+        var current = reader.Current;
 
         bool matches = level switch
         {
             OpLevel.Multi => current is CommandSeparatorToken,
-            OpLevel.Or    => current is ConditionalOrToken,
-            OpLevel.And   => current is ConditionalAndToken,
-            OpLevel.Pipe  => current is PipeToken,
-            _             => false
+            OpLevel.Or => current is ConditionalOrToken,
+            OpLevel.And => current is ConditionalAndToken,
+            OpLevel.Pipe => current is PipeToken,
+            _ => false
         };
 
         if (!matches)
         {
             reader.Pos -= leadingWs.Count;
-            op        = null!;
+            op = null!;
             separator = [];
             return false;
         }
 
-        op        = reader.Consume();
-        separator = [..leadingWs, op, ..reader.ConsumeWhitespace()];
+        op = reader.Consume();
+        separator = [.. leadingWs, op, .. reader.ConsumeWhitespace()];
         return true;
     }
 
@@ -116,9 +116,9 @@ internal static class SequenceParser
         level switch
         {
             OpLevel.Multi => new MultiNode(left, separator, right, []),
-            OpLevel.Or    => new OrNode(left, separator, right, []),
-            OpLevel.And   => new AndNode(left, separator, right, []),
-            OpLevel.Pipe  => new PipeNode(left, separator, right, []),
-            _             => throw new InvalidOperationException($"No binary node for {level}")
+            OpLevel.Or => new OrNode(left, separator, right, []),
+            OpLevel.And => new AndNode(left, separator, right, []),
+            OpLevel.Pipe => new PipeNode(left, separator, right, []),
+            _ => throw new InvalidOperationException($"No binary node for {level}")
         };
 }

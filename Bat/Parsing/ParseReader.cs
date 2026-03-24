@@ -13,11 +13,11 @@ internal ref struct ParseReader(TokenSet tokens)
 {
     private readonly TokenSet _tokens = tokens;
 
-    public int    Pos        = 0;
+    public int Pos = 0;
     public string? ParseError;
 
-    public readonly IToken? Current     => Pos < _tokens.Count ? _tokens[Pos] : null;
-    public readonly bool    AtEnd       => Pos >= _tokens.Count;
+    public readonly IToken? Current => Pos < _tokens.Count ? _tokens[Pos] : null;
+    public readonly bool AtEnd => Pos >= _tokens.Count;
     public readonly string? CurrentText => Current?.Raw;
 
     /// <summary>True when the current token's raw text matches <paramref name="text"/> (case-insensitive).</summary>
