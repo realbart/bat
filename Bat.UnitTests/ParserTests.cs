@@ -988,6 +988,60 @@ public class MixedEscapeScenarios
 
         Assert.AreEqual("set \"path=C:\\Path\\^(with parens^)\"", result.ToString());
     }
+}
+
+[TestClass]
+public class DirCommandSyntaxVariants
+{
+    // CMD:  dir\w  →  dir \w  (lists root-relative path \w; "File Not Found" if absent)
+    // BAT:  "dir\w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    [TestMethod]
+    public void DirBackslashW_ParsesAsGenericCommand()
+    {
+        var result = Parser.Parse(@"dir\w");
+
+        var token = result.LastLine.First();
+        Assert.IsTrue(token is CommandToken);
+        Assert.IsFalse(token is IBuiltInCommandToken);
+    }
+
+    // CMD:  dir/w  →  dir /w  (wide format; exit 0)
+    // BAT:  "dir/w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    [TestMethod]
+    public void DirSlashW_ParsesAsGenericCommand()
+    {
+        var result = Parser.Parse("dir/w");
+
+        var token = result.LastLine.First();
+        Assert.IsTrue(token is CommandToken);
+        Assert.IsFalse(token is IBuiltInCommandToken);
+    }
+
+    // CMD:  dir-w  →  not recognised as internal/external command; exit 1.
+    // BAT:  "dir-w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    [TestMethod]
+    public void DirDashW_ParsesAsGenericCommand()
+    {
+        var result = Parser.Parse("dir-w");
+
+        var token = result.LastLine.First();
+        Assert.IsTrue(token is CommandToken);
+        Assert.IsFalse(token is IBuiltInCommandToken);
+    }
+
+    // CMD:  dir -w  →  "-w" is a filename pattern (not a flag in CMD); shows only files named "-w".
+    // BAT:  "dir" is recognised as DirCommand; "-w" becomes a TextToken argument that
+    //       ArgumentSet interprets as the /W flag (wide format).
+    [TestMethod]
+    public void DirSpaceDashW_ParsesAsDirCommandWithDashWArgument()
+    {
+        var result = Parser.Parse("dir -w");
+
+        var tokens = result.LastLine.ToList();
+        Assert.IsTrue(tokens[0] is BuiltInCommandToken<DirCommand>);
+        Assert.IsTrue(tokens[1] is WhitespaceToken);
+        Assert.AreEqual("-w", tokens[2].Raw);
+    }
 
     [TestMethod]
     public void EscapeBeforeNewline_ParsesCorrectly()

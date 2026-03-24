@@ -2,8 +2,10 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Bat.Commands;
+using Bat.Console;
 using Bat.Execution;
 using Bat.Nodes;
+using Bat.Parsing;
 using Bat.Tokens;
 using Context;
 
@@ -555,6 +557,45 @@ public class DirCommandTests
         Assert.IsTrue(console.OutText.Contains("/A"));
         Assert.IsTrue(console.OutText.Contains("/S"));
     }
+
+    // CMD: dir -w  uses "-w" as a filename pattern (treats - as a literal, not a flag prefix).
+    // Bat: ArgumentSet interprets "-w" as the /W flag, so wide format is activated.
+    [TestMethod]
+    public async Task Dir_DashW_ActivatesWideFormat()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "beta.txt", false);
+        fs.AddEntry('C', [], "gamma.txt", false);
+        var (cmd, console, bc) = Setup(fs, 'C', []);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("-w")), bc, []);
+        // Wide format: all three short names fit on a single output line.
+        var entryLine = console.OutLines.Single(l =>
+            l.Contains("alpha.txt") || l.Contains("beta.txt") || l.Contains("gamma.txt"));
+        Assert.IsTrue(entryLine.Contains("alpha.txt"));
+        Assert.IsTrue(entryLine.Contains("beta.txt"));
+        Assert.IsTrue(entryLine.Contains("gamma.txt"));
+    }
+
+    // Column width = floor(WindowWidth / numCols) where numCols = floor(WindowWidth / maxNameWidth).
+    [TestMethod]
+    public async Task Dir_WideFormat_ColWidthDerivedFromWidestNameAndWindowWidth()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "a.txt", false);          // 5 chars
+        fs.AddEntry('C', [], "b.txt", false);          // 5 chars
+        fs.AddEntry('C', [], "longggggg.txt", false);  // 13 chars — widest
+        var (cmd, console, bc) = Setup(fs, 'C', []);
+        console.WindowWidth = 40;
+        // maxWidth=13, numCols=floor(40/13)=3, colWidth=floor(40/3)=13
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/W")), bc, []);
+        var contentLine = console.OutLines.Single(l => l.Contains("a.txt"));
+        Assert.AreEqual("a.txt".PadRight(13), contentLine[..13]);
+        Assert.AreEqual("b.txt".PadRight(13), contentLine[13..26]);
+        Assert.AreEqual("longggggg.txt", contentLine[26..39]);
+    }
 }
 
 internal static class TestArgs
@@ -563,4 +604,85 @@ internal static class TestArgs
         where TCmd : class, ICommand
         => ArgumentSet.Parse(tokens, ArgumentSpec.From(
             typeof(TCmd).GetCustomAttributes<BuiltInCommandAttribute>()));
+}
+
+[TestClass]
+public class DispatcherIntegrationTests
+{
+    private static (Dispatcher dispatcher, TestConsole console, TestCommandContext ctx) Setup(
+        TestFileSystem fs, char drive = 'C', string[]? path = null)
+    {
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        if (path != null) ctx.SetPath(drive, path);
+        return (new Dispatcher(), console, ctx);
+    }
+
+    // CMD: dir/w → treats /w as the wide flag; produces wide-format listing.
+    [TestMethod]
+    public async Task DirSlashW_ListsFilesInWideFormat()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "beta.txt", false);
+        fs.AddEntry('C', [], "subdir", true);
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        var cmd = Parser.Parse("dir/w");
+        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Volume")));
+        string content = console.OutText;
+        Assert.IsTrue(content.Contains("alpha.txt"));
+        Assert.IsTrue(content.Contains("beta.txt"));
+        Assert.IsTrue(content.Contains("[subdir]"));
+    }
+
+    // CMD: dir\subdir → treats \subdir as a path argument; lists that directory.
+    [TestMethod]
+    public async Task DirBackslashSubdir_ListsSubdirectory()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddDir('C', ["subdir"]);
+        fs.AddEntry('C', ["subdir"], "file.txt", false);
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        var cmd = Parser.Parse(@"dir\subdir");
+        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory")));
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("file.txt")));
+    }
+
+    // CMD: dir-w → not recognized as command, exits with code 1.
+    [TestMethod]
+    public async Task DirDashW_IsNotRecognized()
+    {
+        var fs = new TestFileSystem();
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        var cmd = Parser.Parse("dir-w");
+        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+
+        Assert.AreEqual(1, ctx.ErrorCode);
+        Assert.IsTrue(console.ErrLines.Any(l => l.Contains("'dir-w'") && l.Contains("not recognized")));
+    }
+
+    // CMD: foo → unknown command, exits with code 1.
+    [TestMethod]
+    public async Task UnknownCommand_PrintsNotRecognizedError()
+    {
+        var fs = new TestFileSystem();
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        var cmd = Parser.Parse("foo");
+        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+
+        Assert.AreEqual(1, ctx.ErrorCode);
+        Assert.IsTrue(console.ErrLines.Any(l => l.Contains("'foo'") && l.Contains("not recognized")));
+        Assert.IsTrue(console.ErrLines.Any(l => l.Contains("operable program")));
+    }
 }

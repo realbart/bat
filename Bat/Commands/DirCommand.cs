@@ -9,48 +9,48 @@ namespace Bat.Commands;
 internal class DirCommand : ICommand
 {
     private const string HelpText = """
-        Displays a list of files and subdirectories in a directory.
+                                    Displays a list of files and subdirectories in a directory.
 
-        DIR [drive:][path][filename] [/A[[:]attributes]] [/B] [/C] [/D] [/L] [/N]
-          [/O[[:]sortorder]] [/P] [/Q] [/R] [/S] [/T[[:]timefield]] [/W] [/X] [/4]
+                                    DIR [drive:][path][filename] [/A[[:]attributes]] [/B] [/C] [/D] [/L] [/N]
+                                      [/O[[:]sortorder]] [/P] [/Q] [/R] [/S] [/T[[:]timefield]] [/W] [/X] [/4]
 
-          [drive:][path][filename]
-                      Specifies drive, directory, and/or files to list.
+                                      [drive:][path][filename]
+                                                  Specifies drive, directory, and/or files to list.
 
-          /A          Displays files with specified attributes.
-          attributes   D  Directories                R  Read-only files
-                       H  Hidden files               A  Files ready for archiving
-                       S  System files               I  Not content indexed files
-                       L  Reparse Points             O  Offline files
-                       -  Prefix meaning not
-          /B          Uses bare format (no heading information or summary).
-          /C          Display the thousand separator in file sizes.  This is the
-                      default.  Use /-C to disable display of separator.
-          /D          Same as wide but files are list sorted by column.
-          /L          Uses lowercase.
-          /N          New long list format where filenames are on the far right.
-          /O          List by files in sorted order.
-          sortorder    N  By name (alphabetic)       S  By size (smallest first)
-                       E  By extension (alphabetic)  D  By date/time (oldest first)
-                       G  Group directories first    -  Prefix to reverse order
-          /P          Pauses after each screenful of information.
-          /Q          Display the owner of the file.
-          /R          Display alternate data streams of the file.
-          /S          Displays files in specified directory and all subdirectories.
-          /T          Controls which time field displayed or used for sorting
-          timefield   C  Creation
-                      A  Last Access
-                      W  Last Written
-          /W          Uses wide list format.
-          /X          This displays the short names generated for non-8dot3 file
-                      names.  The format is that of /N with the short name inserted
-                      before the long name. If no short name is present, blanks are
-                      displayed in its place.
-          /4          Displays four-digit years
+                                      /A          Displays files with specified attributes.
+                                      attributes   D  Directories                R  Read-only files
+                                                   H  Hidden files               A  Files ready for archiving
+                                                   S  System files               I  Not content indexed files
+                                                   L  Reparse Points             O  Offline files
+                                                   -  Prefix meaning not
+                                      /B          Uses bare format (no heading information or summary).
+                                      /C          Display the thousand separator in file sizes.  This is the
+                                                  default.  Use /-C to disable display of separator.
+                                      /D          Same as wide but files are list sorted by column.
+                                      /L          Uses lowercase.
+                                      /N          New long list format where filenames are on the far right.
+                                      /O          List by files in sorted order.
+                                      sortorder    N  By name (alphabetic)       S  By size (smallest first)
+                                                   E  By extension (alphabetic)  D  By date/time (oldest first)
+                                                   G  Group directories first    -  Prefix to reverse order
+                                      /P          Pauses after each screenful of information.
+                                      /Q          Display the owner of the file.
+                                      /R          Display alternate data streams of the file.
+                                      /S          Displays files in specified directory and all subdirectories.
+                                      /T          Controls which time field displayed or used for sorting
+                                      timefield   C  Creation
+                                                  A  Last Access
+                                                  W  Last Written
+                                      /W          Uses wide list format.
+                                      /X          This displays the short names generated for non-8dot3 file
+                                                  names.  The format is that of /N with the short name inserted
+                                                  before the long name. If no short name is present, blanks are
+                                                  displayed in its place.
+                                      /4          Displays four-digit years
 
-        Switches may be preset in the DIRCMD environment variable.  Override
-        preset switches by prefixing any switch with - (hyphen)--for example, /-W.
-        """;
+                                    Switches may be preset in the DIRCMD environment variable.  Override
+                                    preset switches by prefixing any switch with - (hyphen)--for example, /-W.
+                                    """;
 
     private record DirOptions(
         bool BareNames,
@@ -65,9 +65,14 @@ internal class DirCommand : ICommand
         bool Pause,
         string Pattern);
 
-    public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext,
+        IReadOnlyList<Redirection> redirections)
     {
-        if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteAsync(HelpText); return 0; }
+        if (arguments.IsHelpRequest)
+        {
+            await batchContext.Console!.Out.WriteAsync(HelpText);
+            return 0;
+        }
 
         var context = batchContext.Context!;
         var console = batchContext.Console!;
@@ -87,13 +92,22 @@ internal class DirCommand : ICommand
                 drive = char.ToUpperInvariant(normalized[0]);
                 normalized = normalized.Substring(2);
             }
+
             int lastSep = normalized.LastIndexOf('\\');
             if (lastSep >= 0)
             {
                 string pathPart = normalized.Substring(0, lastSep);
                 pattern = normalized.Substring(lastSep + 1);
                 if (pattern.Length == 0) pattern = "*";
-                path = pathPart.Length == 0 ? [] : pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+                path = pathPart.Length == 0
+                    ? []
+                    : pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+                // No wildcards in the trailing segment → treat it as a subdirectory to enter
+                if (pattern != "*" && !pattern.Contains('*') && !pattern.Contains('?'))
+                {
+                    path = [.. path, pattern];
+                    pattern = "*";
+                }
             }
             else if (normalized.Contains('*') || normalized.Contains('?'))
             {
@@ -111,7 +125,8 @@ internal class DirCommand : ICommand
         return 0;
     }
 
-    private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path, DirOptions opts, string pattern, bool recurse)
+    private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path,
+        DirOptions opts, string pattern, bool recurse)
     {
         if (!opts.BareNames)
         {
@@ -139,14 +154,18 @@ internal class DirCommand : ICommand
 
         entries = opts.SortKey switch
         {
-            "N" => opts.SortReverse ? entries.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                                    : entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
-            "E" => opts.SortReverse ? entries.OrderByDescending(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
-                                    : entries.OrderBy(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
-            "S" => opts.SortReverse ? entries.OrderByDescending(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name))
-                                    : entries.OrderBy(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name)),
-            "D" => opts.SortReverse ? entries.OrderByDescending(e => SafeDate(context, drive, path, e.Name))
-                                    : entries.OrderBy(e => SafeDate(context, drive, path, e.Name)),
+            "N" => opts.SortReverse
+                ? entries.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                : entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
+            "E" => opts.SortReverse
+                ? entries.OrderByDescending(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
+                : entries.OrderBy(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
+            "S" => opts.SortReverse
+                ? entries.OrderByDescending(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name))
+                : entries.OrderBy(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name)),
+            "D" => opts.SortReverse
+                ? entries.OrderByDescending(e => SafeDate(context, drive, path, e.Name))
+                : entries.OrderBy(e => SafeDate(context, drive, path, e.Name)),
             _ => entries
         };
 
@@ -215,18 +234,35 @@ internal class DirCommand : ICommand
         }
     }
 
-    private static async Task WriteWideAsync(IConsole console, List<(string Name, bool IsDirectory)> entries, bool lower)
+    private static async Task WriteWideAsync(IConsole console, List<(string Name, bool IsDirectory)> entries,
+        bool lower)
     {
-        const int colWidth = 15;
+        var cells = entries
+            .Select(e =>
+            {
+                string d = lower ? e.Name.ToLowerInvariant() : e.Name;
+                return e.IsDirectory ? $"[{d}]" : d;
+            })
+            .ToList();
+        if (cells.Count == 0) return;
+
+        int maxWidth = cells.Max(c => c.Length);
+        int windowWidth = console.WindowWidth;
+        int numCols = Math.Max(1, windowWidth / maxWidth);
+        int colWidth = windowWidth / numCols;
+
         int col = 0;
-        foreach (var (name, isDir) in entries)
+        foreach (var cell in cells)
         {
-            string display = lower ? name.ToLowerInvariant() : name;
-            string cell = isDir ? $"[{display}]" : display;
             await console.Out.WriteAsync(cell.PadRight(colWidth));
             col++;
-            if (col == 5) { await console.Out.WriteLineAsync(); col = 0; }
+            if (col == numCols)
+            {
+                await console.Out.WriteLineAsync();
+                col = 0;
+            }
         }
+
         if (col > 0) await console.Out.WriteLineAsync();
     }
 
@@ -236,7 +272,12 @@ internal class DirCommand : ICommand
         bool negate = false;
         foreach (char c in filter)
         {
-            if (c == '-') { negate = true; continue; }
+            if (c == '-')
+            {
+                negate = true;
+                continue;
+            }
+
             bool has = c switch
             {
                 'D' => entry.IsDirectory,
@@ -249,31 +290,49 @@ internal class DirCommand : ICommand
             if (negate ? has : !has) return false;
             negate = false;
         }
+
         return true;
     }
 
     private static bool SafeHasAttribute(IContext context, char drive, string[] path,
         string name, FileAttributes attr)
     {
-        try { return (context.FileSystem.GetAttributes(drive, [.. path, name]) & attr) != 0; }
-        catch { return false; }
+        try
+        {
+            return (context.FileSystem.GetAttributes(drive, [.. path, name]) & attr) != 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static long SafeSize(IContext context, char drive, string[] path, string name)
     {
-        try { return context.FileSystem.GetFileSize(drive, [.. path, name]); }
-        catch { return 0; }
+        try
+        {
+            return context.FileSystem.GetFileSize(drive, [.. path, name]);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static DateTime SafeDate(IContext context, char drive, string[] path, string name)
     {
-        try { return context.FileSystem.GetLastWriteTime(drive, [.. path, name]); }
-        catch { return DateTime.MinValue; }
+        try
+        {
+            return context.FileSystem.GetLastWriteTime(drive, [.. path, name]);
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
     }
 
     private static string FormatDate(DateTime dt) =>
-        dt == DateTime.MinValue ? "                  " :
-        $"{dt:MM/dd/yyyy  hh:mm tt}";
+        dt == DateTime.MinValue ? "                  " : $"{dt:MM/dd/yyyy  hh:mm tt}";
 
     private static DirOptions BuildOptions(IArgumentSet args)
     {

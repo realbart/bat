@@ -1,4 +1,5 @@
-﻿using Bat.Commands;
+﻿using System.Reflection;
+using Bat.Commands;
 using Bat.Execution;
 using Bat.Nodes;
 using Bat.Parsing;
@@ -78,16 +79,35 @@ internal class Dispatcher : IDispatcher
         }
     }
 
-    private static Task<int> ExecuteCommandNodeAsync(BatchContext bc, CommandNode cmd)
+    private static async Task<int> ExecuteCommandNodeAsync(BatchContext bc, CommandNode cmd)
     {
         if (cmd.Head is IBuiltInCommandToken builtIn)
         {
             var rawArgs = cmd.Tail.SkipWhile(static t => t is WhitespaceToken).ToList();
             var args = ArgumentSet.Parse(rawArgs, builtIn.Spec);
-            return builtIn.CreateCommand().ExecuteAsync(args, bc, cmd.Redirections);
+            return await builtIn.CreateCommand().ExecuteAsync(args, bc, cmd.Redirections);
         }
 
-        // External command execution not yet implemented (Step 6)
-        return Task.FromResult(0);
+        // Try splitting command/switch combos like dir/w or dir\path
+        string rawName = cmd.Head.Raw;
+        int splitAt = rawName.IndexOfAny(['/', '\\']);
+        if (splitAt > 0)
+        {
+            var commandType = BuiltInCommandRegistry.GetCommandType(rawName[..splitAt]);
+            if (commandType != null)
+            {
+                var spec = ArgumentSpec.From(commandType.GetCustomAttributes<BuiltInCommandAttribute>());
+                var suffixToken = Token.Text(rawName[splitAt..]);
+                var allArgs = new List<IToken> { suffixToken };
+                allArgs.AddRange(cmd.Tail.SkipWhile(static t => t is WhitespaceToken));
+                var args = ArgumentSet.Parse(allArgs, spec);
+                return await ((ICommand)Activator.CreateInstance(commandType)!).ExecuteAsync(args, bc, cmd.Redirections);
+            }
+        }
+
+        // External command not found
+        await bc.Console!.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
+        await bc.Console!.Error.WriteLineAsync("operable program or batch file.");
+        return 1;
     }
 }
