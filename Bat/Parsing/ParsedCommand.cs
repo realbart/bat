@@ -1,7 +1,8 @@
+using Bat.Console;
 using Bat.Nodes;
 using Bat.Tokens;
 
-namespace Bat.Console;
+namespace Bat.Parsing;
 
 internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IReadOnlyList<IToken>? rawTokens = null)
 {
@@ -12,11 +13,16 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IRe
     public bool IsIncomplete => root is IncompleteNode;
 
     /// <summary>
-    /// All tokens. Uses the raw tokeniser list when available so round-trip and
-    /// token-count tests work correctly.
+    /// Flat token sequence for the entire parsed input.
+    /// Uses the tokenizer's original list when available so that round-trip
+    /// and token-count assertions always reflect the full unmodified stream.
     /// </summary>
     public IEnumerable<IToken> RawTokens => rawTokens ?? root.GetTokens();
 
+    /// <summary>
+    /// Splits the token stream into lines at each <see cref="EndOfLineToken"/>.
+    /// Lines with no tokens before the EOL are yielded as <see cref="EmptyLine"/> instances.
+    /// </summary>
     public IEnumerable<Line> Lines
     {
         get
@@ -42,7 +48,7 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IRe
     }
 
     public Line FirstLine => Lines.First();
-    public Line LastLine => Lines.Last();
+    public Line LastLine  => Lines.Last();
 
     public override string ToString() => string.Concat(RawTokens);
 }

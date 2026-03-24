@@ -1,6 +1,7 @@
 using Bat.Commands;
 using Bat.Console;
 using Bat.Context;
+using Bat.Parsing;
 using Bat.Tokens;
 
 namespace Bat.UnitTests;
