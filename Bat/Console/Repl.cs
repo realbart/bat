@@ -29,9 +29,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
         } while (true);
     }
 
-    public async Task<string> ReadLine(IContext context)
-    {
+    public async Task<string> ReadLine(IContext context) =>
         // todo: character for characer to support autocompletion and history
-        return (await console.In.ReadLineAsync())?? string.Empty;
-    }
+        (await console.In.ReadLineAsync()) ?? string.Empty;
 }

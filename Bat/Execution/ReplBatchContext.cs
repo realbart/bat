@@ -16,8 +16,5 @@ public static class ReplBatchContext
 
     public static BatchContext Value => _instance.Value!;
 
-    public static void UpdateLine(string line)
-    {
-        Value.FileContent = line;
-    }
+    public static void UpdateLine(string line) => Value.FileContent = line;
 }

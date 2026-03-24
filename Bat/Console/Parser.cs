@@ -35,7 +35,7 @@ internal class Parser()
     // ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Append a line of batch source (may be called multiple times for continuations).</summary>
-    public void Append(string input) => Tokenizing.Tokenizer.AppendTokens(_tokenSet, input);
+    public void Append(string input) => Tokenizing.Tokenizer.Tokenize(_tokenSet, input);
 
     public string? ErrorMessage => _tokenSet.ErrorMessage ?? _parseError;
 

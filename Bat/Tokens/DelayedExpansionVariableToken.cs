@@ -2,8 +2,7 @@ namespace Bat.Tokens;
 
 internal class DelayedExpansionVariableToken(string raw) : TokenBase(raw)
 {
-    private string? _cachedName;
-    public string Name => _cachedName ??= ExtractAndUnescapeName(Raw);
+    public string Name => field ??= ExtractAndUnescapeName(Raw);
 
     private static string ExtractAndUnescapeName(string raw)
     {

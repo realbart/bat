@@ -2,8 +2,5 @@
 
 internal class UxFileSystemAdapter : FileSystem
 {
-    public override string GetNativePath(char drive, string[] path)
-    {
-        throw new NotImplementedException();
-    }
+    public override string GetNativePath(char drive, string[] path) => throw new NotImplementedException();
 }
