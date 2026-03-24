@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Bat.Commands;
 using Bat.Console;
+using Bat.Context;
 using Bat.Execution;
 using Bat.Nodes;
 using Bat.Parsing;
@@ -328,6 +329,7 @@ internal sealed class TestFileSystem : IFileSystem
     public void MoveFile(char sd, string[] sp, char dd, string[] dp) => throw new NotImplementedException();
     public void RenameFile(char d, string[] p, string n) => throw new NotImplementedException();
     public void SetAttributes(char d, string[] p, FileAttributes a) => throw new NotImplementedException();
+    public uint GetVolumeSerialNumber(char drive) => FileSystem.GetVolumeSerialNumber(Key(drive, []));
 }
 
 [TestClass]
@@ -557,7 +559,47 @@ public class DirCommandTests
         Assert.IsTrue(console.OutText.Contains("/A"));
         Assert.IsTrue(console.OutText.Contains("/S"));
     }
+    // /B — bare format: no volume header, no summary, just names
+    [TestMethod]
+    public async Task Dir_SlashB_PrintsOnlyNames()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false, size: 1234);
+        fs.AddEntry('C', [], "sub", true);
+        var (cmd, console, bc) = Setup(fs, 'C', []);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("file.txt"));
+        Assert.IsTrue(console.OutLines.Contains("sub"));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("Volume")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("bytes")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("1,234") || l.Contains("1234")));
+    }
 
+    // default (/C implied): file sizes use thousand separator
+    [TestMethod]
+    public async Task Dir_Default_SizeHasThousandSeparator()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 1234567);
+        var (cmd, console, bc) = Setup(fs, 'C', []);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("1,234,567")));
+    }
+
+    // /-C: thousand separator disabled
+    [TestMethod]
+    public async Task Dir_NegateC_SizeHasNoThousandSeparator()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 1234567);
+        var (cmd, console, bc) = Setup(fs, 'C', []);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/-C")), bc, []);
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("1,234,567")));
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("1234567")));
+    }
     // CMD: dir -w  uses "-w" as a filename pattern (treats - as a literal, not a flag prefix).
     // Bat: ArgumentSet interprets "-w" as the /W flag, so wide format is activated.
     [TestMethod]
@@ -604,6 +646,147 @@ internal static class TestArgs
         where TCmd : class, ICommand
         => ArgumentSet.Parse(tokens, ArgumentSpec.From(
             typeof(TCmd).GetCustomAttributes<BuiltInCommandAttribute>()));
+}
+
+[TestClass]
+public class DirAttributeFilterTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(
+        TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    // /AH — only hidden files (/A:H or /AH)
+    [TestMethod]
+    public async Task Dir_AH_ShowsOnlyHidden()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "visible.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "hidden.txt", false, attrs: FileAttributes.Hidden);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AH")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("hidden.txt"));
+        Assert.IsFalse(console.OutLines.Contains("visible.txt"));
+    }
+
+    // /AR — only read-only files
+    [TestMethod]
+    public async Task Dir_AR_ShowsOnlyReadOnly()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "normal.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "readonly.txt", false, attrs: FileAttributes.ReadOnly);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AR")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("readonly.txt"));
+        Assert.IsFalse(console.OutLines.Contains("normal.txt"));
+    }
+
+    // /AS — only system files
+    [TestMethod]
+    public async Task Dir_AS_ShowsOnlySystem()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "normal.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "system.txt", false, attrs: FileAttributes.System);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AS")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("system.txt"));
+        Assert.IsFalse(console.OutLines.Contains("normal.txt"));
+    }
+
+    // /AA — only archive files
+    [TestMethod]
+    public async Task Dir_AA_ShowsOnlyArchive()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "normal.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "archive.txt", false, attrs: FileAttributes.Archive);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AA")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("archive.txt"));
+        Assert.IsFalse(console.OutLines.Contains("normal.txt"));
+    }
+
+    // /AL — only reparse points (symlinks/junctions)
+    [TestMethod]
+    public async Task Dir_AL_ShowsOnlyReparsePoints()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "normal.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "link.txt", false, attrs: FileAttributes.ReparsePoint);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AL")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("link.txt"));
+        Assert.IsFalse(console.OutLines.Contains("normal.txt"));
+    }
+
+    // /AI — only files not content indexed
+    [TestMethod]
+    public async Task Dir_AI_ShowsOnlyNotContentIndexed()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "indexed.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "notindexed.txt", false, attrs: FileAttributes.NotContentIndexed);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AI")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("notindexed.txt"));
+        Assert.IsFalse(console.OutLines.Contains("indexed.txt"));
+    }
+
+    // /AO — only offline files
+    [TestMethod]
+    public async Task Dir_AO_ShowsOnlyOffline()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "online.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "offline.txt", false, attrs: FileAttributes.Offline);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/AO")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("offline.txt"));
+        Assert.IsFalse(console.OutLines.Contains("online.txt"));
+    }
+
+    // /A:H — colon syntax still works
+    [TestMethod]
+    public async Task Dir_AColonH_SameAsAH()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "visible.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "hidden.txt", false, attrs: FileAttributes.Hidden);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/A:H")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("hidden.txt"));
+        Assert.IsFalse(console.OutLines.Contains("visible.txt"));
+    }
+
+    // /A-H — negation: only non-hidden
+    [TestMethod]
+    public async Task Dir_ANegH_ShowsOnlyNonHidden()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "visible.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "hidden.txt", false, attrs: FileAttributes.Hidden);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/A-H")), bc, []);
+        Assert.IsFalse(console.OutLines.Contains("hidden.txt"));
+        Assert.IsTrue(console.OutLines.Contains("visible.txt"));
+    }
 }
 
 [TestClass]

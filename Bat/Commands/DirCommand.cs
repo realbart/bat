@@ -5,7 +5,7 @@ using Context;
 
 namespace Bat.Commands;
 
-[BuiltInCommand("dir", Flags = "B W L S P Q N", Options = "A O T")]
+[BuiltInCommand("dir", Flags = "B C W L S P Q N", Options = "A O T")]
 internal class DirCommand : ICommand
 {
     private const string HelpText = """
@@ -57,6 +57,7 @@ internal class DirCommand : ICommand
         bool WideFormat,
         bool Lowercase,
         bool Recursive,
+        bool ThousandSeparator,
         string AttributeFilter,
         string SortKey,
         bool SortReverse,
@@ -131,8 +132,10 @@ internal class DirCommand : ICommand
         if (!opts.BareNames)
         {
             var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
+            uint serial = context.FileSystem.GetVolumeSerialNumber(drive);
+            string serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
             await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
-            await console.Out.WriteLineAsync($" Volume Serial Number is 0000-0000");
+            await console.Out.WriteLineAsync($" Volume Serial Number is {serialStr}");
             await console.Out.WriteLineAsync();
             await console.Out.WriteLineAsync($" Directory of {displayPath}");
             await console.Out.WriteLineAsync();
@@ -207,7 +210,8 @@ internal class DirCommand : ICommand
                     if (!opts.BareNames)
                     {
                         var dt = SafeDate(context, drive, path, name);
-                        await console.Out.WriteLineAsync($"{FormatDate(dt)} {size,15:N0}   {displayName}");
+                        string sizeStr = opts.ThousandSeparator ? $"{size,15:N0}" : $"{size,15}";
+                        await console.Out.WriteLineAsync($"{FormatDate(dt)} {sizeStr}   {displayName}");
                     }
                     else
                     {
@@ -219,7 +223,8 @@ internal class DirCommand : ICommand
 
         if (!opts.BareNames)
         {
-            await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalSize,15:N0} bytes");
+            string totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
+            await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
             await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)");
             await console.Out.WriteLineAsync();
         }
@@ -285,6 +290,9 @@ internal class DirCommand : ICommand
                 'R' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.ReadOnly),
                 'S' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.System),
                 'A' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.Archive),
+                'L' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.ReparsePoint),
+                'I' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.NotContentIndexed),
+                'O' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.Offline),
                 _ => true
             };
             if (negate ? has : !has) return false;
@@ -351,16 +359,17 @@ internal class DirCommand : ICommand
         string attributeFilter = string.Concat(args.GetValues("A"));
 
         return new DirOptions(
-            BareNames: args.HasFlag("B"),
-            WideFormat: args.HasFlag("W"),
-            Lowercase: args.HasFlag("L"),
-            Recursive: args.HasFlag("S"),
+            BareNames: args.GetFlagValue("B"),
+            WideFormat: args.GetFlagValue("W"),
+            Lowercase: args.GetFlagValue("L"),
+            Recursive: args.GetFlagValue("S"),
+            ThousandSeparator: args.GetFlagValue("C", defaultValue: true),
             AttributeFilter: attributeFilter,
             SortKey: sortKey,
             SortReverse: sortReverse,
             GroupDirsFirst: groupDirsFirst,
             TimeField: timeField,
-            Pause: args.HasFlag("P"),
+            Pause: args.GetFlagValue("P"),
             Pattern: "*");
     }
 }

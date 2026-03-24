@@ -48,7 +48,7 @@ internal class CdCommand : ICommand
         if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteAsync(HelpText); return 0; }
 
         var context = batchContext.Context!;
-        bool slashD = arguments.HasFlag('D');
+        bool slashD = arguments.GetFlagValue('D');
         string positional = arguments.Positionals.FirstOrDefault() ?? "";
 
         if (positional.Length == 0)

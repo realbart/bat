@@ -27,4 +27,10 @@ public interface IFileSystem
     void SetAttributes(char drive, string[] path, FileAttributes attributes);
     long GetFileSize(char drive, string[] path);
     DateTime GetLastWriteTime(char drive, string[] path);
+
+    /// <summary>
+    /// Returns a stable 4-byte volume serial number for the given drive.
+    /// Derived by hashing the native root path of the drive (FNV-1a).
+    /// </summary>
+    uint GetVolumeSerialNumber(char drive);
 }

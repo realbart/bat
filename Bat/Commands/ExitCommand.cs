@@ -14,7 +14,7 @@ internal class ExitCommand : ICommand
     {
         var context = batchContext.Context!;
 
-        bool batchOnly = arguments.HasFlag('B');
+        bool batchOnly = arguments.GetFlagValue('B');
 
         if (int.TryParse(arguments.Positionals.FirstOrDefault(), out int code))
             context.ErrorCode = code;

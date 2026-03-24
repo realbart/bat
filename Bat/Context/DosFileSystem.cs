@@ -1,4 +1,6 @@
-﻿namespace Bat.Context;
+﻿using System.Runtime.InteropServices;
+
+namespace Bat.Context;
 
 /// <summary>
 /// Windows filesystem implementation. Maintains a dictionary that maps
@@ -36,7 +38,30 @@ internal class DosFileSystem : FileSystem
 
     public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
 
-    // ── existence ────────────────────────────────────────────────────────
+    protected override uint GetVolumeSerialNumber(string nativeRoot)
+    {
+        // we should find a mount point in case the path is a mount point,
+        // e.g. c:\foo might be a mount point for a drive without a drive letter,
+        // and we want to get the serial number of the mounted drive, not the system drive
+
+        var hash = GetVolumeInformationW(nativeRoot, null, 0, out uint serial, out _, out _, null, 0)
+            ? serial : 0;
+
+        return nativeRoot.Length>3 
+            ? (uint)HashCode.Combine(hash, nativeRoot[3..]) 
+            : hash;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool GetVolumeInformationW(
+        string lpRootPathName,
+        char[]? lpVolumeNameBuffer,
+        int nVolumeNameSize,
+        out uint lpVolumeSerialNumber,
+        out uint lpMaximumComponentLength,
+        out uint lpFileSystemFlags,
+        char[]? lpFileSystemNameBuffer,
+        int nFileSystemNameSize);
 
     public override bool FileExists(char drive, string[] path) =>
         File.Exists(GetNativePath(drive, path));

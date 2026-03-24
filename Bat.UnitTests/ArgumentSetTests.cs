@@ -29,41 +29,41 @@ public class ArgumentSetTests
     public void Parse_Flag_RecognizesSwitch()
     {
         var args = ArgumentSet.Parse(Tok("/B"), Spec(flags: "B"));
-        Assert.IsTrue(args.HasFlag('B'));
-        Assert.IsTrue(args.HasFlag("B"));
-        Assert.IsFalse(args.HasFlag('W'));
+        Assert.IsTrue(args.GetFlagValue('B'));
+        Assert.IsTrue(args.GetFlagValue("B"));
+        Assert.IsFalse(args.GetFlagValue('W'));
     }
 
     [TestMethod]
     public void Parse_Flag_CaseInsensitive()
     {
         var args = ArgumentSet.Parse(Tok("/b"), Spec(flags: "B"));
-        Assert.IsTrue(args.HasFlag('B'));
-        Assert.IsTrue(args.HasFlag('b'));
+        Assert.IsTrue(args.GetFlagValue('B'));
+        Assert.IsTrue(args.GetFlagValue('b'));
     }
 
     [TestMethod]
     public void Parse_Flag_DashPrefixRecognized()
     {
         var args = ArgumentSet.Parse(Tok("-B"), Spec(flags: "B"));
-        Assert.IsTrue(args.HasFlag('B'));
+        Assert.IsTrue(args.GetFlagValue('B'));
     }
 
     [TestMethod]
     public void Parse_MultipleFlags_AllRecognized()
     {
         var args = ArgumentSet.Parse(Tok("/B", "/W", "/S"), Spec(flags: "B W S"));
-        Assert.IsTrue(args.HasFlag('B'));
-        Assert.IsTrue(args.HasFlag('W'));
-        Assert.IsTrue(args.HasFlag('S'));
-        Assert.IsFalse(args.HasFlag('L'));
+        Assert.IsTrue(args.GetFlagValue('B'));
+        Assert.IsTrue(args.GetFlagValue('W'));
+        Assert.IsTrue(args.GetFlagValue('S'));
+        Assert.IsFalse(args.GetFlagValue('L'));
     }
 
     [TestMethod]
     public void Parse_UnknownSwitch_TreatedAsPositional()
     {
         var args = ArgumentSet.Parse(Tok("/Z"), Spec(flags: "B"));
-        Assert.IsFalse(args.HasFlag('Z'));
+        Assert.IsFalse(args.GetFlagValue('Z'));
         Assert.AreEqual("/Z", args.Positionals[0]);
     }
 
@@ -88,7 +88,7 @@ public class ArgumentSetTests
     {
         var args = ArgumentSet.Parse(Tok("/O", "/B"), Spec(flags: "B", options: "O"));
         Assert.AreEqual("", args.GetValue("O"));
-        Assert.IsTrue(args.HasFlag('B'));
+        Assert.IsTrue(args.GetFlagValue('B'));
     }
 
     [TestMethod]
@@ -142,7 +142,7 @@ public class ArgumentSetTests
     public void Parse_Positional_MixedFlagsAndPositionals()
     {
         var args = ArgumentSet.Parse(Tok("/B", @"C:\Temp"), Spec(flags: "B"));
-        Assert.IsTrue(args.HasFlag('B'));
+        Assert.IsTrue(args.GetFlagValue('B'));
         Assert.AreEqual(1, args.Positionals.Count);
         Assert.AreEqual(@"C:\Temp", args.Positionals[0]);
     }
@@ -194,7 +194,7 @@ public class ArgumentSetTests
         var args = ArgumentSet.Parse(Tok("/?"), Spec(flags: "B"));
         Assert.IsTrue(args.IsHelpRequest);
         Assert.AreEqual(0, args.Positionals.Count);
-        Assert.IsFalse(args.HasFlag('B'));
+        Assert.IsFalse(args.GetFlagValue('B'));
     }
 
     // ── Empty input ─────────────────────────────────────────────────────────
@@ -206,5 +206,100 @@ public class ArgumentSetTests
         Assert.AreEqual("", args.FullArgument);
         Assert.AreEqual(0, args.Positionals.Count);
         Assert.IsFalse(args.IsHelpRequest);
+    }
+
+    // ── Prefix-option matching (/AH → option A = H) ─────────────────────────
+
+    [TestMethod]
+    public void Parse_PrefixOption_NoColon_ValueIsRemainder()
+    {
+        var args = ArgumentSet.Parse(Tok("/AH"), Spec(options: "A"));
+        Assert.AreEqual("H", args.GetValue("A"));
+    }
+
+    [TestMethod]
+    public void Parse_PrefixOption_WithNegation()
+    {
+        var args = ArgumentSet.Parse(Tok("/A-H"), Spec(options: "A"));
+        Assert.AreEqual("-H", args.GetValue("A"));
+    }
+
+    [TestMethod]
+    public void Parse_PrefixOption_MultipleLetters()
+    {
+        var args = ArgumentSet.Parse(Tok("/ADH"), Spec(options: "A"));
+        Assert.AreEqual("DH", args.GetValue("A"));
+    }
+
+    [TestMethod]
+    public void Parse_PrefixOption_CaseInsensitive()
+    {
+        var args = ArgumentSet.Parse(Tok("/ah"), Spec(options: "A"));
+        Assert.AreEqual("h", args.GetValue("A"));
+    }
+
+    [TestMethod]
+    public void Parse_PrefixOption_DoesNotConflictWithExactFlag()
+    {
+        // /L = lowercase flag, /AL = attribute option A with value "L"
+        var args = ArgumentSet.Parse(Tok("/L", "/AL"), Spec(flags: "L", options: "A"));
+        Assert.IsTrue(args.GetFlagValue('L'));
+        Assert.AreEqual("L", args.GetValue("A"));
+    }
+
+    [TestMethod]
+    public void Parse_PrefixOption_LongestPrefixWins()
+    {
+        // If both "A" and "AB" are options and input is "/ABC", "AB" wins
+        var args = ArgumentSet.Parse(Tok("/ABC"), Spec(options: "A AB"));
+        Assert.AreEqual("C", args.GetValue("AB"));
+        Assert.IsNull(args.GetValue("A"));
+    }
+
+    // ── Negated flags (/-X) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void Parse_NegatedFlag_SlashDashX_RecognizedAsNegated()
+    {
+        var args = ArgumentSet.Parse(Tok("/-C"), Spec(flags: "C"));
+        Assert.IsFalse(args.GetFlagValue('C'));
+        Assert.IsFalse(args.GetFlagValue("C"));
+        // Default is false, but explicit negation also gives false — distinguish via non-default:
+        Assert.IsFalse(args.GetFlagValue('C', defaultValue: true),
+            "/-C should override the defaultValue=true and return false");
+    }
+
+    [TestMethod]
+    public void Parse_NegatedFlag_CaseInsensitive()
+    {
+        var args = ArgumentSet.Parse(Tok("/-c"), Spec(flags: "C"));
+        Assert.IsFalse(args.GetFlagValue('C', defaultValue: true));
+        Assert.IsFalse(args.GetFlagValue('c', defaultValue: true));
+    }
+
+    [TestMethod]
+    public void Parse_NegatedFlag_UnknownNotRecognized()
+    {
+        // /-Z when Z is not a known flag → treated as positional, default returned
+        var args = ArgumentSet.Parse(Tok("/-Z"), Spec(flags: "C"));
+        Assert.IsFalse(args.GetFlagValue('Z'));
+        Assert.AreEqual("/-Z", args.Positionals[0]);
+    }
+
+    [TestMethod]
+    public void Parse_NegatedFlag_CoexistsWithPositiveFlag()
+    {
+        var args = ArgumentSet.Parse(Tok("/B", "/-C"), Spec(flags: "B C"));
+        Assert.IsTrue(args.GetFlagValue('B'));
+        Assert.IsFalse(args.GetFlagValue('C'));
+        Assert.IsFalse(args.GetFlagValue('C', defaultValue: true));
+    }
+
+    [TestMethod]
+    public void Parse_GetFlagValue_DefaultReturnedWhenAbsent()
+    {
+        var args = ArgumentSet.Parse(Tok("/B"), Spec(flags: "B C"));
+        Assert.IsFalse(args.GetFlagValue('C'));
+        Assert.IsTrue(args.GetFlagValue('C', defaultValue: true));
     }
 }

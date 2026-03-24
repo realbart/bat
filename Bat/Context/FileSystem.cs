@@ -53,4 +53,7 @@ internal abstract class FileSystem : IFileSystem
     public abstract void SetAttributes(char drive, string[] path, FileAttributes attributes);
     public abstract long GetFileSize(char drive, string[] path);
     public abstract DateTime GetLastWriteTime(char drive, string[] path);
+    public uint GetVolumeSerialNumber(char drive)
+        => GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), []));
+    protected abstract uint GetVolumeSerialNumber(string nativeRoot);
 }

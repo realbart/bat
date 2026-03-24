@@ -21,4 +21,5 @@ internal class UxFileSystemAdapter : FileSystem
     public override void SetAttributes(char drive, string[] path, FileAttributes attributes) => throw new NotImplementedException();
     public override long GetFileSize(char drive, string[] path) => throw new NotImplementedException();
     public override DateTime GetLastWriteTime(char drive, string[] path) => throw new NotImplementedException();
+    protected override uint GetVolumeSerialNumber(string nativeRoot) => throw new NotImplementedException();
 }

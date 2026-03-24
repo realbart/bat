@@ -11,6 +11,7 @@ namespace Bat.Commands;
 internal sealed class ArgumentSet : IArgumentSet
 {
     private readonly FrozenSet<string> _activeFlags;
+    private readonly FrozenSet<string> _negatedFlags;
     private readonly FrozenDictionary<string, string[]> _options;
 
     private ArgumentSet(
@@ -18,12 +19,14 @@ internal sealed class ArgumentSet : IArgumentSet
         string[] positionals,
         bool isHelpRequest,
         FrozenSet<string> activeFlags,
+        FrozenSet<string> negatedFlags,
         FrozenDictionary<string, string[]> options)
     {
         FullArgument = fullArgument;
         Positionals = positionals;
         IsHelpRequest = isHelpRequest;
         _activeFlags = activeFlags;
+        _negatedFlags = negatedFlags;
         _options = options;
     }
 
@@ -31,8 +34,14 @@ internal sealed class ArgumentSet : IArgumentSet
     public IReadOnlyList<string> Positionals { get; }
     public bool IsHelpRequest { get; }
 
-    public bool HasFlag(char name) => _activeFlags.Contains(name.ToString().ToUpperInvariant());
-    public bool HasFlag(string name) => _activeFlags.Contains(name.ToUpperInvariant());
+    public bool GetFlagValue(char name, bool defaultValue = false) => GetFlagValue(name.ToString(), defaultValue);
+    public bool GetFlagValue(string name, bool defaultValue = false)
+    {
+        string key = name.ToUpperInvariant();
+        if (_activeFlags.Contains(key)) return true;
+        if (_negatedFlags.Contains(key)) return false;
+        return defaultValue;
+    }
 
     public string[] GetValues(char name) => GetValues(name.ToString());
     public string[] GetValues(string name) =>
@@ -77,11 +86,12 @@ internal sealed class ArgumentSet : IArgumentSet
         if (buf.Length > 0) words.Add(buf.ToString());
 
         // /? anywhere → help request
-        if (words.Any(w => w == "/?"))
+        if (words.Any(w => w == "/?" || w == "-?"))
             return new ArgumentSet(fullArgument, [], true,
-                FrozenSet<string>.Empty, FrozenDictionary<string, string[]>.Empty);
+                FrozenSet<string>.Empty, FrozenSet<string>.Empty, FrozenDictionary<string, string[]>.Empty);
 
         var flags = new HashSet<string>();
+        var negatedFlags = new HashSet<string>();
         var options = new Dictionary<string, List<string>>();
         var positionals = new List<string>();
 
@@ -104,6 +114,14 @@ internal sealed class ArgumentSet : IArgumentSet
                 {
                     switchName = body.ToUpperInvariant();
                     switchValue = null;
+                }
+
+                // /-X  negated flag (e.g. /-C disables thousand separator)
+                if (switchName.Length > 1 && switchName[0] == '-' && spec.Flags.Contains(switchName[1..]))
+                {
+                    negatedFlags.Add(switchName[1..]);
+                    i++;
+                    continue;
                 }
 
                 if (spec.Flags.Contains(switchName))
@@ -136,7 +154,22 @@ internal sealed class ArgumentSet : IArgumentSet
                 }
                 else
                 {
-                    positionals.Add(word);
+                    // Prefix-option match: /AH → option A with value H, /A-H → value -H
+                    string? prefixOpt = spec.Options
+                        .Where(o => switchName.StartsWith(o, StringComparison.Ordinal) && switchName.Length > o.Length)
+                        .OrderByDescending(o => o.Length)
+                        .FirstOrDefault();
+                    if (prefixOpt != null)
+                    {
+                        string prefixValue = body.Substring(prefixOpt.Length);
+                        if (!options.TryGetValue(prefixOpt, out var prefixList))
+                            options[prefixOpt] = prefixList = [];
+                        prefixList.Add(prefixValue);
+                    }
+                    else
+                    {
+                        positionals.Add(word);
+                    }
                     i++;
                 }
             }
@@ -152,6 +185,7 @@ internal sealed class ArgumentSet : IArgumentSet
             positionals.ToArray(),
             isHelpRequest: false,
             flags.ToFrozenSet(),
+            negatedFlags.ToFrozenSet(),
             options.ToFrozenDictionary(k => k.Key, v => v.Value.ToArray()));
     }
 }

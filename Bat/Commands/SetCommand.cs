@@ -20,7 +20,7 @@ internal class SetCommand : ICommand
             return 0;
         }
 
-        if (arguments.HasFlag('A'))
+        if (arguments.GetFlagValue('A'))
         {
             string expr = string.Join(" ", arguments.Positionals);
             long result = ArithmeticEvaluator.Evaluate(expr, context);
@@ -29,7 +29,7 @@ internal class SetCommand : ICommand
             return 0;
         }
 
-        if (arguments.HasFlag('P'))
+        if (arguments.GetFlagValue('P'))
         {
             string rest = string.Join(" ", arguments.Positionals);
             int eq = rest.IndexOf('=');

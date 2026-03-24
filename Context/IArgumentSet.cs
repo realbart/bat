@@ -21,15 +21,19 @@ public interface IArgumentSet
     /// <summary>True when /? was the only argument.</summary>
     bool IsHelpRequest { get; }
 
-    /// <summary>Returns true when the specified flag was present. For example, /B or -B.</summary>
-    /// <param name="name">The name of the flag.</param>
-    /// <returns>True if the flag was present; otherwise, false.</returns>
-    bool HasFlag(char name);
+    /// <summary>
+    /// Returns the effective value of a flag, considering both positive (/X) and negated (/-X) forms.
+    /// Returns <c>true</c> when /X is present, <c>false</c> when /-X is present,
+    /// or <paramref name="defaultValue"/> when neither was supplied.
+    /// </summary>
+    bool GetFlagValue(char name, bool defaultValue = false);
 
-    /// <summary>Returns true when the specified flag was present. For example, /BAR or -BAR.</summary>
-    /// <param name="name">The name of the flag.</param>
-    /// <returns>True if the flag was present; otherwise, false.</returns>
-    bool HasFlag(string name);
+    /// <summary>
+    /// Returns the effective value of a flag, considering both positive (/X) and negated (/-X) forms.
+    /// Returns <c>true</c> when /X is present, <c>false</c> when /-X is present,
+    /// or <paramref name="defaultValue"/> when neither was supplied.
+    /// </summary>
+    bool GetFlagValue(string name, bool defaultValue = false);
 
     /// <summary>
     /// Returns all values supplied for this option name.
