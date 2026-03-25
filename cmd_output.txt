@@ -1,0 +1,123 @@
+ Volume in drive C has no label.
+ Volume Serial Number is 0C45-E5C9
+
+ Directory of C:\windows
+
+2026.03.26  12:03 ?    <DIR>          NT SERVICE\TrustedInsta.
+2026.03.13  12:44 ?    <DIR>          NT AUTHORITY\SYSTEM    appcompat
+2026.03.13  02:51 ?    <DIR>          NT SERVICE\TrustedInstaapppatch
+2026.03.28  06:05 ?    <DIR>          NT AUTHORITY\SYSTEM    AppReadiness
+2026.03.20  12:02 ?    <DIR>          NT AUTHORITY\SYSTEM    assembly
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstabcastdvr
+2026.03.12  10:28 ?           126,976 NT SERVICE\TrustedInstabfsvc.exe
+2024.04.01  08:34 ?    <DIR>          NT SERVICE\TrustedInstaBoot
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaBranding
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaBrowserCore
+2026.03.28  08:48 ?    <DIR>          NT AUTHORITY\SYSTEM    CbsTemp
+2026.02.15  03:49 ?               762 NT AUTHORITY\SYSTEM    comsetup.log
+2024.04.01  05:15 ?    <DIR>          NT AUTHORITY\SYSTEM    Containers
+2026.02.13  04:27 ?    <DIR>          NT AUTHORITY\SYSTEM    CSC
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaCursors
+2026.02.15  08:55 ?    <DIR>          NT AUTHORITY\SYSTEM    debug
+2026.02.13  06:55 ?    <DIR>          NT AUTHORITY\SYSTEM    Defender Duplication Data
+2024.04.01  08:34 ?    <DIR>          NT SERVICE\TrustedInstadiagnostics
+2026.02.15  02:29 ?    <DIR>          NT SERVICE\TrustedInstaDiagTrack
+2024.04.01  05:12 ?    <DIR>          NT AUTHORITY\SYSTEM    DigitalLocker
+2026.03.28  11:38 ?           203,958 BUILTIN\Administrators DPINST.LOG
+2026.03.13  12:47 ?             1,836 NT AUTHORITY\SYSTEM    DtcInstall.log
+2024.04.01  08:22 ?            25,319 BUILTIN\Administrators Education.xml
+2026.02.15  02:29 ?    <DIR>          NT SERVICE\TrustedInstaen-US
+2024.04.01  08:22 ?            25,359 BUILTIN\Administrators Enterprise.xml
+2026.03.12  10:28 ?         3,261,608 NT SERVICE\TrustedInstaexplorer.exe
+2026.02.15  02:33 ?    <DIR>          BUILTIN\Administrators Firmware
+2026.03.26  12:27 ?                25 BUILTIN\Administrators Fwupdate.INI
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaGameBarPresenceWriter
+2024.04.01  05:14 ?    <DIR>          NT SERVICE\TrustedInstaGlobalization
+2024.04.01  05:12 ?    <DIR>          NT AUTHORITY\SYSTEM    Help
+2026.02.15  02:25 ?         1,081,344 NT SERVICE\TrustedInstaHelpPane.exe
+2026.02.15  02:25 ?            40,960 NT SERVICE\TrustedInstahh.exe
+2024.04.01  08:34 ?    <DIR>          NT AUTHORITY\SYSTEM    IdentityCRL
+2026.03.13  12:49 ?           236,288 ...                    iis.log
+2026.02.15  02:12 ?            87,395 BUILTIN\Administrators iis_gather.log
+2025.09.15  08:53 ?    <DIR>          NT SERVICE\TrustedInstaIME
+2026.03.17  10:14 ?    <DIR>          BUILTIN\Administrators IMECache
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaImmersiveControlPanel
+2026.03.13  12:44 ?    <DIR>          NT AUTHORITY\SYSTEM    InboxApps
+2026.03.23  12:06 ?    <DIR>          NT SERVICE\TrustedInstaINF
+2024.04.01  08:34 ?    <DIR>          NT AUTHORITY\SYSTEM    InputMethod
+2024.10.21  02:05 ?           181,416 NT AUTHORITY\SYSTEM    KOBDrvAPIW64.EXE
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaL2Schemas
+2026.02.15  02:17 ?    <DIR>          BUILTIN\Administrators Lenovo
+2026.02.24  09:01 ?    <DIR>          ...                    LiveKernelReports
+2026.03.20  12:21 ?    <DIR>          NT AUTHORITY\SYSTEM    Logs
+2024.04.01  08:22 ?            43,131 NT SERVICE\TrustedInstamib.bin
+2025.09.15  08:53 ?    <DIR>          NT AUTHORITY\SYSTEM    Microsoft
+2026.03.28  05:28 ?    <DIR>          NT SERVICE\TrustedInstaMicrosoft.NET
+2024.04.01  08:26 ?    <DIR>          NT AUTHORITY\SYSTEM    Migration
+2024.04.01  08:26 ?    <DIR>          ...                    ModemLogs
+2026.02.15  02:29 ?    <DIR>          NT AUTHORITY\SYSTEM    nl-NL
+2026.02.15  02:25 ?           360,448 NT SERVICE\TrustedInstanotepad.exe
+2026.02.15  02:23 ?    <DIR>          NT SERVICE\TrustedInstaOCR
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaOffline Web Pages
+2026.03.19  04:53 ?    <DIR>          BUILTIN\Administrators Panther
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaPerformance
+2026.03.22  09:25 ?           195,646 BUILTIN\Administrators PFRO.log
+2024.04.01  08:34 ?    <DIR>          NT AUTHORITY\SYSTEM    PLA
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaPolicyDefinitions
+2026.03.28  09:33 ?    <DIR>          ...                    Prefetch
+2024.04.01  08:22 ?            25,359 BUILTIN\Administrators Professional.xml
+2024.04.01  08:22 ?            25,319 BUILTIN\Administrators ProfessionalCountrySpecific.xml
+2024.04.01  08:22 ?            25,319 BUILTIN\Administrators ProfessionalEducation.xml
+2024.04.01  08:22 ?            25,319 BUILTIN\Administrators ProfessionalSingleLanguage.xml
+2024.04.01  08:22 ?            25,319 BUILTIN\Administrators ProfessionalWorkstation.xml
+2026.02.15  01:31 ?                36 BUILTIN\Administrators progress.ini
+2026.02.15  02:29 ?    <DIR>          NT SERVICE\TrustedInstaProvisioning
+2026.02.15  02:25 ?           577,536 NT SERVICE\TrustedInstaregedit.exe
+2026.02.15  03:37 ?    <DIR>          BUILTIN\Administrators Registration
+2024.04.01  05:15 ?    <DIR>          NT AUTHORITY\SYSTEM    RemotePackages
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstarescache
+2024.04.01  08:34 ?    <DIR>          NT SERVICE\TrustedInstaResources
+2024.04.01  08:26 ?    <DIR>          NT AUTHORITY\SYSTEM    SchCache
+2026.02.15  02:24 ?    <DIR>          NT SERVICE\TrustedInstaschemas
+2024.04.01  05:15 ?    <DIR>          NT SERVICE\TrustedInstasecurity
+2026.03.28  09:02 ?    <DIR>          BUILTIN\Administrators SensorFramework
+2026.02.15  03:46 ?    <DIR>          NT AUTHORITY\SYSTEM    ServiceProfiles
+2026.03.22  09:25 ?    <DIR>          ...                    ServiceState
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaservicing
+2026.02.15  02:33 ?    <DIR>          BUILTIN\Administrators Setup
+2026.03.22  09:25 ?           562,978 NT AUTHORITY\SYSTEM    setupact.log
+2026.02.15  03:38 ?                 0 NT AUTHORITY\SYSTEM    setuperr.log
+2026.03.13  12:44 ?    <DIR>          NT AUTHORITY\SYSTEM    ShellComponents
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaShellExperiences
+2024.04.01  08:34 ?    <DIR>          NT SERVICE\TrustedInstaSKB
+2026.03.12  11:12 ?    <DIR>          NT AUTHORITY\SYSTEM    SoftwareDistribution
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaSpeech
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaSpeech_OneCore
+2026.03.12  10:28 ?           225,280 NT SERVICE\TrustedInstasplwow64.exe
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaSystem
+2026.02.13  04:15 ?               219 NT AUTHORITY\SYSTEM    system.ini
+2026.03.22  09:33 ?    <DIR>          NT SERVICE\TrustedInstaSystem32
+2026.02.15  02:29 ?    <DIR>          NT AUTHORITY\SYSTEM    SystemApps
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaSystemResources
+2026.03.28  09:35 ?    <DIR>          ...                    SystemTemp
+2026.03.17  09:14 ?    <DIR>          NT SERVICE\TrustedInstaSysWOW64
+2024.04.01  08:26 ?    <DIR>          NT AUTHORITY\SYSTEM    TAPI
+2026.02.15  03:50 ?    <DIR>          NT AUTHORITY\SYSTEM    Tasks
+2026.03.28  09:35 ?    <DIR>          ...                    Temp
+2026.03.28  11:38 ?    <DIR>          NT AUTHORITY\SYSTEM    TempInst
+2024.04.01  08:26 ?    <DIR>          NT AUTHORITY\SYSTEM    tracing
+2025.09.15  08:53 ?    <DIR>          NT SERVICE\TrustedInstatwain_32
+2026.03.12  10:28 ?            96,256 NT SERVICE\TrustedInstatwain_32.dll
+2026.02.14  06:54 ?             5,315 BUILTIN\Administrators unsu.log
+2026.03.13  12:44 ?    <DIR>          NT SERVICE\TrustedInstaUUS
+2024.04.01  08:26 ?    <DIR>          NT AUTHORITY\SYSTEM    Vss
+2024.04.01  08:26 ?    <DIR>          NT SERVICE\TrustedInstaWaaS
+2024.04.01  08:34 ?    <DIR>          NT SERVICE\TrustedInstaWeb
+2026.02.13  04:15 ?                92 NT AUTHORITY\SYSTEM    win.ini
+2026.03.28  09:33 ?               276 BUILTIN\Administrators WindowsUpdate.log
+2025.09.15  08:46 ?            12,288 NT SERVICE\TrustedInstawinhlp32.exe
+2026.03.16  05:03 ?    <DIR>          NT SERVICE\TrustedInstaWinSxS
+2024.04.01  05:15 ?           316,640 NT SERVICE\TrustedInstaWMSysPr9.prx
+2026.02.15  02:29 ?    <DIR>          ...                    WUModels
+              33 File(s)      7,796,022 bytes
+              83 Dir(s)  711,290,347,520 bytes free

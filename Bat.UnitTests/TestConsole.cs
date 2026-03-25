@@ -2,16 +2,11 @@ using Bat.Console;
 
 namespace Bat.UnitTests;
 
-internal class TestConsole : IConsole
+internal class TestConsole(string input = "") : IConsole
 {
     private readonly StringWriter _outWriter = new();
     private readonly StringWriter _errWriter = new();
-    private readonly StringReader _inReader;
-
-    public TestConsole(string input = "")
-    {
-        _inReader = new StringReader(input);
-    }
+    private readonly StringReader _inReader = new StringReader(input);
 
     public TextWriter Out => _outWriter;
     public TextWriter Error => _errWriter;

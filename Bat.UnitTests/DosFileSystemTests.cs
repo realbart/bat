@@ -7,6 +7,7 @@ public class DosFileSystemTests : IDisposable
 {
     private readonly string _testRoot;
     private readonly DosFileSystem _fs;
+    private bool _disposed;
 
     public DosFileSystemTests()
     {
@@ -15,10 +16,18 @@ public class DosFileSystemTests : IDisposable
         _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot });
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        if (disposing && Directory.Exists(_testRoot))
+            Directory.Delete(_testRoot, recursive: true);
+        _disposed = true;
+    }
+
     public void Dispose()
     {
-        if (Directory.Exists(_testRoot))
-            Directory.Delete(_testRoot, recursive: true);
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 
     // ── GetNativePath ────────────────────────────────────────────────────────
@@ -147,7 +156,7 @@ public class DosFileSystemTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        string longName = "This is a very long file name that definitely exceeds 8.3 format.txt";
+        var longName = "This is a very long file name that definitely exceeds 8.3 format.txt";
         File.WriteAllText(Path.Combine(_testRoot, longName), "test");
 
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();

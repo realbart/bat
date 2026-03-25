@@ -9,9 +9,9 @@ internal class EchoCommand : ICommand
 {
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        var context = batchContext.Context!;
-        var console = batchContext.Console!;
-        string args = arguments.FullArgument;
+        var context = batchContext.Context;
+        var console = batchContext.Console;
+        var args = arguments.FullArgument;
 
         if (args.Equals("on", StringComparison.OrdinalIgnoreCase))
         {

@@ -7,12 +7,11 @@ namespace Bat.Execution;
 /// Batch execution state - analogous to ReactOS BATCH_CONTEXT
 /// https://doxygen.reactos.org/d3/d0a/cmd_8h_source.html
 /// </summary>
-public class BatchContext
+internal class BatchContext
 {
-    internal IConsole? Console { get; set; }
-    internal IContext? Context { get; set; }
+    internal required IConsole Console { get; set; }
+    internal required IContext Context { get; set; }
 
-    // File state (null for REPL)
     public string? BatchFilePath { get; set; }
     public string? FileContent { get; set; }
     public int FilePosition { get; set; }
@@ -28,7 +27,7 @@ public class BatchContext
     public Stack<EnvironmentSnapshot> SetLocalStack { get; } = new();
 
     // CALL nesting (ReactOS naming: prev)
-    public BatchContext? prev { get; set; }
+    public BatchContext? Prev { get; set; }
 
     // Label cache (null for REPL → GOTO doet niks)
     public Dictionary<string, int>? LabelPositions { get; set; }

@@ -22,18 +22,17 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
 | 1 | 🟢 DONE | Repareer ontwerpkeuzes | [STEP_01_REPAIR_DESIGN.md](steps/STEP_01_REPAIR_DESIGN.md) |
-| 2 | � DONE | PROMPT environment variabele expansie | [STEP_02_PROMPT_EXPANSION.md](steps/STEP_02_PROMPT_EXPANSION.md) |
+| 2 | 🟢 DONE | PROMPT environment variabele expansie | [STEP_02_PROMPT_EXPANSION.md](steps/STEP_02_PROMPT_EXPANSION.md) |
 | 3 | 🟢 DONE | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
 | 4 | 🟢 DONE | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
 | 5 | 🟢 DONE | CD en DIR commands | [STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md) |
-| 6 | 🔴 TODO | Native executables uitvoeren | [STEP_06_EXECUTE_NATIVE.md](steps/STEP_06_EXECUTE_NATIVE.md) |
-| 7 | 🔴 TODO | .NET library executables | [STEP_07_EXECUTE_DOTNET.md](steps/STEP_07_EXECUTE_DOTNET.md) |
-| 8 | 🔴 TODO | Batchbestanden uitvoeren | [STEP_08_BATCH_EXECUTE.md](steps/STEP_08_BATCH_EXECUTE.md) |
-| 9 | 🔴 TODO | Piping + bestandsredirectie | [STEP_09_REDIRECTIONS.md](steps/STEP_09_REDIRECTIONS.md) |
-| 10 | 🔴 TODO | SUBST + Drive Switching (D:) | [STEP_10_SUBST_DRIVE_SWITCHING.md](steps/STEP_10_SUBST_DRIVE_SWITCHING.md) |
-| 11 | 🔴 TODO | SETLOCAL / ENDLOCAL | [STEP_11_SETLOCAL.md](steps/STEP_11_SETLOCAL.md) |
-| 12 | 🔴 TODO | Command line parameters van Bat | [STEP_12_BAT_CMDLINE.md](steps/STEP_12_BAT_CMDLINE.md) |
-| 13 | 🔴 TODO | UxFileSystem / UxContext | [STEP_13_UX_FILESYSTEM.md](steps/STEP_13_UX_FILESYSTEM.md) |
+| 6 | 🟡 NEXT | Executable resolution & execution | [STEP_06_EXECUTABLE_RESOLUTION.md](steps/STEP_06_EXECUTABLE_RESOLUTION.md) |
+| 7 | 🔴 TODO | Piping + bestandsredirectie | [STEP_07_REDIRECTIONS.md](steps/STEP_07_REDIRECTIONS.md) |
+| 8 | 🔴 TODO | GOTO, CALL, advanced batch features | [STEP_08_ADVANCED_BATCH.md](steps/STEP_08_ADVANCED_BATCH.md) |
+| 9 | 🔴 TODO | SUBST + Drive Switching (D:) | [STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md) |
+| 10 | 🔴 TODO | SETLOCAL / ENDLOCAL | [STEP_10_SETLOCAL.md](steps/STEP_10_SETLOCAL.md) |
+| 11 | 🔴 TODO | Command line parameters van Bat | [STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md) |
+| 12 | 🔴 TODO | UxFileSystem / UxContext | [STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md) |
 
 ### Commando-implementatiestappen
 
@@ -42,9 +41,9 @@ De volgende commando's worden geïmplementeerd volgens de **[Generieke implement
 Commando's die al gedekt worden door infrastructuurstappen (niet hieronder):
 - Stap 4: `ECHO`, `SET`, `REM`, `EXIT`, `CLS` (basaal, nog uit te breiden volgens de Generieke implementatieregels)
 - Stap 5: `CD` / `CHDIR`, `DIR`
-- Stap 8: `GOTO`, `CALL`, `SHIFT`
-- Stap 10: `SUBST`, drive switching (`D:`)
-- Stap 11: `SETLOCAL`, `ENDLOCAL`
+- Stap 8: `GOTO`, `CALL`, `SHIFT` (advanced batch features)
+- Stap 9: `SUBST`, drive switching (`D:`)
+- Stap 10: `SETLOCAL`, `ENDLOCAL`
 
 | Stap | Status | Commando | Type | Vereist |
 |---|---|---|---|---|
@@ -73,19 +72,19 @@ Commando's die al gedekt worden door infrastructuurstappen (niet hieronder):
 | 36 | 🔴 TODO | FTYPE | intern | 4 |
 | 37 | 🔴 TODO | IF | intern (complex) | 1, 4 |
 | 38 | 🔴 TODO | FOR | intern (complex) | 1, 4, 8 |
-| 39 | 🔴 TODO | XCOPY | extern .NET | 7 |
-| 40 | 🔴 TODO | DOSKEY | extern .NET | 7 |
-| 41 | 🔴 TODO | CMD | extern .NET | 7 |
-| 42 | 🔴 TODO | FIND | extern .NET | 7, 9 |
-| 43 | 🔴 TODO | FINDSTR | extern .NET | 7, 9 |
-| 44 | 🔴 TODO | SORT | extern .NET | 7, 9 |
-| 45 | 🔴 TODO | MORE | extern .NET | 7, 9 |
-| 46 | 🔴 TODO | FC | extern .NET | 7 |
-| 47 | 🔴 TODO | TREE | extern .NET | 7 |
-| 48 | 🔴 TODO | WHERE | extern .NET | 7 |
-| 49 | 🔴 TODO | TIMEOUT | extern .NET | 7 |
-| 50 | 🔴 TODO | CHOICE | extern .NET | 7 |
-| 51 | 🔴 TODO | ATTRIB | extern .NET (DOS-specifiek) | 7, 3 |
+| 39 | 🔴 TODO | XCOPY | extern .NET | 6 |
+| 40 | 🔴 TODO | DOSKEY | extern .NET | 6 |
+| 41 | 🔴 TODO | CMD | extern .NET | 6 |
+| 42 | 🔴 TODO | FIND | extern .NET | 6, 7 |
+| 43 | 🔴 TODO | FINDSTR | extern .NET | 6, 7 |
+| 44 | 🔴 TODO | SORT | extern .NET | 6, 7 |
+| 45 | 🔴 TODO | MORE | extern .NET | 6, 7 |
+| 46 | 🔴 TODO | FC | extern .NET | 6 |
+| 47 | 🔴 TODO | TREE | extern .NET | 6 |
+| 48 | 🔴 TODO | WHERE | extern .NET | 6 |
+| 49 | 🔴 TODO | TIMEOUT | extern .NET | 6 |
+| 50 | 🔴 TODO | CHOICE | extern .NET | 6 |
+| 51 | 🔴 TODO | ATTRIB | extern .NET (DOS-specifiek) | 6, 3 |
 
 > **Opmerking:** Een doel van Bat is batchbestanden ook op Unix uit te voeren. Windows-executables zoals `find.exe`, `sort.exe`, `more.com` etc. bestaan niet op Unix en moeten daarom als .NET-executables worden geïmplementeerd (net als XCopy en Doskey). `ATTRIB` staat bewust als laatste: het beheert DOS-specifieke bestandsattributen (hidden/system/archive/readonly) die op Unix geen directe equivalent hebben.
 
@@ -297,90 +296,55 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 
 → **[STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md)**
 
-## Stap 6: Native Executables Uitvoeren
+## Stap 6: Executable Resolution & Execution
 
-**Doel:** Process.Start voor externe programma's (notepad.exe, xcopy.exe, etc.)
-
-**Scope:**
-- PATH lookup (zoek in PATH environment variable)
-- ProcessStartInfo met WorkingDirectory, Arguments
-- Redirectie-support (stdin/stdout/stderr)
-- Exit code capture
-- Wacht op completion
-
-**Test strategie:**
-- Mock Process (testbare wrapper)
-- Test met echte executables (cmd.exe, notepad.exe)
-- Test PATH lookup
-- Test redirecties
-
-**Acceptance criteria:**
-- `notepad test.txt` start Notepad
-- `cmd /c echo hello` werkt en toont output
-- Exit code wordt correct doorgegeven
-
-→ **[STEP_06_EXECUTE_NATIVE.md](steps/STEP_06_EXECUTE_NATIVE.md)**
-
-## Stap 7: .NET Library Executables (Doskey, XCopy, Subst)
-
-**Doel:** Assembly.LoadFrom voor .NET programs met IContext entry point.
+**Doel:** Executables vinden en uitvoeren — batch files (lineair), native .exe, en .NET libraries met IContext.
 
 **Scope:**
-- Zoek `Main(IContext, params string[])` via reflection
-- Call met huidige context (shared filesystem, env vars)
-- Fallback naar Process.Start als geen library interface
-- Test met Doskey, XCopy, Subst
+
+**Executable Resolution:**
+- Search volgorde: current directory → PATH directories
+- Extensie prioriteit: .bat/.cmd → .exe → .dll
+- CMD gedrag: huidige dir heeft ALTIJD voorrang (security implicatie)
+
+**Type Detection:**
+- `.bat` / `.cmd` → BatchExecutor (lineair, geen GOTO/CALL support in deze stap)
+- `.dll` → .NET library met `Main(IContext, string[])` signature (via reflection)
+- `.exe` → Native process (Process.Start)
+- Fallback: .dll zonder IContext → native process
+
+**BatchExecutor (basis):**
+- Laad bestand via IFileSystem
+- Voer regels lineair uit (geen GOTO, CALL, SHIFT)
+- BatchContext met parameters (`%0`, `%1`, etc.)
+- `EXIT /B` beëindigt batch, `EXIT` beëindigt Bat
+
+**DotNetLibraryExecutor:**
+- Assembly.LoadFrom(path)
+- Reflection: zoek `Main(IContext, string[])`
+- Invoke met current context (shared env vars, filesystem)
+- Fallback naar Process.Start als signature niet matcht
+
+**NativeExecutor:**
+- Process.Start met WorkingDirectory
+- Capture exit code
+- Basic stdout/stderr redirect (geen pipes/files yet)
 
 **Test strategie:**
-- Create test executable met IContext Main
-- Verify context wordt correct doorgegeven
-- Test fallback naar Process.Start
-- Integration test met Doskey.dll
+- Mock executables voor elke type
+- Test resolution volgorde (current dir beats PATH)
+- Test batch parameter expansion (%1, %2)
+- Test .NET library context sharing
 
 **Acceptance criteria:**
-- `doskey` roept `Doskey.Main(IContext, args)` aan
-- Doskey ziet dezelfde environment variables
-- Doskey ziet virtuele Z: drive
-- Fallback werkt voor normale .NET executables
+- `test.bat` in current dir wordt uitgevoerd
+- `notepad.exe` wordt gevonden via PATH
+- `.NET library met IContext` deelt context met Bat
+- `test.bat arg1 arg2` → `%1` en `%2` werken
 
-→ **[STEP_07_EXECUTE_DOTNET.md](steps/STEP_07_EXECUTE_DOTNET.md)**
+→ **[STEP_06_EXECUTABLE_RESOLUTION.md](steps/STEP_06_EXECUTABLE_RESOLUTION.md)**
 
-## Stap 8: Batchbestanden Uitvoeren
-
-**Doel:** Batch files uitvoeren vanaf de command prompt en via CALL.
-
-**Scope:**
-- `BatchExecutor`: laad bestand via IFileSystem, ScanLabels, uitvoeringsloop
-- `GOTO` — spring naar label (vereist LabelPositions dictionary)
-- `CALL file.bat` — roep ander batch bestand aan (nieuwe BatchContext, prev-ketting)
-- `CALL :subroutine` — interne subroutine aanroep
-- `SHIFT` — schuif batch-parameters op (`%1` wordt vorige `%2`, etc.)
-- `EXIT /B` — verlaat huidige batch (keert terug naar caller)
-- Automatisch unwind van `SetLocalStack` bij batch-exit
-
-**Volgorde:**
-1. BatchExecutor zonder GOTO (lineaire uitvoering)
-2. ScanLabels + GOTO
-3. CALL (extern bestand)
-4. CALL :label (subroutine)
-5. SHIFT + EXIT /B
-
-**Test strategie:**
-- Unit tests voor ScanLabels
-- Integration tests met test-.bat bestanden (via IFileSystem mock)
-- Test CALL-nesting (max 16 niveaus)
-- Test EXIT /B keert terug naar caller
-
-**Acceptance criteria:**
-- `bat test.bat arg1 arg2` voert test.bat uit
-- `%1` en `%2` worden correct geëxpandeerd
-- `GOTO :eof` beëindigt het bestand
-- `CALL :sub` + `GOTO :eof` werkt als subroutine
-- SHIFT verschuift parameters één positie
-
-→ **[STEP_08_BATCH_EXECUTE.md](steps/STEP_08_BATCH_EXECUTE.md)**
-
-## Stap 9: Piping + Bestandsredirectie
+## Stap 7: Piping + Bestandsredirectie
 
 **Doel:** `>`, `>>`, `<`, `|`, `2>`, `2>&1` daadwerkelijk uitvoeren.
 
@@ -407,9 +371,34 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - `dir | find ".cs"` filtert output
 - `somecommand 2>nul` onderdrukt alleen fouten
 
-→ **[STEP_09_REDIRECTIONS.md](steps/STEP_09_REDIRECTIONS.md)**
+→ **[STEP_07_REDIRECTIONS.md](steps/STEP_07_REDIRECTIONS.md)**
 
-## Stap 10: SUBST + Drive Switching
+## Stap 8: Advanced Batch Features
+
+**Doel:** GOTO, CALL, SHIFT voor volledige batch file support.
+
+**Scope:**
+- `ScanLabels` — bouw LabelPositions dictionary
+- `GOTO` — spring naar label
+- `CALL file.bat` — roep ander batch bestand aan (nieuwe BatchContext, prev-ketting)
+- `CALL :subroutine` — interne subroutine aanroep
+- `SHIFT` — schuif batch-parameters op
+- `EXIT /B` — verlaat huidige batch (keert terug naar caller)
+
+**Test strategie:**
+- Unit tests voor ScanLabels
+- Test GOTO naar labels
+- Test CALL-nesting (max 16 niveaus)
+- Test EXIT /B keert terug naar caller
+
+**Acceptance criteria:**
+- `GOTO :label` werkt
+- `CALL :sub` + `GOTO :eof` werkt als subroutine
+- SHIFT verschuift parameters correct
+
+→ **[STEP_08_ADVANCED_BATCH.md](steps/STEP_08_ADVANCED_BATCH.md)**
+
+## Stap 9: SUBST + Drive Switching
 
 **Doel:** Virtual drive mapping via SUBST en intern drive switching-commando (D:, Z:, etc.)
 
@@ -443,9 +432,9 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - `SUBST Q: /D` → `Q:` → error
 - Per-drive directories worden bijgehouden
 
-→ **[STEP_10_SUBST_DRIVE_SWITCHING.md](steps/STEP_10_SUBST_DRIVE_SWITCHING.md)**
+→ **[STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md)**
 
-## Stap 11: SETLOCAL / ENDLOCAL
+## Stap 10: SETLOCAL / ENDLOCAL
 
 **Doel:** Sla de omgevingsstaat op en herstel die bij ENDLOCAL, inclusief CMD extensions-vlaggen.
 
@@ -470,9 +459,9 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - Geneste setlocal werkt correct
 - Batch-exit ruimt automatisch op
 
-→ **[STEP_11_SETLOCAL.md](steps/STEP_11_SETLOCAL.md)**
+→ **[STEP_10_SETLOCAL.md](steps/STEP_10_SETLOCAL.md)**
 
-## Stap 12: Command Line Parameters van Bat
+## Stap 11: Command Line Parameters van Bat
 
 **Doel:** Bat accepteert command line opties die deels afwijken van CMD.EXE.
 
@@ -481,9 +470,9 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - Initialiseer `IContext` met de meegegeven startwaarden (drive, pad, env vars)
 - Ondersteuning voor `/C` (uitvoeren en sluiten), `/K` (uitvoeren en open houden)
 
-→ **[STEP_12_BAT_CMDLINE.md](steps/STEP_12_BAT_CMDLINE.md)**
+→ **[STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md)**
 
-## Stap 13: UxFileSystem / UxContext
+## Stap 12: UxFileSystem / UxContext
 
 **Doel:** Bat draait op Unix via een adapter die Unix-paden presenteert als Windows-drives.
 
@@ -499,7 +488,7 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - `CD /home` werkt als `CD C:\home` op Linux
 - Processen worden gestart met correcte Unix-paden
 
-→ **[STEP_13_UX_FILESYSTEM.md](steps/STEP_13_UX_FILESYSTEM.md)**
+→ **[STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md)**
 
 ## Afhankelijkheden
 
@@ -512,36 +501,36 @@ Stap 3 (Filesystem)
 Stap 4 (Minimale REPL)
   ↓
 Stap 5 (CD + DIR) ← Vereist Filesystem
-Stap 6 (Native exec) ← Vereist Filesystem (PATH lookup)
   ↓
-Stap 7 (.NET exec) ← Vereist Stap 6 (fallback)
+Stap 6 (Executable resolution & execution) ← Vereist Filesystem + Stap 1
   ↓
-Stap 8 (Batch execute) ← Vereist Stap 1 + 3 + 7
-Stap 9 (Redirecties) ← Vereist Stap 6 (process I/O)
+Stap 7 (Redirecties) ← Vereist Stap 6 (process I/O)
   ↓
-Stap 10 (SUBST + Drive switching) ← Vereist Stap 3 + 7
+Stap 8 (Advanced batch: GOTO/CALL) ← Vereist Stap 6 (basis batch)
   ↓
-Stap 11 (SETLOCAL) ← Vereist Stap 10 (drive paden snapshot)
+Stap 9 (SUBST + Drive switching) ← Vereist Stap 3 + 6
   ↓
-Stap 12 (Bat cmdline) ← Vereist Stap 1 (IContext startup)
-Stap 13 (UxFileSystem) ← Vereist Stap 3 (referentie-implementatie)
+Stap 10 (SETLOCAL) ← Vereist Stap 9 (drive paden snapshot)
   ↓
-Stap 14–41 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
+Stap 11 (Bat cmdline) ← Vereist Stap 1 (IContext startup)
+Stap 12 (UxFileSystem) ← Vereist Stap 3 (referentie-implementatie)
+  ↓
+Stap 13–51 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
 ```
 
 **Kritiek pad:** 1 → 3 → 4 → 5 → 6 → 7 → 8  
 **Snel iets zien:** 1 → 3 → 4 (dan kun je interactief typen)
-**Cross-platform pijp-utilities:** 42–50 vereisen stap 7 (.NET exec) + stap 9 (pipes); ATTRIB (51) als laatste vanwege DOS-specifieke semantiek
+**Cross-platform pijp-utilities:** 42–50 vereisen stap 6 (.NET exec) + stap 7 (pipes); ATTRIB (51) als laatste vanwege DOS-specifieke semantiek
 
 ## Uitvoering
 
-Voor infrastructuurstappen (1–13):
+Voor infrastructuurstappen (1–12):
 1. Lees het instructiebestand volledig
 2. Vraag: "Voer STEP_0X uit"
 3. Implementeer volgens TDD
 4. Alle tests slagen → volgende stap
 
-Voor commando-stappen (14–51):
+Voor commando-stappen (13–51):
 1. Verwijs naar de [Generieke implementatieregels](#generieke-implementatieregels-voor-commandos)
 2. Vraag: "Implementeer stap XX: COMMAND"
 3. Implementeer — geen apart bestand nodig

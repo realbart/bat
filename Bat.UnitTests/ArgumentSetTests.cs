@@ -15,7 +15,7 @@ public class ArgumentSetTests
     private static List<IToken> Tok(params string[] parts)
     {
         var result = new List<IToken>();
-        for (int i = 0; i < parts.Length; i++)
+        for (var i = 0; i < parts.Length; i++)
         {
             if (i > 0) result.Add(Token.Whitespace(" "));
             result.Add(T(parts[i]));
@@ -60,11 +60,11 @@ public class ArgumentSetTests
     }
 
     [TestMethod]
-    public void Parse_UnknownSwitch_TreatedAsPositional()
+    public void Parse_UnknownMultiCharSwitch_TreatedAsPositional()
     {
-        var args = ArgumentSet.Parse(Tok("/Z"), Spec(flags: "B"));
+        var args = ArgumentSet.Parse(Tok("/ZZ"), Spec(flags: "B"));
         Assert.IsFalse(args.GetFlagValue('Z'));
-        Assert.AreEqual("/Z", args.Positionals[0]);
+        Assert.AreEqual("/ZZ", args.Positionals[0]);
     }
 
     // ── Options ─────────────────────────────────────────────────────────────
@@ -104,14 +104,12 @@ public class ArgumentSetTests
     }
 
     [TestMethod]
-    public void Parse_Option_GetValue_ThrowsOnMultiple()
+    public void Parse_Option_GetValue_ReturnsFirstWhenMultiple()
     {
         var tokens = new List<IToken> { Token.Text("/A:D"), Token.Whitespace(" "), Token.Text("/A:H") };
         var args = ArgumentSet.Parse(tokens, Spec(options: "A"));
-        bool threw = false;
-        try { args.GetValue("A"); }
-        catch (InvalidOperationException) { threw = true; }
-        Assert.IsTrue(threw, "Expected InvalidOperationException");
+        var value = args.GetValue("A");
+        Assert.AreEqual("D", value);
     }
 
     [TestMethod]
@@ -301,5 +299,54 @@ public class ArgumentSetTests
         var args = ArgumentSet.Parse(Tok("/B"), Spec(flags: "B C"));
         Assert.IsFalse(args.GetFlagValue('C'));
         Assert.IsTrue(args.GetFlagValue('C', defaultValue: true));
+    }
+
+    [TestMethod]
+    public void Parse_InvalidSingleCharSwitch_ReturnsError()
+    {
+        var args = ArgumentSet.Parse(Tok("/g"), Spec(flags: "B C"));
+        Assert.IsNotNull(args.ErrorMessage);
+        Assert.IsTrue(args.ErrorMessage.Contains("Invalid switch"));
+        Assert.IsTrue(args.ErrorMessage.Contains("\"g\""));
+    }
+
+    [TestMethod]
+    public void Parse_CompoundFlags_SplitsCorrectly()
+    {
+        var args = ArgumentSet.Parse(Tok("/Q/X"), Spec(flags: "Q X B"));
+        Assert.IsNull(args.ErrorMessage);
+        Assert.IsTrue(args.GetFlagValue('Q'));
+        Assert.IsTrue(args.GetFlagValue('X'));
+        Assert.IsFalse(args.GetFlagValue('B'));
+    }
+
+    [TestMethod]
+    public void Parse_SingleCharFlag_Q_RecognizedAsFlag()
+    {
+        var args = ArgumentSet.Parse(Tok("/Q"), Spec(flags: "Q B"));
+        Assert.IsNull(args.ErrorMessage, $"Should not have error, got: {args.ErrorMessage}");
+        Assert.IsTrue(args.GetFlagValue('Q'));
+        Assert.AreEqual(0, args.Positionals.Count, "Q should be flag, not positional");
+    }
+
+    [TestMethod]
+    public void Parse_FlagAndPositional_BothRecognized()
+    {
+        var args = ArgumentSet.Parse(Tok("/Q", "\\windows"), Spec(flags: "Q B"));
+        Assert.IsNull(args.ErrorMessage, $"Should not have error, got: {args.ErrorMessage}");
+        Assert.IsTrue(args.GetFlagValue('Q'), "Q should be recognized as flag");
+        Assert.AreEqual(1, args.Positionals.Count, "Should have one positional");
+        Assert.AreEqual("\\windows", args.Positionals[0]);
+    }
+
+    [TestMethod]
+    public void Parse_SlashQAsTextToken_WithPositional_BothRecognized()
+    {
+        var tokens = new List<IToken> { Token.Text("/Q"), Token.Whitespace(" "), Token.Text("\\windows") };
+        var spec = Spec(flags: "Q B");
+        var args = ArgumentSet.Parse(tokens, spec);
+        Assert.IsNull(args.ErrorMessage, $"Should not have error, got: {args.ErrorMessage}");
+        Assert.IsTrue(args.GetFlagValue('Q'), $"Q should be flag. Positionals: {string.Join(", ", args.Positionals)}");
+        Assert.AreEqual(1, args.Positionals.Count, $"Should have one positional. Got: {string.Join(", ", args.Positionals)}");
     }
 }

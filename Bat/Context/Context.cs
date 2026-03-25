@@ -5,7 +5,7 @@ namespace Bat.Context;
 internal abstract class Context(IFileSystem fileSystem) : IContext
 {
     public int ErrorCode { get; set; } = 0;
-    public Dictionary<string, string> EnvironmentVariables { get; } = [];
+    public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
     protected readonly Dictionary<char, string[]> CurrentFolders = [];
     public char CurrentDrive { get; protected set; } = 'C';
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
@@ -35,6 +35,13 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
         {
             if (entry.Key is string key && entry.Value is string value)
                 EnvironmentVariables[key] = value;
+        }
+
+        // Translate host PATH to Bat virtual drives
+        if (EnvironmentVariables.TryGetValue("PATH", out var hostPath))
+        {
+            var batPath = PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
+            EnvironmentVariables["PATH"] = batPath;
         }
 
         // PROMPT: if not provided by the environment, default to $P$G

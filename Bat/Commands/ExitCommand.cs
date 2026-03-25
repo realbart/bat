@@ -9,20 +9,19 @@ namespace Bat.Commands;
 internal class ExitCommand : ICommand
 {
     internal const int ExitSentinel = int.MinValue;
+    internal const int ExitBatchSentinel = int.MinValue + 1;
 
     public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         var context = batchContext.Context!;
 
-        bool batchOnly = arguments.GetFlagValue('B');
+        var batchOnly = arguments.GetFlagValue('B');
 
-        if (int.TryParse(arguments.Positionals.FirstOrDefault(), out int code))
+        if (int.TryParse(arguments.Positionals.FirstOrDefault(), out var code))
             context.ErrorCode = code;
 
-        // /B in batch context returns from batch but keeps interpreter running;
-        // in REPL (or when not in batch), treat identical to EXIT.
         if (batchOnly && batchContext.IsBatchFile)
-            return Task.FromResult(0);
+            return Task.FromResult(ExitBatchSentinel);
 
         return Task.FromResult(ExitSentinel);
     }

@@ -10,4 +10,5 @@ public readonly record struct DosFileEntry(
     string ShortName,
     long Size,
     DateTime LastWriteTime,
-    FileAttributes Attributes);
+    FileAttributes Attributes,
+    string Owner);

@@ -47,7 +47,7 @@ public class ReplBatchContextTests
         var bc = ReplBatchContext.Value;
 
         // Assert
-        for (int i = 1; i < bc.Parameters.Length; i++)
+        for (var i = 1; i < bc.Parameters.Length; i++)
         {
             Assert.IsNull(bc.Parameters[i], $"Parameter {i} should be null");
         }

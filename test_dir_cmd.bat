@@ -1,0 +1,2 @@
+dir /q \windows
+exit

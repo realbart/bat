@@ -16,7 +16,7 @@ internal abstract class FileSystem : IFileSystem
     public string GetDisplayName(string segment)
         => string.Create(segment.Length, segment, (span, input) =>
             {
-                for (int i = 0; i < span.Length; i++)
+                for (var i = 0; i < span.Length; i++)
                 {
                     var c = input[i];
                     span[i] = c switch
@@ -33,6 +33,20 @@ internal abstract class FileSystem : IFileSystem
                     };
                 }
             });
+
+    public virtual bool TryGetNativePath(char drive, string[] path, out string nativePath)
+    {
+        try
+        {
+            nativePath = GetNativePath(drive, path);
+            return true;
+        }
+        catch
+        {
+            nativePath = "";
+            return false;
+        }
+    }
 
     public abstract string GetNativePath(char drive, string[] path);
 

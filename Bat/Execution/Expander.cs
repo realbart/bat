@@ -7,13 +7,13 @@ namespace Bat.Execution;
 /// Expands batch parameters (%0..%9, %*, %~modifiers) and environment variables (%VAR%)
 /// before tokenization. Analogous to ReactOS SubstituteVars and related functions.
 /// </summary>
-public static class Expander
+internal static class Expander
 {
     /// <summary>
     /// Expand batch parameters in a line (%0..%9, %*, %~dp1, etc.)
     /// Preserves literal %N if parameter is null/missing.
     /// </summary>
-    public static string ExpandBatchParameters(string line, BatchContext bc)
+    internal static string ExpandBatchParameters(string line, BatchContext bc)
     {
         if (string.IsNullOrEmpty(line))
             return line;
@@ -42,7 +42,7 @@ public static class Expander
                 else if (i + 1 < line.Length && line[i + 1] == '*')
                 {
                     var allParams = new List<string>();
-                    for (int j = 1 + bc.ShiftOffset; j < bc.Parameters.Length; j++)
+                    for (var j = 1 + bc.ShiftOffset; j < bc.Parameters.Length; j++)
                     {
                         if (bc.Parameters[j] != null)
                             allParams.Add(bc.Parameters[j]!);

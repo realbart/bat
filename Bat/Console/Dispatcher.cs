@@ -27,7 +27,7 @@ internal class Dispatcher : IDispatcher
         return true;
     }
 
-    private static async Task<int> ExecuteNodeAsync(BatchContext bc, ICommandNode node)
+    internal static async Task<int> ExecuteNodeAsync(BatchContext bc, ICommandNode node)
     {
         switch (node)
         {
@@ -39,7 +39,7 @@ internal class Dispatcher : IDispatcher
 
             case BlockNode block:
             {
-                int last = 0;
+                var last = 0;
                 foreach (var sub in block.Subcommands)
                     last = await ExecuteNodeAsync(bc, sub);
                 return last;
@@ -51,14 +51,14 @@ internal class Dispatcher : IDispatcher
 
             case AndNode and:
             {
-                int left = await ExecuteNodeAsync(bc, and.Left);
+                var left = await ExecuteNodeAsync(bc, and.Left);
                 if (left != 0) return left;
                 return await ExecuteNodeAsync(bc, and.Right);
             }
 
             case OrNode or:
             {
-                int left = await ExecuteNodeAsync(bc, or.Left);
+                var left = await ExecuteNodeAsync(bc, or.Left);
                 if (left == 0) return left;
                 return await ExecuteNodeAsync(bc, or.Right);
             }
@@ -85,12 +85,17 @@ internal class Dispatcher : IDispatcher
         {
             var rawArgs = cmd.Tail.SkipWhile(static t => t is WhitespaceToken).ToList();
             var args = ArgumentSet.Parse(rawArgs, builtIn.Spec);
+            if (args.ErrorMessage != null)
+            {
+                await bc.Console.Error.WriteLineAsync(args.ErrorMessage);
+                return 1;
+            }
             return await builtIn.CreateCommand().ExecuteAsync(args, bc, cmd.Redirections);
         }
 
         // Try splitting command/switch combos like dir/w or dir\path
-        string rawName = cmd.Head.Raw;
-        int splitAt = rawName.IndexOfAny(['/', '\\']);
+        var rawName = cmd.Head.Raw;
+        var splitAt = rawName.IndexOfAny(['/', '\\']);
         if (splitAt > 0)
         {
             var commandType = BuiltInCommandRegistry.GetCommandType(rawName[..splitAt]);
@@ -101,13 +106,45 @@ internal class Dispatcher : IDispatcher
                 var allArgs = new List<IToken> { suffixToken };
                 allArgs.AddRange(cmd.Tail.SkipWhile(static t => t is WhitespaceToken));
                 var args = ArgumentSet.Parse(allArgs, spec);
+                if (args.ErrorMessage != null)
+                {
+                    await bc.Console.Error.WriteLineAsync(args.ErrorMessage);
+                    return 1;
+                }
                 return await ((ICommand)Activator.CreateInstance(commandType)!).ExecuteAsync(args, bc, cmd.Redirections);
             }
         }
 
-        // External command not found
-        await bc.Console!.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
-        await bc.Console!.Error.WriteLineAsync("operable program or batch file.");
-        return 1;
+        var executablePath = ExecutableResolver.Resolve(rawName, bc.Context);
+        if (executablePath == null)
+        {
+            await bc.Console.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
+            await bc.Console.Error.WriteLineAsync("operable program or batch file.");
+            return 1;
+        }
+
+        var executor = GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
+        var argumentTokens = cmd.Tail.OfType<TextToken>().Select(t => t.Value).ToArray();
+        var arguments = string.Join(" ", argumentTokens);
+        return await executor.ExecuteAsync(executablePath, arguments, bc, cmd.Redirections);
+    }
+
+    private static IExecutor GetExecutor(IConsole console, string executablePath, global::Context.IFileSystem fileSystem)
+    {
+        var ext = Path.GetExtension(executablePath).ToLowerInvariant();
+
+        if (ext is ".bat" or ".cmd")
+            return new BatchExecutor(console);
+
+        var hostPath = Context.PathTranslator.TranslateBatPathToHost(executablePath, fileSystem);
+        var peType = ExecutableTypeDetector.GetExecutableType(hostPath);
+
+        return peType switch
+        {
+            ExecutableType.DotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false)),
+            ExecutableType.WindowsGui => new NativeExecutor(waitForExit: false, isGuiApp: true),
+            ExecutableType.WindowsConsole => new NativeExecutor(waitForExit: true, isGuiApp: false),
+            _ => new NativeExecutor(waitForExit: true, isGuiApp: false)
+        };
     }
 }

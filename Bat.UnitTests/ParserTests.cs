@@ -436,7 +436,7 @@ public class ComplexScenarios
     {
         var fileSystem = new DosFileSystem();
         context = new DosContext(fileSystem);
-        context.EnvironmentVariables.Add("PATH", "C:\\Windows\\System32");
+        context.EnvironmentVariables["PATH"] = "C:\\Windows\\System32";
     }
 
     [TestMethod]
@@ -994,27 +994,25 @@ public class MixedEscapeScenarios
 public class DirCommandSyntaxVariants
 {
     // CMD:  dir\w  →  dir \w  (lists root-relative path \w; "File Not Found" if absent)
-    // BAT:  "dir\w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    // BAT:  "dir\w" is now split by ReadWord at \ → BuiltInCommandToken<DirCommand> + \w path
     [TestMethod]
-    public void DirBackslashW_ParsesAsGenericCommand()
+    public void DirBackslashW_ParsesAsBuiltInCommand()
     {
         var result = Parser.Parse(@"dir\w");
 
         var token = result.LastLine.First();
-        Assert.IsTrue(token is CommandToken);
-        Assert.IsFalse(token is IBuiltInCommandToken);
+        Assert.IsTrue(token is BuiltInCommandToken<DirCommand>, $"Expected BuiltInCommandToken<DirCommand>, got {token.GetType().Name}");
     }
 
     // CMD:  dir/w  →  dir /w  (wide format; exit 0)
-    // BAT:  "dir/w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    // BAT:  "dir/w" is now split by ReadWord at / → BuiltInCommandToken<DirCommand> + /w flag
     [TestMethod]
-    public void DirSlashW_ParsesAsGenericCommand()
+    public void DirSlashW_ParsesAsBuiltInCommand()
     {
         var result = Parser.Parse("dir/w");
 
         var token = result.LastLine.First();
-        Assert.IsTrue(token is CommandToken);
-        Assert.IsFalse(token is IBuiltInCommandToken);
+        Assert.IsTrue(token is BuiltInCommandToken<DirCommand>, $"Expected BuiltInCommandToken<DirCommand>, got {token.GetType().Name}");
     }
 
     // CMD:  dir-w  →  not recognised as internal/external command; exit 1.

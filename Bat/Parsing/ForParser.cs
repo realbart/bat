@@ -76,7 +76,7 @@ internal static class ForParser
     {
         while (reader.CurrentText?.StartsWith('/') == true)
         {
-            bool recognised = reader.CurrentText.ToUpperInvariant() switch
+            var recognised = reader.CurrentText.ToUpperInvariant() switch
             {
                 "/D" => AccumulateSimple(ref reader, ref switches, ForSwitches.Dirs, forParams),
                 "/R" => AccumulateR(ref reader, ref switches, forParams),
