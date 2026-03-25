@@ -1,32 +1,18 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
+using Context;
 
 namespace Bat.Context;
 
-/// <summary>
-/// Windows filesystem implementation. Maintains a dictionary that maps
-/// virtual drive letters to native root paths.
-/// On startup C: is mapped to Z:, making it visible that Bat uses virtual drives.
-/// </summary>
-internal class DosFileSystem : FileSystem
+internal partial class DosFileSystem : FileSystem
 {
     private readonly Dictionary<char, string> _roots;
 
-    /// <summary>Creates a DosFileSystem with an explicit drive-root mapping (used in tests).</summary>
     public DosFileSystem(Dictionary<char, string> roots)
     {
         _roots = new Dictionary<char, string>(roots);
     }
 
-    /// <summary>
-    /// Creates a DosFileSystem with the default Windows mapping:
-    /// virtual Z: → native C:\ (root of the system drive).
-    /// No other drives are mapped — additional drives must be added explicitly
-    /// via /M command-line arguments or SUBST commands.
-    /// On Linux the equivalent would be virtual Z: → native /.
-    /// </summary>
     public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
-
-    // ── path resolution ──────────────────────────────────────────────────
 
     public override string GetNativePath(char drive, string[] path)
     {
@@ -40,20 +26,18 @@ internal class DosFileSystem : FileSystem
 
     protected override uint GetVolumeSerialNumber(string nativeRoot)
     {
-        // we should find a mount point in case the path is a mount point,
-        // e.g. c:\foo might be a mount point for a drive without a drive letter,
-        // and we want to get the serial number of the mounted drive, not the system drive
-
         var hash = GetVolumeInformationW(nativeRoot, null, 0, out uint serial, out _, out _, null, 0)
             ? serial : 0;
 
-        return nativeRoot.Length>3 
-            ? (uint)HashCode.Combine(hash, nativeRoot[3..]) 
+        return nativeRoot.Length > 3
+            ? (uint)HashCode.Combine(hash, nativeRoot[3..])
             : hash;
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool GetVolumeInformationW(
+    [LibraryImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetVolumeInformationW(
         string lpRootPathName,
         char[]? lpVolumeNameBuffer,
         int nVolumeNameSize,
@@ -69,24 +53,74 @@ internal class DosFileSystem : FileSystem
     public override bool DirectoryExists(char drive, string[] path) =>
         Directory.Exists(GetNativePath(drive, path));
 
-    // ── directory operations ─────────────────────────────────────────────
-
     public override void CreateDirectory(char drive, string[] path) =>
         Directory.CreateDirectory(GetNativePath(drive, path));
 
     public override void DeleteDirectory(char drive, string[] path, bool recursive) =>
         Directory.Delete(GetNativePath(drive, path), recursive);
 
-    public override IEnumerable<(string Name, bool IsDirectory)> EnumerateEntries(
+    public override IEnumerable<DosFileEntry> EnumerateEntries(
         char drive, string[] path, string pattern)
     {
-        var native = GetNativePath(drive, path);
-        if (!Directory.Exists(native)) yield break;
-        foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
-            yield return (Path.GetFileName(entry), Directory.Exists(entry));
+        if (!OperatingSystem.IsWindows())
+        {
+            var native = GetNativePath(drive, path);
+            if (!Directory.Exists(native)) yield break;
+            foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
+            {
+                var name = Path.GetFileName(entry);
+                bool isDir = Directory.Exists(entry);
+                var info = new FileInfo(entry);
+                yield return new DosFileEntry(
+                    name,
+                    isDir,
+                    "",
+                    isDir ? 0 : info.Length,
+                    File.GetLastWriteTime(entry),
+                    File.GetAttributes(entry));
+            }
+            yield break;
+        }
+
+        string searchPath = Path.Combine(GetNativePath(drive, path), pattern);
+        IntPtr handle = FindFirstFileW(searchPath, out var data);
+
+        if (handle == new IntPtr(-1))
+            yield break;
+
+        try
+        {
+            do
+            {
+                if (data.cFileName is "." or "..")
+                    continue;
+
+                bool isDir = (data.dwFileAttributes & 0x10) != 0;
+                long size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+                DateTime lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
+
+                yield return new DosFileEntry(
+                    data.cFileName,
+                    isDir,
+                    data.cAlternateFileName ?? "",
+                    size,
+                    lastWrite,
+                    (FileAttributes)data.dwFileAttributes);
+            }
+            while (FindNextFileW(handle, out data));
+        }
+        finally
+        {
+            FindClose(handle);
+        }
     }
 
-    // ── file operations ──────────────────────────────────────────────────
+    private static DateTime FileTimeToDateTime(System.Runtime.InteropServices.ComTypes.FILETIME ft)
+    {
+        long fileTime = ((long)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
+        if (fileTime == 0) return DateTime.MinValue;
+        return DateTime.FromFileTimeUtc(fileTime).ToLocalTime();
+    }
 
     public override void DeleteFile(char drive, string[] path) =>
         File.Delete(GetNativePath(drive, path));
@@ -106,8 +140,6 @@ internal class DosFileSystem : FileSystem
         File.Move(src, dst);
     }
 
-    // ── file I/O ─────────────────────────────────────────────────────────
-
     public override Stream OpenRead(char drive, string[] path) =>
         File.OpenRead(GetNativePath(drive, path));
 
@@ -122,8 +154,6 @@ internal class DosFileSystem : FileSystem
     public override void WriteAllText(char drive, string[] path, string content) =>
         File.WriteAllText(GetNativePath(drive, path), content);
 
-    // ── metadata ─────────────────────────────────────────────────────────
-
     public override FileAttributes GetAttributes(char drive, string[] path) =>
         File.GetAttributes(GetNativePath(drive, path));
 
@@ -135,5 +165,30 @@ internal class DosFileSystem : FileSystem
 
     public override DateTime GetLastWriteTime(char drive, string[] path) =>
         File.GetLastWriteTime(GetNativePath(drive, path));
-}
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WIN32_FIND_DATA
+    {
+        public uint dwFileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftCreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftLastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftLastWriteTime;
+        public uint nFileSizeHigh;
+        public uint nFileSizeLow;
+        public uint dwReserved0;
+        public uint dwReserved1;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string cFileName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+        public string cAlternateFileName;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr FindFirstFileW(string lpFileName, out WIN32_FIND_DATA lpFindFileData);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATA lpFindFileData);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FindClose(IntPtr hFindFile);
+}

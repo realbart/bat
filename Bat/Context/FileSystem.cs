@@ -41,7 +41,7 @@ internal abstract class FileSystem : IFileSystem
     public abstract void CreateDirectory(char drive, string[] path);
     public abstract void DeleteFile(char drive, string[] path);
     public abstract void DeleteDirectory(char drive, string[] path, bool recursive);
-    public abstract IEnumerable<(string Name, bool IsDirectory)> EnumerateEntries(char drive, string[] path, string pattern);
+    public abstract IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern);
     public abstract Stream OpenRead(char drive, string[] path);
     public abstract Stream OpenWrite(char drive, string[] path, bool append);
     public abstract string ReadAllText(char drive, string[] path);

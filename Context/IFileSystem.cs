@@ -12,7 +12,7 @@ public interface IFileSystem
     void DeleteFile(char drive, string[] path);
     void DeleteDirectory(char drive, string[] path, bool recursive);
 
-    IEnumerable<(string Name, bool IsDirectory)> EnumerateEntries(char drive, string[] path, string pattern);
+    IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern);
 
     Stream OpenRead(char drive, string[] path);
     Stream OpenWrite(char drive, string[] path, bool append);
@@ -28,9 +28,5 @@ public interface IFileSystem
     long GetFileSize(char drive, string[] path);
     DateTime GetLastWriteTime(char drive, string[] path);
 
-    /// <summary>
-    /// Returns a stable 4-byte volume serial number for the given drive.
-    /// Derived by hashing the native root path of the drive (FNV-1a).
-    /// </summary>
     uint GetVolumeSerialNumber(char drive);
 }

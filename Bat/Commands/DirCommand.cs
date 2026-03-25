@@ -141,7 +141,7 @@ internal class DirCommand : ICommand
             await console.Out.WriteLineAsync();
         }
 
-        IEnumerable<(string Name, bool IsDirectory)> entries;
+        IEnumerable<DosFileEntry> entries;
         try
         {
             entries = context.FileSystem.EnumerateEntries(drive, path, pattern).ToList();
@@ -164,11 +164,11 @@ internal class DirCommand : ICommand
                 ? entries.OrderByDescending(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
                 : entries.OrderBy(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
             "S" => opts.SortReverse
-                ? entries.OrderByDescending(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name))
-                : entries.OrderBy(e => e.IsDirectory ? 0L : SafeSize(context, drive, path, e.Name)),
+                ? entries.OrderByDescending(e => e.Size)
+                : entries.OrderBy(e => e.Size),
             "D" => opts.SortReverse
-                ? entries.OrderByDescending(e => SafeDate(context, drive, path, e.Name))
-                : entries.OrderBy(e => SafeDate(context, drive, path, e.Name)),
+                ? entries.OrderByDescending(e => e.LastWriteTime)
+                : entries.OrderBy(e => e.LastWriteTime),
             _ => entries
         };
 
@@ -186,16 +186,15 @@ internal class DirCommand : ICommand
         }
         else
         {
-            foreach (var (name, isDir) in list)
+            foreach (var entry in list)
             {
-                string displayName = opts.Lowercase ? name.ToLowerInvariant() : name;
-                if (isDir)
+                string displayName = opts.Lowercase ? entry.Name.ToLowerInvariant() : entry.Name;
+                if (entry.IsDirectory)
                 {
                     dirCount++;
                     if (!opts.BareNames)
                     {
-                        var dt = SafeDate(context, drive, path, name);
-                        await console.Out.WriteLineAsync($"{FormatDate(dt)}    <DIR>          {displayName}");
+                        await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}    <DIR>          {displayName}");
                     }
                     else
                     {
@@ -204,14 +203,12 @@ internal class DirCommand : ICommand
                 }
                 else
                 {
-                    long size = SafeSize(context, drive, path, name);
-                    totalSize += size;
+                    totalSize += entry.Size;
                     fileCount++;
                     if (!opts.BareNames)
                     {
-                        var dt = SafeDate(context, drive, path, name);
-                        string sizeStr = opts.ThousandSeparator ? $"{size,15:N0}" : $"{size,15}";
-                        await console.Out.WriteLineAsync($"{FormatDate(dt)} {sizeStr}   {displayName}");
+                        string sizeStr = opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}";
+                        await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)} {sizeStr}   {displayName}");
                     }
                     else
                     {
@@ -231,15 +228,15 @@ internal class DirCommand : ICommand
 
         if (recurse)
         {
-            foreach (var (name, isDir) in list.Where(e => e.IsDirectory))
+            foreach (var entry in list.Where(e => e.IsDirectory))
             {
-                var subPath = path.Append(name).ToArray();
+                var subPath = path.Append(entry.Name).ToArray();
                 await ListDirectoryAsync(console, context, drive, subPath, opts, pattern, recurse: true);
             }
         }
     }
 
-    private static async Task WriteWideAsync(IConsole console, List<(string Name, bool IsDirectory)> entries,
+    private static async Task WriteWideAsync(IConsole console, List<DosFileEntry> entries,
         bool lower)
     {
         var cells = entries
@@ -272,7 +269,7 @@ internal class DirCommand : ICommand
     }
 
     private static bool MatchesAttributeFilter(IContext context, char drive, string[] path,
-        (string Name, bool IsDirectory) entry, string filter)
+        DosFileEntry entry, string filter)
     {
         bool negate = false;
         foreach (char c in filter)
@@ -286,13 +283,13 @@ internal class DirCommand : ICommand
             bool has = c switch
             {
                 'D' => entry.IsDirectory,
-                'H' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.Hidden),
-                'R' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.ReadOnly),
-                'S' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.System),
-                'A' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.Archive),
-                'L' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.ReparsePoint),
-                'I' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.NotContentIndexed),
-                'O' => SafeHasAttribute(context, drive, path, entry.Name, FileAttributes.Offline),
+                'H' => entry.Attributes.HasFlag(FileAttributes.Hidden),
+                'R' => entry.Attributes.HasFlag(FileAttributes.ReadOnly),
+                'S' => entry.Attributes.HasFlag(FileAttributes.System),
+                'A' => entry.Attributes.HasFlag(FileAttributes.Archive),
+                'L' => entry.Attributes.HasFlag(FileAttributes.ReparsePoint),
+                'I' => entry.Attributes.HasFlag(FileAttributes.NotContentIndexed),
+                'O' => entry.Attributes.HasFlag(FileAttributes.Offline),
                 _ => true
             };
             if (negate ? has : !has) return false;
@@ -300,43 +297,6 @@ internal class DirCommand : ICommand
         }
 
         return true;
-    }
-
-    private static bool SafeHasAttribute(IContext context, char drive, string[] path,
-        string name, FileAttributes attr)
-    {
-        try
-        {
-            return (context.FileSystem.GetAttributes(drive, [.. path, name]) & attr) != 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static long SafeSize(IContext context, char drive, string[] path, string name)
-    {
-        try
-        {
-            return context.FileSystem.GetFileSize(drive, [.. path, name]);
-        }
-        catch
-        {
-            return 0;
-        }
-    }
-
-    private static DateTime SafeDate(IContext context, char drive, string[] path, string name)
-    {
-        try
-        {
-            return context.FileSystem.GetLastWriteTime(drive, [.. path, name]);
-        }
-        catch
-        {
-            return DateTime.MinValue;
-        }
     }
 
     private static string FormatDate(DateTime dt) =>

@@ -240,6 +240,7 @@ internal sealed class TestFileSystem : IFileSystem
     private readonly HashSet<string> _dirs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<(string Name, bool IsDir, long Size, DateTime Date, FileAttributes Attrs)>> _contents
         = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _shortNames = new(StringComparer.OrdinalIgnoreCase);
 
     public void AddDir(char drive, string[] path) => _dirs.Add(Key(drive, path));
 
@@ -253,6 +254,11 @@ internal sealed class TestFileSystem : IFileSystem
         list.Add((name, isDir, size, date == default ? new DateTime(2026, 1, 1) : date, attrs));
     }
 
+    public void SetShortName(char drive, string[] path, string shortName)
+    {
+        _shortNames[Key(drive, path)] = shortName;
+    }
+
     private static string Key(char drive, string[] path)
         => path.Length == 0
             ? $"{char.ToUpperInvariant(drive)}:\\"
@@ -264,12 +270,17 @@ internal sealed class TestFileSystem : IFileSystem
     public bool DirectoryExists(char drive, string[] path) => _dirs.Contains(Key(drive, path));
     public bool FileExists(char drive, string[] path) => false;
 
-    public IEnumerable<(string Name, bool IsDirectory)> EnumerateEntries(char drive, string[] path, string pattern)
+    public IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern)
     {
         if (!_contents.TryGetValue(Key(drive, path), out var list)) yield break;
         foreach (var e in list)
+        {
             if (GlobMatch(e.Name, pattern))
-                yield return (e.Name, e.IsDir);
+            {
+                string shortName = _shortNames.TryGetValue(Key(drive, [..path, e.Name]), out var sn) ? sn : "";
+                yield return new DosFileEntry(e.Name, e.IsDir, shortName, e.Size, e.Date, e.Attrs);
+            }
+        }
     }
 
     public FileAttributes GetAttributes(char drive, string[] path)
@@ -329,7 +340,7 @@ internal sealed class TestFileSystem : IFileSystem
     public void MoveFile(char sd, string[] sp, char dd, string[] dp) => throw new NotImplementedException();
     public void RenameFile(char d, string[] p, string n) => throw new NotImplementedException();
     public void SetAttributes(char d, string[] p, FileAttributes a) => throw new NotImplementedException();
-    public uint GetVolumeSerialNumber(char drive) => FileSystem.GetVolumeSerialNumber(Key(drive, []));
+    public uint GetVolumeSerialNumber(char drive) => 0;
 }
 
 [TestClass]
@@ -869,3 +880,863 @@ public class DispatcherIntegrationTests
         Assert.IsTrue(console.ErrLines.Any(l => l.Contains("operable program")));
     }
 }
+
+[TestClass]
+public class DirLowercaseTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    // /L lowercases file names in the normal listing
+    [TestMethod]
+    public async Task Dir_L_FileNamesAreLowercase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "ReadMe.TXT", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/L")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("readme.txt")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("ReadMe.TXT")));
+    }
+
+    // /L lowercases directory names in the normal listing
+    [TestMethod]
+    public async Task Dir_L_DirectoryNamesAreLowercase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "MyFolder", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/L")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("myfolder")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("MyFolder")));
+    }
+
+    // /L with /B: bare format still produces lowercase names
+    [TestMethod]
+    public async Task Dir_L_WithBare_NamesAreLowercase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "Alpha.TXT", false);
+        fs.AddEntry('C', [], "Beta.DOC", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/L"), Token.Whitespace(" "), Token.Text("/B")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("alpha.txt"));
+        Assert.IsTrue(console.OutLines.Contains("beta.doc"));
+        Assert.IsFalse(console.OutLines.Contains("Alpha.TXT"));
+        Assert.IsFalse(console.OutLines.Contains("Beta.DOC"));
+    }
+
+    // /L with /W: wide format still produces lowercase names; dirs use [name]
+    [TestMethod]
+    public async Task Dir_L_WithWide_NamesAreLowercase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "Alpha.TXT", false);
+        fs.AddEntry('C', [], "SUBDIR", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/L"), Token.Whitespace(" "), Token.Text("/W")), bc, []);
+        string content = console.OutText;
+        Assert.IsTrue(content.Contains("alpha.txt"));
+        Assert.IsTrue(content.Contains("[subdir]"));
+        Assert.IsFalse(content.Contains("Alpha.TXT"));
+        Assert.IsFalse(content.Contains("SUBDIR"));
+    }
+
+    // Without /L, mixed-case names are preserved as stored
+    [TestMethod]
+    public async Task Dir_Default_NamesKeepOriginalCase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "MixedCase.TXT", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("MixedCase.TXT")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("mixedcase.txt")));
+    }
+
+    // /L lowercases multiple files with various mixed-case patterns
+    [TestMethod]
+    public async Task Dir_L_MixedCaseFiles_AllLowercased()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "UPPER.TXT", false);
+        fs.AddEntry('C', [], "lower.txt", false);
+        fs.AddEntry('C', [], "CamelCase.Dat", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/L")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("upper.txt"));
+        Assert.IsTrue(console.OutLines.Contains("lower.txt"));
+        Assert.IsTrue(console.OutLines.Contains("camelcase.dat"));
+    }
+
+    // /L does not affect the volume/directory header lines
+    [TestMethod]
+    public async Task Dir_L_HeaderLinesAreNotLowercased()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/L")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Volume")));
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory")));
+    }
+}
+
+[TestClass]
+public class DirNewLongFormatTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    // /N shows all files in the listing
+    [TestMethod]
+    public async Task Dir_N_ShowsAllFiles()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "document.txt", false, size: 1024);
+        fs.AddEntry('C', [], "image.png", false, size: 4096);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bc, []);
+        string content = console.OutText;
+        Assert.IsTrue(content.Contains("document.txt"));
+        Assert.IsTrue(content.Contains("image.png"));
+    }
+
+    // /N shows directories with <DIR> marker
+    [TestMethod]
+    public async Task Dir_N_ShowsDirectoriesWithDirMarker()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "subdir", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("subdir") && l.Contains("<DIR>")));
+    }
+
+    // /N still shows the volume header and directory info
+    [TestMethod]
+    public async Task Dir_N_ShowsVolumeHeaderAndDirectoryInfo()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false, size: 100);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Volume")));
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory")));
+    }
+
+    // /N still shows the summary (file count and total bytes)
+    [TestMethod]
+    public async Task Dir_N_ShowsSummaryLine()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false, size: 500);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("File(s)")));
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Dir(s)")));
+    }
+
+    // /N shows long filenames without truncation
+    [TestMethod]
+    public async Task Dir_N_WithLongFileName_IsNotTruncated()
+    {
+        string longName = "this_is_a_very_long_filename_that_exceeds_eight_chars.txt";
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], longName, false, size: 100);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains(longName)));
+    }
+
+    // /N and default produce the same file listing (long names shown in both)
+    [TestMethod]
+    public async Task Dir_N_ProducesSameFilesAsDefault()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "document.txt", false, size: 1234);
+        fs.AddEntry('C', [], "subdir", true);
+        var (cmdN, consoleN, bcN) = Setup(fs);
+        var (cmdDefault, consoleDefault, bcDefault) = Setup(fs);
+        await cmdN.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N")), bcN, []);
+        await cmdDefault.ExecuteAsync(TestArgs.For<DirCommand>(), bcDefault, []);
+        Assert.IsTrue(consoleN.OutLines.Any(l => l.Contains("document.txt")));
+        Assert.IsTrue(consoleDefault.OutLines.Any(l => l.Contains("document.txt")));
+        Assert.IsTrue(consoleN.OutLines.Any(l => l.Contains("subdir")));
+        Assert.IsTrue(consoleDefault.OutLines.Any(l => l.Contains("subdir")));
+    }
+
+    // /N combined with /B: bare names still work
+    [TestMethod]
+    public async Task Dir_N_WithBare_ShowsOnlyNames()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false, size: 999);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/N"), Token.Whitespace(" "), Token.Text("/B")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("file.txt"));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("Volume")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("bytes")));
+    }
+}
+
+[TestClass]
+public class DirSortOrderTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    // /O:N — sort by name ascending (alphabetical)
+    [TestMethod]
+    public async Task Dir_OColonN_SortsByNameAscending()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "mango.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:N")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("alpha.txt") < lines.IndexOf("mango.txt"));
+        Assert.IsTrue(lines.IndexOf("mango.txt") < lines.IndexOf("zebra.txt"));
+    }
+
+    // /ON (no colon) — prefix-option fallback, same effect as /O:N
+    [TestMethod]
+    public async Task Dir_ON_NoColon_SortsByNameAscending()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/ON")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("alpha.txt") < lines.IndexOf("zebra.txt"));
+    }
+
+    // /O:N comparison is case-insensitive
+    [TestMethod]
+    public async Task Dir_OColonN_SortIsNotCaseSensitive()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "BETA.txt", false);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:N")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("alpha.txt") < lines.IndexOf("BETA.txt"),
+            "Case-insensitive: alpha should appear before BETA");
+    }
+
+    // /O:-N — sort by name descending (reverse alphabetical)
+    [TestMethod]
+    public async Task Dir_OColonMinusN_SortsByNameDescending()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        fs.AddEntry('C', [], "mango.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:-N")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("zebra.txt") < lines.IndexOf("mango.txt"));
+        Assert.IsTrue(lines.IndexOf("mango.txt") < lines.IndexOf("alpha.txt"));
+    }
+
+    // /O:E — sort by extension ascending
+    [TestMethod]
+    public async Task Dir_OColonE_SortsByExtensionAscending()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        fs.AddEntry('C', [], "file.doc", false);
+        fs.AddEntry('C', [], "file.bat", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:E")), bc, []);
+        var lines = console.OutLines.ToList();
+        // .bat < .doc < .txt alphabetically
+        Assert.IsTrue(lines.IndexOf("file.bat") < lines.IndexOf("file.doc"));
+        Assert.IsTrue(lines.IndexOf("file.doc") < lines.IndexOf("file.txt"));
+    }
+
+    // /O:E — files with no extension sort before files with any extension
+    [TestMethod]
+    public async Task Dir_OColonE_NoExtensionSortedBeforeExtensions()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "readme", false);
+        fs.AddEntry('C', [], "file.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:E")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("readme") < lines.IndexOf("file.txt"),
+            "Empty extension should sort before .txt");
+    }
+
+    // /O:-E — sort by extension descending (reverse)
+    [TestMethod]
+    public async Task Dir_OColonMinusE_SortsByExtensionDescending()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        fs.AddEntry('C', [], "file.doc", false);
+        fs.AddEntry('C', [], "file.bat", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:-E")), bc, []);
+        var lines = console.OutLines.ToList();
+        // reversed: .txt > .doc > .bat
+        Assert.IsTrue(lines.IndexOf("file.txt") < lines.IndexOf("file.doc"));
+        Assert.IsTrue(lines.IndexOf("file.doc") < lines.IndexOf("file.bat"));
+    }
+
+    // /O:S — sort by size ascending (smallest first)
+    [TestMethod]
+    public async Task Dir_OColonS_SortsBySizeSmallestFirst()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 9000);
+        fs.AddEntry('C', [], "small.txt", false, size: 100);
+        fs.AddEntry('C', [], "medium.txt", false, size: 5000);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:S")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("small.txt") < lines.IndexOf("medium.txt"));
+        Assert.IsTrue(lines.IndexOf("medium.txt") < lines.IndexOf("big.txt"));
+    }
+
+    // /O:-S — sort by size descending (largest first)
+    [TestMethod]
+    public async Task Dir_OColonMinusS_SortsBySizeLargestFirst()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 9000);
+        fs.AddEntry('C', [], "small.txt", false, size: 100);
+        fs.AddEntry('C', [], "medium.txt", false, size: 5000);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:-S")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("big.txt") < lines.IndexOf("medium.txt"));
+        Assert.IsTrue(lines.IndexOf("medium.txt") < lines.IndexOf("small.txt"));
+    }
+
+    // /O:D — sort by date ascending (oldest first)
+    [TestMethod]
+    public async Task Dir_OColonD_SortsByDateOldestFirst()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "new.txt", false, date: new DateTime(2026, 3, 1));
+        fs.AddEntry('C', [], "old.txt", false, date: new DateTime(2024, 1, 1));
+        fs.AddEntry('C', [], "mid.txt", false, date: new DateTime(2025, 6, 15));
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:D")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("old.txt") < lines.IndexOf("mid.txt"));
+        Assert.IsTrue(lines.IndexOf("mid.txt") < lines.IndexOf("new.txt"));
+    }
+
+    // /O:-D — sort by date descending (newest first)
+    [TestMethod]
+    public async Task Dir_OColonMinusD_SortsByDateNewestFirst()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "new.txt", false, date: new DateTime(2026, 3, 1));
+        fs.AddEntry('C', [], "old.txt", false, date: new DateTime(2024, 1, 1));
+        fs.AddEntry('C', [], "mid.txt", false, date: new DateTime(2025, 6, 15));
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:-D")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("new.txt") < lines.IndexOf("mid.txt"));
+        Assert.IsTrue(lines.IndexOf("mid.txt") < lines.IndexOf("old.txt"));
+    }
+
+    // /O:G — directories appear before files regardless of name order
+    [TestMethod]
+    public async Task Dir_OColonG_GroupsDirsBeforeFiles()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "zfile.txt", false);
+        fs.AddEntry('C', [], "adir", true);
+        fs.AddEntry('C', [], "bfile.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:G")), bc, []);
+        var lines = console.OutLines.ToList();
+        int dirIdx = lines.IndexOf("adir");
+        int firstFileIdx = Math.Min(lines.IndexOf("zfile.txt"), lines.IndexOf("bfile.txt"));
+        Assert.IsTrue(dirIdx >= 0 && firstFileIdx >= 0 && dirIdx < firstFileIdx);
+    }
+
+    // /O:G with multiple dirs — all dirs appear before any file
+    [TestMethod]
+    public async Task Dir_OColonG_AllDirsBeforeAllFiles()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "z.txt", false);
+        fs.AddEntry('C', [], "b.txt", false);
+        fs.AddEntry('C', [], "zdir", true);
+        fs.AddEntry('C', [], "adir", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:G")), bc, []);
+        var lines = console.OutLines.ToList();
+        int lastDirIdx = Math.Max(lines.IndexOf("zdir"), lines.IndexOf("adir"));
+        int firstFileIdx = Math.Min(lines.IndexOf("z.txt"), lines.IndexOf("b.txt"));
+        Assert.IsTrue(lastDirIdx < firstFileIdx, "All directories should appear before any file");
+    }
+
+    // /O:GN — group dirs first, then within each group sort by name
+    [TestMethod]
+    public async Task Dir_OColonGN_GroupsDirsFirst_ThenSortsByName()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "zdir", true);
+        fs.AddEntry('C', [], "adir", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:GN")), bc, []);
+        var lines = console.OutLines.ToList();
+        int adirIdx = lines.IndexOf("adir");
+        int zdirIdx = lines.IndexOf("zdir");
+        int alphaIdx = lines.IndexOf("alpha.txt");
+        int zebraIdx = lines.IndexOf("zebra.txt");
+        // All dirs before all files
+        Assert.IsTrue(adirIdx < alphaIdx, "adir (dir) should appear before alpha.txt (file)");
+        Assert.IsTrue(zdirIdx < alphaIdx, "zdir (dir) should appear before alpha.txt (file)");
+        // Dirs sorted by name within the dir group
+        Assert.IsTrue(adirIdx < zdirIdx, "adir should sort before zdir within the dirs group");
+        // Files sorted by name within the file group
+        Assert.IsTrue(alphaIdx < zebraIdx, "alpha.txt should sort before zebra.txt within the files group");
+    }
+
+    // /O:GS — group dirs first, then within each group sort by size
+    [TestMethod]
+    public async Task Dir_OColonGS_GroupsDirsFirst_ThenSortsBySize()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 9000);
+        fs.AddEntry('C', [], "small.txt", false, size: 100);
+        fs.AddEntry('C', [], "adir", true);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:GS")), bc, []);
+        var lines = console.OutLines.ToList();
+        int dirIdx = lines.IndexOf("adir");
+        int smallIdx = lines.IndexOf("small.txt");
+        int bigIdx = lines.IndexOf("big.txt");
+        // Dir before files
+        Assert.IsTrue(dirIdx < smallIdx);
+        // Files sorted by size ascending
+        Assert.IsTrue(smallIdx < bigIdx);
+    }
+
+    // /O:N with a single file — always succeeds without error
+    [TestMethod]
+    public async Task Dir_OColonN_SingleFile_Succeeds()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "only.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        int result = await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:N")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutLines.Contains("only.txt"));
+    }
+
+    // /O:N with empty directory — no entries, no crash
+    [TestMethod]
+    public async Task Dir_OColonN_EmptyDirectory_ShowsEmptySummary()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        var (cmd, console, bc) = Setup(fs);
+        int result = await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/O:N")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("File(s)")));
+    }
+}
+
+[TestClass]
+public class DirRecursiveTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    [TestMethod]
+    public async Task Dir_S_RecursesIntoSubdirectories()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddDir('C', ["subdir"]);
+        fs.AddEntry('C', [], "root.txt", false);
+        fs.AddEntry('C', ["subdir"], "nested.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/S")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("root.txt"));
+        Assert.IsTrue(console.OutLines.Contains("nested.txt"));
+    }
+
+    [TestMethod]
+    public async Task Dir_S_ShowsMultipleDirectoryHeaders()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddDir('C', ["sub"]);
+        fs.AddEntry('C', [], "file1.txt", false);
+        fs.AddEntry('C', ["sub"], "file2.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/S")), bc, []);
+        var dirHeaders = console.OutLines.Where(l => l.Contains("Directory of")).ToList();
+        Assert.IsTrue(dirHeaders.Count >= 2);
+    }
+
+    [TestMethod]
+    public async Task Dir_S_WithWildcard_FindsInSubdirs()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddDir('C', ["subdir"]);
+        fs.AddEntry('C', [], "root.log", false);
+        fs.AddEntry('C', [], "root.txt", false);
+        fs.AddEntry('C', ["subdir"], "nested.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/S"), Token.Whitespace(" "), Token.Text("*.txt")), bc, []);
+        Assert.IsTrue(console.OutLines.Contains("root.txt"));
+        Assert.IsTrue(console.OutLines.Contains("nested.txt"));
+        Assert.IsFalse(console.OutLines.Contains("root.log"));
+    }
+}
+
+[TestClass]
+public class DirDircmdEnvironmentTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc, TestCommandContext ctx) Setup(
+        TestFileSystem fs, char drive = 'C')
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive(drive);
+        ctx.SetPath(drive, []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx }, ctx);
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdBare_OverriddenByWide_ShowsHeader()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/B";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/W")), bc, []);
+        Assert.IsTrue(console.OutText.Contains("Volume"));
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdWide_OverriddenByBare_HidesHeader()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/W";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B")), bc, []);
+        Assert.IsFalse(console.OutText.Contains("Volume"));
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdLowercase_WithoutOverride_Lowercases()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "UPPER.TXT", false);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/L";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
+        Assert.IsTrue(console.OutText.Contains("upper.txt"));
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdLowercase_OverriddenByNegateL_PreservesCase()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "UPPER.TXT", false);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/L";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/-L")), bc, []);
+        Assert.IsTrue(console.OutText.Contains("UPPER.TXT"));
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdSort_OverriddenByReverseSort()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/O:N";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/B"), Token.Whitespace(" "), Token.Text("/O:-N")), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf("zebra.txt") < lines.IndexOf("alpha.txt"));
+    }
+
+    [TestMethod]
+    public async Task Dir_DircmdSeparator_OverriddenByNegateC_NoCommas()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "big.txt", false, size: 1234567);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = "/C";
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/-C")), bc, []);
+        Assert.IsTrue(console.OutText.Contains("1234567"));
+        Assert.IsFalse(console.OutText.Contains("1,234,567"));
+    }
+
+    [DataTestMethod]
+    [DataRow("/A:H", "", "hidden.txt", DisplayName = "DIRCMD /A:H without override shows hidden")]
+    [DataRow("/A:H", "/-A", "visible.txt", DisplayName = "DIRCMD /A:H overridden shows visible")]
+    [DataRow("/A:D", "", "subdir", DisplayName = "DIRCMD /A:D without override shows dirs")]
+    [DataRow("/A:D", "/A:-D", "file.txt", DisplayName = "DIRCMD /A:D overridden shows files")]
+    public async Task Dir_Dircmd_AttributeFilter_Combinations(string dircmdValue, string cmdLineFlag, string expectedName)
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "visible.txt", false, attrs: FileAttributes.Normal);
+        fs.AddEntry('C', [], "hidden.txt", false, attrs: FileAttributes.Hidden);
+        fs.AddEntry('C', [], "file.txt", false);
+        fs.AddEntry('C', [], "subdir", true);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = dircmdValue;
+
+        var tokens = string.IsNullOrWhiteSpace(cmdLineFlag)
+            ? new IToken[] { Token.Text("/B") }
+            : new IToken[] { Token.Text("/B"), Token.Whitespace(" "), Token.Text(cmdLineFlag) };
+
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(tokens), bc, []);
+        Assert.IsTrue(console.OutLines.Contains(expectedName), $"Expected to find {expectedName} in output");
+    }
+
+    [DataTestMethod]
+    [DataRow("/O:N", "", "alpha.txt", "zebra.txt", DisplayName = "DIRCMD /O:N ascending")]
+    [DataRow("/O:N", "/O:-N", "zebra.txt", "alpha.txt", DisplayName = "DIRCMD /O:N overridden by reverse")]
+    [DataRow("/O:E", "", "file.bat", "file.txt", DisplayName = "DIRCMD /O:E by extension")]
+    [DataRow("/O:S", "", "small.txt", "big.txt", DisplayName = "DIRCMD /O:S by size")]
+    [DataRow("/O:GN", "", "adir", "alpha.txt", DisplayName = "DIRCMD /O:GN dirs first then alpha")]
+    public async Task Dir_Dircmd_SortOrder_Combinations(string dircmdValue, string cmdLineFlag, string firstExpected, string secondExpected)
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "alpha.txt", false);
+        fs.AddEntry('C', [], "zebra.txt", false);
+        fs.AddEntry('C', [], "file.bat", false);
+        fs.AddEntry('C', [], "file.txt", false);
+        fs.AddEntry('C', [], "small.txt", false, size: 100);
+        fs.AddEntry('C', [], "big.txt", false, size: 9000);
+        fs.AddEntry('C', [], "zfile.txt", false);
+        fs.AddEntry('C', [], "adir", true);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = dircmdValue;
+
+        var tokens = string.IsNullOrWhiteSpace(cmdLineFlag)
+            ? new IToken[] { Token.Text("/B") }
+            : new IToken[] { Token.Text("/B"), Token.Whitespace(" "), Token.Text(cmdLineFlag) };
+
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(tokens), bc, []);
+        var lines = console.OutLines.ToList();
+        Assert.IsTrue(lines.IndexOf(firstExpected) < lines.IndexOf(secondExpected),
+            $"{firstExpected} should appear before {secondExpected}");
+    }
+
+    [DataTestMethod]
+    [DataRow("/N", "", "<DIR>", DisplayName = "DIRCMD /N shows <DIR> marker")]
+    [DataRow("/N", "/-N", "<DIR>", DisplayName = "DIRCMD /N overridden still shows dirs")]
+    public async Task Dir_Dircmd_NewLongFormat_Combinations(string dircmdValue, string cmdLineFlag, string expectedMarker)
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "subdir", true);
+        var (cmd, console, bc, ctx) = Setup(fs);
+        ctx.EnvironmentVariables["DIRCMD"] = dircmdValue;
+
+        var tokens = string.IsNullOrWhiteSpace(cmdLineFlag)
+            ? Array.Empty<IToken>()
+            : new IToken[] { Token.Text(cmdLineFlag) };
+
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(tokens), bc, []);
+        Assert.IsTrue(console.OutText.Contains(expectedMarker));
+    }
+}
+
+[TestClass]
+public class DirUnimplementedFlagsTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs)
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive('C');
+        ctx.SetPath('C', []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    [DataTestMethod]
+    [DataRow("/P", DisplayName = "/P pause flag")]
+    [DataRow("/Q", DisplayName = "/Q owner flag")]
+    [DataRow("/T:C", DisplayName = "/T:C creation time")]
+    [DataRow("/T:A", DisplayName = "/T:A access time")]
+    [DataRow("/T:W", DisplayName = "/T:W write time")]
+    public async Task Dir_ImplementedFlags_DoNotCrash(string flag)
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        int result = await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text(flag)), bc, []);
+        Assert.AreEqual(0, result);
+    }
+}
+
+[TestClass]
+public class DirMissingFlagsTests
+{
+    private static (DirCommand cmd, TestConsole console, BatchContext bc) Setup(TestFileSystem fs)
+    {
+        var cmd = new DirCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs);
+        ctx.SetCurrentDrive('C');
+        ctx.SetPath('C', []);
+        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+    }
+
+    [DataTestMethod]
+    [DataRow("/D", DisplayName = "/D wide sorted by column")]
+    [DataRow("/R", DisplayName = "/R alternate data streams")]
+    [DataRow("/X", DisplayName = "/X short names")]
+    [DataRow("/4", DisplayName = "/4 four-digit years")]
+    public async Task Dir_FlagsNotInBuiltInCommand_TreatedAsPositional(string flag)
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        var (cmd, console, bc) = Setup(fs);
+        int result = await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text(flag)), bc, []);
+        Assert.AreEqual(0, result);
+    }
+}
+
+[TestClass]
+public class ShortNameTests
+{
+    [TestMethod]
+    public void DosFileSystem_EnumerateEntries_IncludesShortNamesWhenPresent()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            string longFileName = "This is a very long file name that exceeds 8.3 format.txt";
+            File.WriteAllText(Path.Combine(tempDir, longFileName), "test");
+
+            var fs = new DosFileSystem(new Dictionary<char, string> { ['T'] = tempDir + "\\" });
+            var entries = fs.EnumerateEntries('T', [], "*").ToList();
+
+            Assert.IsTrue(entries.Count > 0, "Should find at least one entry");
+            var entry = entries.FirstOrDefault(e => e.Name == longFileName);
+            Assert.IsNotNull(entry.Name, $"Should find '{longFileName}'. Found: {string.Join(", ", entries.Select(e => e.Name))}");
+            Assert.IsTrue(entry.ShortName.Length > 0, $"Long filename should have a short name. Got: '{entry.ShortName}'");
+            Assert.IsTrue(entry.ShortName.Length <= 12, $"Short name should be 8.3 format, got length {entry.ShortName.Length}");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, true);
+        }
+    }
+
+    [TestMethod]
+    public void TestFileSystem_EnumerateEntries_ReturnsSetShortName()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "LongFileName.txt", false);
+        fs.SetShortName('C', ["LongFileName.txt"], "LONGFI~1.TXT");
+
+        var entries = fs.EnumerateEntries('C', [], "*").ToList();
+        var entry = entries.Single(e => e.Name == "LongFileName.txt");
+        Assert.AreEqual("LONGFI~1.TXT", entry.ShortName);
+    }
+
+    [TestMethod]
+    public void TestFileSystem_EnumerateEntries_NoShortNameSet_ReturnsEmpty()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+
+        var entries = fs.EnumerateEntries('C', [], "*").ToList();
+        var entry = entries.Single(e => e.Name == "file.txt");
+        Assert.AreEqual("", entry.ShortName);
+    }
+}
+

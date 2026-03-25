@@ -1,4 +1,6 @@
-﻿namespace Bat.Context;
+﻿using Context;
+
+namespace Bat.Context;
 
 internal class UxFileSystemAdapter : FileSystem
 {
@@ -9,7 +11,7 @@ internal class UxFileSystemAdapter : FileSystem
     public override void CreateDirectory(char drive, string[] path) => throw new NotImplementedException();
     public override void DeleteFile(char drive, string[] path) => throw new NotImplementedException();
     public override void DeleteDirectory(char drive, string[] path, bool recursive) => throw new NotImplementedException();
-    public override IEnumerable<(string Name, bool IsDirectory)> EnumerateEntries(char drive, string[] path, string pattern) => throw new NotImplementedException();
+    public override IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern) => throw new NotImplementedException();
     public override Stream OpenRead(char drive, string[] path) => throw new NotImplementedException();
     public override Stream OpenWrite(char drive, string[] path, bool append) => throw new NotImplementedException();
     public override string ReadAllText(char drive, string[] path) => throw new NotImplementedException();

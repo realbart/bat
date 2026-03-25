@@ -116,9 +116,9 @@ public class DosFileSystemTests : IDisposable
 
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
 
-        CollectionAssert.Contains(entries, ("dir1", true));
-        CollectionAssert.Contains(entries, ("file1.txt", false));
-        CollectionAssert.Contains(entries, ("file2.log", false));
+        Assert.IsTrue(entries.Any(e => e.Name == "dir1" && e.IsDirectory));
+        Assert.IsTrue(entries.Any(e => e.Name == "file1.txt" && !e.IsDirectory));
+        Assert.IsTrue(entries.Any(e => e.Name == "file2.log" && !e.IsDirectory));
     }
 
     [TestMethod]
@@ -140,6 +140,65 @@ public class DosFileSystemTests : IDisposable
     {
         var entries = _fs.EnumerateEntries('Z', ["nosuchdir"], "*").ToList();
         Assert.AreEqual(0, entries.Count);
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_LongFileName_ReturnsShortName()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        string longName = "This is a very long file name that definitely exceeds 8.3 format.txt";
+        File.WriteAllText(Path.Combine(_testRoot, longName), "test");
+
+        var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
+        var entry = entries.Single(e => e.Name == longName);
+
+        Assert.IsTrue(entry.ShortName.Length > 0, "Long filename should have a short name");
+        Assert.IsTrue(entry.ShortName.Length <= 12, $"Short name should be 8.3 format, got: {entry.ShortName}");
+        Assert.IsTrue(entry.ShortName.Contains('~'), $"Short name should contain tilde, got: {entry.ShortName}");
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_ShortFileName_ShortNameMayBeEmpty()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        File.WriteAllText(Path.Combine(_testRoot, "short.tx"), "test");
+
+        var entries = _fs.EnumerateEntries('Z', [], "short.tx").ToList();
+        var entry = entries.Single();
+
+        Assert.AreEqual("short.tx", entry.Name);
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_MultipleFiles_AllHaveShortNames()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName1.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot, "AnotherVeryLongFileName2.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot, "YetAnotherExtremelyLongFileName3.txt"), "");
+
+        var entries = _fs.EnumerateEntries('Z', [], "*.txt").ToList();
+
+        Assert.AreEqual(3, entries.Count);
+        foreach (var entry in entries)
+        {
+            Assert.IsTrue(entry.ShortName.Length > 0, $"{entry.Name} should have a short name");
+        }
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_OnNonWindows_ReturnsEmptyShortNames()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        File.WriteAllText(Path.Combine(_testRoot, "file.txt"), "");
+        var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
+
+        Assert.IsTrue(entries.Any(e => e.Name == "file.txt"));
+        Assert.IsTrue(entries.All(e => e.ShortName == ""));
     }
 
     // ── File I/O ─────────────────────────────────────────────────────────────
