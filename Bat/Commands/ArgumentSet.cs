@@ -20,7 +20,8 @@ internal sealed class ArgumentSet : IArgumentSet
         bool isHelpRequest,
         FrozenSet<string> activeFlags,
         FrozenSet<string> negatedFlags,
-        FrozenDictionary<string, string[]> options)
+        FrozenDictionary<string, string[]> options,
+        string? errorMessage = null)
     {
         FullArgument = fullArgument;
         Positionals = positionals;
@@ -28,16 +29,18 @@ internal sealed class ArgumentSet : IArgumentSet
         _activeFlags = activeFlags;
         _negatedFlags = negatedFlags;
         _options = options;
+        ErrorMessage = errorMessage;
     }
 
     public string FullArgument { get; }
     public IReadOnlyList<string> Positionals { get; }
     public bool IsHelpRequest { get; }
+    public string? ErrorMessage { get; }
 
     public bool GetFlagValue(char name, bool defaultValue = false) => GetFlagValue(name.ToString(), defaultValue);
     public bool GetFlagValue(string name, bool defaultValue = false)
     {
-        string key = name.ToUpperInvariant();
+        var key = name.ToUpperInvariant();
         if (_activeFlags.Contains(key)) return true;
         if (_negatedFlags.Contains(key)) return false;
         return defaultValue;
@@ -51,13 +54,7 @@ internal sealed class ArgumentSet : IArgumentSet
     public string? GetValue(string name)
     {
         var vals = GetValues(name);
-        return vals.Length switch
-        {
-            0 => null,
-            1 => vals[0],
-            _ => throw new InvalidOperationException(
-                $"Option /{name.ToUpperInvariant()} has {vals.Length} values; expected at most 1.")
-        };
+        return vals.Length > 0 ? vals[0] : null;
     }
 
     /// <summary>
@@ -67,7 +64,7 @@ internal sealed class ArgumentSet : IArgumentSet
     /// </summary>
     public static ArgumentSet Parse(IReadOnlyList<IToken> tokens, ArgumentSpec spec)
     {
-        string fullArgument = string.Concat(tokens.Select(t => t.Raw)).TrimStart();
+        var fullArgument = string.Concat(tokens.Select(t => t.Raw)).TrimStart();
 
         // Build word list from tokens
         var words = new List<string>();
@@ -95,14 +92,14 @@ internal sealed class ArgumentSet : IArgumentSet
         var options = new Dictionary<string, List<string>>();
         var positionals = new List<string>();
 
-        int i = 0;
+        var i = 0;
         while (i < words.Count)
         {
-            string word = words[i];
+            var word = words[i];
             if (word.Length > 1 && (word[0] == '/' || word[0] == '-'))
             {
-                string body = word.Substring(1);
-                int colon = body.IndexOf(':');
+                var body = word.Substring(1);
+                var colon = body.IndexOf(':');
                 string switchName;
                 string? switchValue;
                 if (colon >= 0)
@@ -116,8 +113,9 @@ internal sealed class ArgumentSet : IArgumentSet
                     switchValue = null;
                 }
 
-                // /-X  negated flag (e.g. /-C disables thousand separator)
-                if (switchName.Length > 1 && switchName[0] == '-' && spec.Flags.Contains(switchName[1..]))
+                // /-X  negated flag or option (e.g. /-C disables separator, /-A clears attribute filter)
+                if (switchName.Length > 1 && switchName[0] == '-' &&
+                    (spec.Flags.Contains(switchName[1..]) || spec.Options.Contains(switchName[1..])))
                 {
                     negatedFlags.Add(switchName[1..]);
                     i++;
@@ -155,16 +153,32 @@ internal sealed class ArgumentSet : IArgumentSet
                 else
                 {
                     // Prefix-option match: /AH → option A with value H, /A-H → value -H
-                    string? prefixOpt = spec.Options
+                    var prefixOpt = spec.Options
                         .Where(o => switchName.StartsWith(o, StringComparison.Ordinal) && switchName.Length > o.Length)
                         .OrderByDescending(o => o.Length)
                         .FirstOrDefault();
                     if (prefixOpt != null)
                     {
-                        string prefixValue = body.Substring(prefixOpt.Length);
+                        var prefixValue = body.Substring(prefixOpt.Length);
                         if (!options.TryGetValue(prefixOpt, out var prefixList))
                             options[prefixOpt] = prefixList = [];
                         prefixList.Add(prefixValue);
+                    }
+                    else if (TrySplitCompoundFlags(body, spec.Flags, spec.Options, out var compoundFlags))
+                    {
+                        foreach (var flag in compoundFlags)
+                            flags.Add(flag);
+                    }
+                    else if (switchName.Length == 1)
+                    {
+                        return new ArgumentSet(
+                            fullArgument,
+                            [],
+                            isHelpRequest: false,
+                            FrozenSet<string>.Empty,
+                            FrozenSet<string>.Empty,
+                            FrozenDictionary<string, string[]>.Empty,
+                            errorMessage: $"Invalid switch - \"{switchName.ToLowerInvariant()}\".");
                     }
                     else
                     {
@@ -186,6 +200,42 @@ internal sealed class ArgumentSet : IArgumentSet
             isHelpRequest: false,
             flags.ToFrozenSet(),
             negatedFlags.ToFrozenSet(),
-            options.ToFrozenDictionary(k => k.Key, v => v.Value.ToArray()));
+            options.ToFrozenDictionary(k => k.Key, v => v.Value.ToArray()),
+            errorMessage: null);
+    }
+
+    private static bool TrySplitCompoundFlags(string body, FrozenSet<string> flags, FrozenSet<string> options, out List<string> splitFlags)
+    {
+        splitFlags = [];
+        if (body.Length == 0 || !body.Contains('/')) return false;
+
+        var parts = body.Split('/');
+        foreach (var part in parts)
+        {
+            if (part.Length == 0) continue;
+            var upper = part.ToUpperInvariant();
+            if (flags.Contains(upper))
+                splitFlags.Add(upper);
+            else
+            {
+                splitFlags.Clear();
+                return false;
+            }
+        }
+
+        return splitFlags.Count > 0;
+    }
+
+    internal static ArgumentSet ParseString(string argString, ArgumentSpec spec)
+    {
+        var tokens = new List<IToken>();
+        var first = true;
+        foreach (var word in argString.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!first) tokens.Add(new WhitespaceToken(" "));
+            tokens.Add(new TextToken(word));
+            first = false;
+        }
+        return Parse(tokens, spec);
     }
 }

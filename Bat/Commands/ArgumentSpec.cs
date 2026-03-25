@@ -23,9 +23,9 @@ internal record ArgumentSpec(
         var options = new HashSet<string>();
         foreach (var attr in attrs)
         {
-            foreach (string f in attr.Flags.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var f in attr.Flags.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 flags.Add(f.ToUpperInvariant());
-            foreach (string o in attr.Options.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var o in attr.Options.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 options.Add(o.ToUpperInvariant());
         }
         return new ArgumentSpec(flags.ToFrozenSet(), options.ToFrozenSet());

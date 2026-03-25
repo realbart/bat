@@ -1,9 +1,8 @@
 ﻿using Context;
 
-namespace Bat.Console
+namespace Bat.Console;
+
+internal interface IRepl
 {
-    internal interface IRepl
-    {
-        Task StartAsync(IContext context);
-    }
+    Task StartAsync(IContext context);
 }

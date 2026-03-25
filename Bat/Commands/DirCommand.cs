@@ -1,11 +1,12 @@
 using Bat.Console;
+using Bat.Context;
 using Bat.Execution;
 using Bat.Nodes;
 using Context;
 
 namespace Bat.Commands;
 
-[BuiltInCommand("dir", Flags = "B C W L S P Q N", Options = "A O T")]
+[BuiltInCommand("dir", Flags = "B C D R W L S P Q N X 4", Options = "A O T")]
 internal class DirCommand : ICommand
 {
     private const string HelpText = """
@@ -64,63 +65,30 @@ internal class DirCommand : ICommand
         bool GroupDirsFirst,
         string TimeField,
         bool Pause,
+        bool ShowShortNames,
+        bool ShowOwner,
         string Pattern);
+
+    private static readonly ArgumentSpec _spec = ArgumentSpec.From(
+        [new BuiltInCommandAttribute("dir") { Flags = "B C D R W L S P Q N X 4", Options = "A O T" }]);
 
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext,
         IReadOnlyList<Redirection> redirections)
     {
-        if (arguments.IsHelpRequest)
-        {
-            await batchContext.Console!.Out.WriteAsync(HelpText);
-            return 0;
-        }
+        if (arguments.IsHelpRequest) { await batchContext.Console.Out.WriteLineAsync(HelpText); return 0; }
 
-        var context = batchContext.Context!;
-        var console = batchContext.Console!;
-        var opts = BuildOptions(arguments);
-        string argPath = arguments.Positionals.FirstOrDefault() ?? "";
+        var context = batchContext.Context;
+        var console = batchContext.Console;
+        var dircmdStr = context.EnvironmentVariables.TryGetValue("DIRCMD", out var d) ? d : "";
+        var dircmdArgs = ArgumentSet.ParseString(dircmdStr, _spec);
+        var opts = BuildOptions(arguments, dircmdArgs);
+        var argPath = arguments.Positionals.Count > 0 ? arguments.Positionals[0] : "";
 
-        char drive = context.CurrentDrive;
-        string[] path = context.CurrentPath;
-        string pattern = opts.Pattern;
+        var drive = context.CurrentDrive;
+        var path = context.CurrentPath;
+        var pattern = opts.Pattern;
 
-        if (argPath.Length > 0)
-        {
-            // Separate path from pattern if wildcard present
-            string normalized = argPath.Replace('/', '\\');
-            if (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':')
-            {
-                drive = char.ToUpperInvariant(normalized[0]);
-                normalized = normalized.Substring(2);
-            }
-
-            int lastSep = normalized.LastIndexOf('\\');
-            if (lastSep >= 0)
-            {
-                string pathPart = normalized.Substring(0, lastSep);
-                pattern = normalized.Substring(lastSep + 1);
-                if (pattern.Length == 0) pattern = "*";
-                path = pathPart.Length == 0
-                    ? []
-                    : pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
-                // No wildcards in the trailing segment → treat it as a subdirectory to enter
-                if (pattern != "*" && !pattern.Contains('*') && !pattern.Contains('?'))
-                {
-                    path = [.. path, pattern];
-                    pattern = "*";
-                }
-            }
-            else if (normalized.Contains('*') || normalized.Contains('?'))
-            {
-                pattern = normalized;
-            }
-            else
-            {
-                // Treat as directory
-                path = [.. path, normalized];
-                pattern = "*";
-            }
-        }
+        if (argPath.Length > 0) (drive, path, pattern) = DosPath.ParseArgPath(argPath, drive, path);
 
         await ListDirectoryAsync(console, context, drive, path, opts, pattern, opts.Recursive);
         return 0;
@@ -129,18 +97,49 @@ internal class DirCommand : ICommand
     private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path,
         DirOptions opts, string pattern, bool recurse)
     {
-        if (!opts.BareNames)
+        if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
+
+        var entries = GetFilteredEntries(context, drive, path, pattern, opts);
+        if (entries == null)
         {
-            var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
-            uint serial = context.FileSystem.GetVolumeSerialNumber(drive);
-            string serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
-            await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
-            await console.Out.WriteLineAsync($" Volume Serial Number is {serialStr}");
-            await console.Out.WriteLineAsync();
-            await console.Out.WriteLineAsync($" Directory of {displayPath}");
-            await console.Out.WriteLineAsync();
+            await console.Error.WriteLineAsync("File Not Found");
+            return;
         }
 
+        var list = entries.ToList();
+        var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, list, opts);
+
+        if (!opts.BareNames) await WriteDirectorySummary(console, fileCount, dirCount, totalSize, opts);
+
+        if (!recurse) return;
+        foreach (var entry in context.FileSystem.EnumerateEntries(drive, path, "*").Where(e => e.IsDirectory))
+        {
+            await ListDirectoryAsync(console, context, drive, [.. path, entry.Name], opts, pattern, recurse: true);
+        }
+    }
+
+    private static async Task WriteDirectoryHeader(IConsole console, IContext context, char drive, string[] path)
+    {
+        var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
+        var serial = context.FileSystem.GetVolumeSerialNumber(drive);
+        var serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
+        await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
+        await console.Out.WriteLineAsync($" Volume Serial Number is {serialStr}");
+        await console.Out.WriteLineAsync();
+        await console.Out.WriteLineAsync($" Directory of {displayPath}");
+        await console.Out.WriteLineAsync();
+    }
+
+    private static async Task WriteDirectorySummary(IConsole console, int fileCount, int dirCount, long totalSize, DirOptions opts)
+    {
+        var totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
+        await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
+        await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)");
+        await console.Out.WriteLineAsync();
+    }
+
+    private static List<DosFileEntry>? GetFilteredEntries(IContext context, char drive, string[] path, string pattern, DirOptions opts)
+    {
         IEnumerable<DosFileEntry> entries;
         try
         {
@@ -148,21 +147,24 @@ internal class DirCommand : ICommand
         }
         catch (DirectoryNotFoundException)
         {
-            await console.Error.WriteLineAsync("File Not Found");
-            return;
+            return null;
         }
 
-        if (opts.AttributeFilter.Length > 0)
-            entries = entries.Where(e => MatchesAttributeFilter(context, drive, path, e, opts.AttributeFilter));
+        if (opts.AttributeFilter.Length > 0) entries = entries.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));
+        entries = ApplySortOrder(entries, opts);
+        return entries.ToList();
+    }
 
+    private static IEnumerable<DosFileEntry> ApplySortOrder(IEnumerable<DosFileEntry> entries, DirOptions opts)
+    {
         entries = opts.SortKey switch
         {
             "N" => opts.SortReverse
                 ? entries.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase)
                 : entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
             "E" => opts.SortReverse
-                ? entries.OrderByDescending(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
-                : entries.OrderBy(e => System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
+                ? entries.OrderByDescending(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
+                : entries.OrderBy(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
             "S" => opts.SortReverse
                 ? entries.OrderByDescending(e => e.Size)
                 : entries.OrderBy(e => e.Size),
@@ -175,104 +177,84 @@ internal class DirCommand : ICommand
         if (opts.GroupDirsFirst)
             entries = entries.OrderBy(e => e.IsDirectory ? 0 : 1);
 
-        var list = entries.ToList();
-        long totalSize = 0;
-        int fileCount = 0;
-        int dirCount = 0;
+        return entries;
+    }
 
+    private static async Task<(int FileCount, int DirCount, long TotalSize)> WriteEntriesAsync(
+        IConsole console, List<DosFileEntry> list, DirOptions opts)
+    {
         if (opts.WideFormat)
         {
             await WriteWideAsync(console, list, opts.Lowercase);
+            return (list.Count(e => !e.IsDirectory), list.Count(e => e.IsDirectory), list.Where(e => !e.IsDirectory).Sum(e => e.Size));
         }
-        else
+
+        long totalSize = 0;
+        var fileCount = 0;
+        var dirCount = 0;
+
+        foreach (var entry in list)
         {
-            foreach (var entry in list)
+            var displayName = opts.Lowercase ? entry.Name.ToLowerInvariant() : entry.Name;
+
+            if (opts.BareNames)
             {
-                string displayName = opts.Lowercase ? entry.Name.ToLowerInvariant() : entry.Name;
-                if (entry.IsDirectory)
-                {
-                    dirCount++;
-                    if (!opts.BareNames)
-                    {
-                        await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}    <DIR>          {displayName}");
-                    }
-                    else
-                    {
-                        await console.Out.WriteLineAsync(displayName);
-                    }
-                }
+                await console.Out.WriteLineAsync(displayName);
+                if (entry.IsDirectory) dirCount++;
                 else
                 {
                     totalSize += entry.Size;
                     fileCount++;
-                    if (!opts.BareNames)
-                    {
-                        string sizeStr = opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}";
-                        await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)} {sizeStr}   {displayName}");
-                    }
-                    else
-                    {
-                        await console.Out.WriteLineAsync(displayName);
-                    }
                 }
+                continue;
             }
-        }
 
-        if (!opts.BareNames)
-        {
-            string totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
-            await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
-            await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)");
-            await console.Out.WriteLineAsync();
-        }
+            var shortField = opts.ShowShortNames ? DosPath.FormatField(entry.ShortName, 12, 1) : "";
+            var ownerField = opts.ShowOwner ? DosPath.FormatField(entry.Owner, 23) : "";
 
-        if (recurse)
-        {
-            foreach (var entry in list.Where(e => e.IsDirectory))
+            if (entry.IsDirectory)
             {
-                var subPath = path.Append(entry.Name).ToArray();
-                await ListDirectoryAsync(console, context, drive, subPath, opts, pattern, recurse: true);
+                dirCount++;
+                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}    <DIR>          {ownerField}{shortField}{displayName}");
+            }
+            else
+            {
+                totalSize += entry.Size;
+                fileCount++;
+                var sizeStr = opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}";
+                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}   {sizeStr} {ownerField}{shortField}{displayName}");
             }
         }
+
+        return (fileCount, dirCount, totalSize);
     }
 
-    private static async Task WriteWideAsync(IConsole console, List<DosFileEntry> entries,
-        bool lower)
+    private static async Task WriteWideAsync(IConsole console, List<DosFileEntry> entries, bool lower)
     {
-        var cells = entries
-            .Select(e =>
-            {
-                string d = lower ? e.Name.ToLowerInvariant() : e.Name;
-                return e.IsDirectory ? $"[{d}]" : d;
-            })
-            .ToList();
+        var cells = entries.Select(e => e.IsDirectory ? $"[{(lower ? e.Name.ToLowerInvariant() : e.Name)}]" : (lower ? e.Name.ToLowerInvariant() : e.Name)).ToList();
         if (cells.Count == 0) return;
 
-        int maxWidth = cells.Max(c => c.Length);
-        int windowWidth = console.WindowWidth;
-        int numCols = Math.Max(1, windowWidth / maxWidth);
-        int colWidth = windowWidth / numCols;
+        var maxWidth = cells.Max(c => c.Length);
+        var numCols = Math.Max(1, console.WindowWidth / maxWidth);
+        var colWidth = console.WindowWidth / numCols;
 
-        int col = 0;
+        var col = 0;
         foreach (var cell in cells)
         {
             await console.Out.WriteAsync(cell.PadRight(colWidth));
-            col++;
-            if (col == numCols)
+            if (++col == numCols)
             {
                 await console.Out.WriteLineAsync();
                 col = 0;
             }
         }
-
         if (col > 0) await console.Out.WriteLineAsync();
     }
 
-    private static bool MatchesAttributeFilter(IContext context, char drive, string[] path,
-        DosFileEntry entry, string filter)
+    private static bool MatchesAttributeFilter(DosFileEntry entry, string filter)
     {
-        bool negate = false;
-        foreach (char c in filter)
+        var negate = false;
+        foreach (var c in filter)
         {
             if (c == '-')
             {
@@ -280,7 +262,7 @@ internal class DirCommand : ICommand
                 continue;
             }
 
-            bool has = c switch
+            var has = c switch
             {
                 'D' => entry.IsDirectory,
                 'H' => entry.Attributes.HasFlag(FileAttributes.Hidden),
@@ -292,44 +274,75 @@ internal class DirCommand : ICommand
                 'O' => entry.Attributes.HasFlag(FileAttributes.Offline),
                 _ => true
             };
-            if (negate ? has : !has) return false;
+            if (negate == has) return false;
             negate = false;
         }
 
         return true;
     }
 
-    private static string FormatDate(DateTime dt) =>
-        dt == DateTime.MinValue ? "                  " : $"{dt:MM/dd/yyyy  hh:mm tt}";
-
-    private static DirOptions BuildOptions(IArgumentSet args)
+    private static string FormatDate(DateTime dt)
     {
-        string sortArg = args.GetValue("O") ?? "";
-        bool sortReverse = sortArg.Contains('-');
-        string sortBody = sortArg.Replace("-", "");
-        bool groupDirsFirst = sortBody.Contains('G', StringComparison.OrdinalIgnoreCase);
+        if (dt == DateTime.MinValue) return "                  ";
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var dateStr = dt.ToString("d", culture);
+        var timeStr = dt.ToString("t", culture);
+        if (timeStr.Length < 8 && !timeStr.Contains(':')) timeStr = dt.ToString("HH:mm", culture);
+        else if (timeStr.Split(':')[0].Length == 1) timeStr = "0" + timeStr;
+        return $"{dateStr}  {timeStr}".PadRight(18);
+    }
+
+    private static bool IsExplicit(IArgumentSet args, string name)
+        => args.GetFlagValue(name, false) == args.GetFlagValue(name, true);
+
+    private static bool GetFlag(IArgumentSet cmdLine, IArgumentSet dircmd, string name, bool systemDefault = false)
+    {
+        if (IsExplicit(cmdLine, name)) return cmdLine.GetFlagValue(name);
+        if (IsExplicit(dircmd, name)) return dircmd.GetFlagValue(name);
+        return systemDefault;
+    }
+
+    private static string[] GetOptionValues(IArgumentSet cmdLine, IArgumentSet dircmd, string name)
+    {
+        if (IsExplicit(cmdLine, name) && !cmdLine.GetFlagValue(name)) return [];
+        var vals = cmdLine.GetValues(name);
+        if (vals.Length > 0) return vals;
+        return dircmd.GetValues(name);
+    }
+
+    private static DirOptions BuildOptions(IArgumentSet args, IArgumentSet dircmd)
+    {
+        var sortArg = args.GetValue("O") ?? dircmd.GetValue("O") ?? "";
+        var sortReverse = sortArg.Contains('-');
+        var sortBody = sortArg.Replace("-", "");
+        var groupDirsFirst = sortBody.Contains('G', StringComparison.OrdinalIgnoreCase);
         sortBody = sortBody.Replace("G", "").Replace("g", "");
-        string sortKey = sortBody.Length > 0
-            ? sortBody[0].ToString().ToUpperInvariant()
-            : (sortArg.Length > 0 && !groupDirsFirst ? "N" : "");
+        var sortKey = sortBody.Length > 0 ? sortBody[0].ToString().ToUpperInvariant()
+            : sortArg.Length > 0 && !groupDirsFirst ? "N" : "";
 
-        string timeArg = args.GetValue("T") ?? "";
-        string timeField = timeArg.Length > 0 ? timeArg[0].ToString().ToUpperInvariant() : "W";
+        var timeArg = args.GetValue("T") ?? dircmd.GetValue("T") ?? "";
+        var timeField = timeArg.Length > 0 ? timeArg[0].ToString().ToUpperInvariant() : "W";
 
-        string attributeFilter = string.Concat(args.GetValues("A"));
+        var hasExplicitA = args.GetValues("A").Length > 0 || dircmd.GetValues("A").Length > 0;
+        var attributeFilter = hasExplicitA
+            ? string.Concat(GetOptionValues(args, dircmd, "A"))
+            : "-H-S";
 
         return new DirOptions(
-            BareNames: args.GetFlagValue("B"),
-            WideFormat: args.GetFlagValue("W"),
-            Lowercase: args.GetFlagValue("L"),
-            Recursive: args.GetFlagValue("S"),
-            ThousandSeparator: args.GetFlagValue("C", defaultValue: true),
+            BareNames: IsExplicit(args, "B") ? args.GetFlagValue("B")
+                : (!IsExplicit(args, "W") || !args.GetFlagValue("W")) && GetFlag(args, dircmd, "B"),
+            WideFormat: GetFlag(args, dircmd, "W"),
+            Lowercase: GetFlag(args, dircmd, "L"),
+            Recursive: GetFlag(args, dircmd, "S"),
+            ThousandSeparator: GetFlag(args, dircmd, "C", systemDefault: true),
             AttributeFilter: attributeFilter,
             SortKey: sortKey,
             SortReverse: sortReverse,
             GroupDirsFirst: groupDirsFirst,
             TimeField: timeField,
-            Pause: args.GetFlagValue("P"),
+            Pause: GetFlag(args, dircmd, "P"),
+            ShowShortNames: GetFlag(args, dircmd, "X"),
+            ShowOwner: GetFlag(args, dircmd, "Q"),
             Pattern: "*");
     }
 }

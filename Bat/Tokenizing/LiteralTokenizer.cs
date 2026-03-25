@@ -21,7 +21,7 @@ internal static class LiteralTokenizer
 
         scanner.Advance(lineEnd.Length);
 
-        bool hasContinuation = tokenSet.Count > 0 && tokenSet[^1] is ContinuationToken;
+        var hasContinuation = tokenSet.Count > 0 && tokenSet[^1] is ContinuationToken;
 
         if (hasContinuation)
         {

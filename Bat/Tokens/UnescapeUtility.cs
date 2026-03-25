@@ -11,8 +11,8 @@ internal static class UnescapeUtility
 
         var source = raw.AsSpan();
         Span<char> buffer = stackalloc char[raw.Length];
-        int writePos = 0;
-        int readPos = 0;
+        var writePos = 0;
+        var readPos = 0;
 
         while (readPos < source.Length)
         {

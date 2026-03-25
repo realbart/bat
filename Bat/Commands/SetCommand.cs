@@ -1,4 +1,5 @@
-﻿using Bat.Execution;
+﻿using Bat.Console;
+using Bat.Execution;
 using Bat.Nodes;
 using Context;
 
@@ -10,72 +11,74 @@ internal class SetCommand : ICommand
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         var context = batchContext.Context!;
-        var console = batchContext.Console!;
-        string args = arguments.FullArgument;
+        var console = batchContext.Console;
+        var args = arguments.FullArgument;
 
-        if (args.Length == 0)
+        if (args.Length == 0) return await ListAllVariablesAsync(context, console);
+        if (arguments.GetFlagValue('A')) return await EvaluateArithmeticAsync(arguments, context, console, batchContext);
+        if (arguments.GetFlagValue('P')) return await PromptForVariableAsync(arguments, console, context);
+
+        var eqIdx = args.IndexOf('=');
+        if (eqIdx >= 0) return SetOrRemoveVariable(context, args, eqIdx);
+        if (context.ExtensionsEnabled) return await ListMatchingVariablesAsync(context, console, args);
+        return 0;
+    }
+
+    private static async Task<int> ListAllVariablesAsync(IContext context, IConsole console)
+    {
+        foreach (var kv in context.EnvironmentVariables.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
         {
-            foreach (var kv in context.EnvironmentVariables.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
-                await console.Out.WriteLineAsync($"{kv.Key}={kv.Value}");
-            return 0;
+            await console.Out.WriteLineAsync($"{kv.Key}={kv.Value}");
+        }
+        return 0;
+    }
+
+    private static async Task<int> EvaluateArithmeticAsync(IArgumentSet arguments, IContext context, IConsole console, BatchContext batchContext)
+    {
+        var result = ArithmeticEvaluator.Evaluate(string.Join(" ", arguments.Positionals), context);
+        if (batchContext.IsReplMode) await console.Out.WriteLineAsync(result.ToString());
+        return 0;
+    }
+
+    private static async Task<int> PromptForVariableAsync(IArgumentSet arguments, IConsole console, IContext context)
+    {
+        var rest = string.Join(" ", arguments.Positionals);
+        var eq = rest.IndexOf('=');
+        if (eq < 0)
+        {
+            await console.Error.WriteLineAsync("SET: missing '=' in /P argument.");
+            return 1;
         }
 
-        if (arguments.GetFlagValue('A'))
-        {
-            string expr = string.Join(" ", arguments.Positionals);
-            long result = ArithmeticEvaluator.Evaluate(expr, context);
-            if (batchContext.IsReplMode)
-                await console.Out.WriteLineAsync(result.ToString());
-            return 0;
-        }
+        var varName = rest[..eq];
+        var prompt = rest[(eq + 1)..];
+        if (prompt.Length > 0) await console.Out.WriteAsync(prompt);
+        var value = await console.In.ReadLineAsync();
+        if (value is not null) context.EnvironmentVariables[varName] = value;
+        return 0;
+    }
 
-        if (arguments.GetFlagValue('P'))
-        {
-            string rest = string.Join(" ", arguments.Positionals);
-            int eq = rest.IndexOf('=');
-            if (eq < 0)
-            {
-                await console.Error.WriteLineAsync("SET: missing '=' in /P argument.");
-                return 1;
-            }
-            string varName = rest.Substring(0, eq);
-            string prompt = rest.Substring(eq + 1);
-            if (prompt.Length > 0)
-                await console.Out.WriteAsync(prompt);
-            string? value = await console.In.ReadLineAsync();
-            if (value is not null)
-                context.EnvironmentVariables[varName] = value;
-            return 0;
-        }
+    private static int SetOrRemoveVariable(IContext context, string args, int eqIdx)
+    {
+        var name = args[..eqIdx];
+        var value = args[(eqIdx + 1)..];
+        if (value.Length == 0) context.EnvironmentVariables.Remove(name);
+        else context.EnvironmentVariables[name] = value;
+        return 0;
+    }
 
-        int eqIdx = args.IndexOf('=');
-        if (eqIdx >= 0)
+    private static async Task<int> ListMatchingVariablesAsync(IContext context, IConsole console, string args)
+    {
+        var matches = context.EnvironmentVariables
+            .Where(kv => kv.Key.StartsWith(args, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (matches.Count == 0)
         {
-            string name = args.Substring(0, eqIdx);
-            string value = args.Substring(eqIdx + 1);
-            if (value.Length == 0)
-                context.EnvironmentVariables.Remove(name);
-            else
-                context.EnvironmentVariables[name] = value;
-            return 0;
+            context.ErrorCode = 1;
+            return 1;
         }
-
-        if (context.ExtensionsEnabled)
-        {
-            var matches = context.EnvironmentVariables
-                .Where(kv => kv.Key.StartsWith(args, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (matches.Count == 0)
-            {
-                context.ErrorCode = 1;
-                return 1;
-            }
-            foreach (var kv in matches)
-                await console.Out.WriteLineAsync($"{kv.Key}={kv.Value}");
-            return 0;
-        }
-
+        foreach (var kv in matches) await console.Out.WriteLineAsync($"{kv.Key}={kv.Value}");
         return 0;
     }
 
@@ -95,7 +98,7 @@ internal class SetCommand : ICommand
 
             public long ParseExprList()
             {
-                long result = ParseAssign();
+                var result = ParseAssign();
                 while (TryConsume(','))
                     result = ParseAssign();
                 return result;
@@ -104,15 +107,15 @@ internal class SetCommand : ICommand
             private long ParseAssign()
             {
                 SkipWs();
-                int saved = _pos;
-                if (TryReadName(out string name))
+                var saved = _pos;
+                if (TryReadName(out var name))
                 {
                     SkipWs();
-                    if (TryReadAssignOp(out string op))
+                    if (TryReadAssignOp(out var op))
                     {
-                        long right = ParseAssign();
-                        long left = op == "=" ? 0 : GetVar(name);
-                        long result = op switch
+                        var right = ParseAssign();
+                        var left = op == "=" ? 0 : GetVar(name);
+                        var result = op switch
                         {
                             "=" => right,
                             "*=" => left * right,
@@ -139,7 +142,7 @@ internal class SetCommand : ICommand
 
             private long ParseBitwiseOr()
             {
-                long v = ParseBitwiseXor();
+                var v = ParseBitwiseXor();
                 while (Peek() == '|' && PeekAhead(1) != '|')
                 {
                     _pos++;
@@ -150,7 +153,7 @@ internal class SetCommand : ICommand
 
             private long ParseBitwiseXor()
             {
-                long v = ParseBitwiseAnd();
+                var v = ParseBitwiseAnd();
                 while (Peek() == '^')
                 {
                     _pos++;
@@ -161,7 +164,7 @@ internal class SetCommand : ICommand
 
             private long ParseBitwiseAnd()
             {
-                long v = ParseShift();
+                var v = ParseShift();
                 while (Peek() == '&' && PeekAhead(1) != '&')
                 {
                     _pos++;
@@ -172,7 +175,7 @@ internal class SetCommand : ICommand
 
             private long ParseShift()
             {
-                long v = ParseAdditive();
+                var v = ParseAdditive();
                 while (true)
                 {
                     SkipWs();
@@ -185,7 +188,7 @@ internal class SetCommand : ICommand
 
             private long ParseAdditive()
             {
-                long v = ParseMultiplicative();
+                var v = ParseMultiplicative();
                 while (true)
                 {
                     SkipWs();
@@ -198,7 +201,7 @@ internal class SetCommand : ICommand
 
             private long ParseMultiplicative()
             {
-                long v = ParseUnary();
+                var v = ParseUnary();
                 while (true)
                 {
                     SkipWs();
@@ -206,13 +209,13 @@ internal class SetCommand : ICommand
                     else if (Peek() == '/')
                     {
                         _pos++;
-                        long d = ParseUnary();
+                        var d = ParseUnary();
                         v = d != 0 ? v / d : 0;
                     }
                     else if (Peek() == '%')
                     {
                         _pos++;
-                        long d = ParseUnary();
+                        var d = ParseUnary();
                         v = d != 0 ? v % d : 0;
                     }
                     else break;
@@ -235,7 +238,7 @@ internal class SetCommand : ICommand
                 if (Peek() == '(')
                 {
                     _pos++;
-                    long v = ParseExprList();
+                    var v = ParseExprList();
                     SkipWs();
                     if (Peek() == ')') _pos++;
                     return v;
@@ -244,7 +247,7 @@ internal class SetCommand : ICommand
                     return ParseNumber();
                 if (char.IsLetter(Peek()) || Peek() == '_')
                 {
-                    TryReadName(out string name);
+                    TryReadName(out var name);
                     return GetVar(name);
                 }
                 return 0;
@@ -301,7 +304,7 @@ internal class SetCommand : ICommand
 
             private bool TryReadName(out string name)
             {
-                int start = _pos;
+                var start = _pos;
                 while (_pos < input.Length && (char.IsLetterOrDigit(input[_pos]) || input[_pos] == '_'))
                     _pos++;
                 if (_pos == start) { name = ""; return false; }
@@ -350,7 +353,7 @@ internal class SetCommand : ICommand
 
             private long GetVar(string name) =>
                 context.EnvironmentVariables.TryGetValue(name, out var s) &&
-                long.TryParse(s, out long v) ? v : 0;
+                long.TryParse(s, out var v) ? v : 0;
 
             private void SetVar(string name, long value) =>
                 context.EnvironmentVariables[name] = value.ToString();

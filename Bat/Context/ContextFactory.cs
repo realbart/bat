@@ -4,15 +4,7 @@ namespace Bat.Context;
 
 internal static class ContextFactory
 {
-    public static IContext CreateContext()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return new DosContext();
-        }
-        else
-        {
-            return new UxContextAdapter(new UxFileSystemAdapter());
-        }
-    }
+    public static IContext CreateContext() => OperatingSystem.IsWindows()
+        ? new DosContext()
+        : new UxContextAdapter(new UxFileSystemAdapter());
 }

@@ -29,7 +29,7 @@ public static class PromptExpander
     {
         var sb = new StringBuilder(format.Length * 2);
 
-        for (int i = 0; i < format.Length; i++)
+        for (var i = 0; i < format.Length; i++)
         {
             if (format[i] != '$' || i + 1 >= format.Length)
             {

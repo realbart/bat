@@ -1,16 +1,13 @@
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Context;
 
 namespace Bat.Context;
 
-internal partial class DosFileSystem : FileSystem
+internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
 {
-    private readonly Dictionary<char, string> _roots;
-
-    public DosFileSystem(Dictionary<char, string> roots)
-    {
-        _roots = new Dictionary<char, string>(roots);
-    }
+    private readonly Dictionary<char, string> _roots = new Dictionary<char, string>(roots);
 
     public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
 
@@ -26,7 +23,7 @@ internal partial class DosFileSystem : FileSystem
 
     protected override uint GetVolumeSerialNumber(string nativeRoot)
     {
-        var hash = GetVolumeInformationW(nativeRoot, null, 0, out uint serial, out _, out _, null, 0)
+        var hash = GetVolumeInformationW(nativeRoot, null, 0, out var serial, out _, out _, null, 0)
             ? serial : 0;
 
         return nativeRoot.Length > 3
@@ -69,21 +66,24 @@ internal partial class DosFileSystem : FileSystem
             foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
             {
                 var name = Path.GetFileName(entry);
-                bool isDir = Directory.Exists(entry);
+                var isDir = Directory.Exists(entry);
                 var info = new FileInfo(entry);
+                var owner = GetFileOwner(entry);
                 yield return new DosFileEntry(
                     name,
                     isDir,
                     "",
                     isDir ? 0 : info.Length,
                     File.GetLastWriteTime(entry),
-                    File.GetAttributes(entry));
+                    File.GetAttributes(entry),
+                    owner);
             }
             yield break;
         }
 
-        string searchPath = Path.Combine(GetNativePath(drive, path), pattern);
-        IntPtr handle = FindFirstFileW(searchPath, out var data);
+        var searchPath = Path.Combine(GetNativePath(drive, path), pattern);
+        var dirPath = GetNativePath(drive, path);
+        var handle = FindFirstFileW(searchPath, out var data);
 
         if (handle == new IntPtr(-1))
             yield break;
@@ -92,20 +92,23 @@ internal partial class DosFileSystem : FileSystem
         {
             do
             {
-                if (data.cFileName is "." or "..")
-                    continue;
+                if (data.cFileName != "..")
+                {
+                    var isDir = (data.dwFileAttributes & 0x10) != 0;
+                    var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+                    var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
+                    var fullPath = Path.Combine(dirPath, data.cFileName);
+                    var owner = GetFileOwner(fullPath);
 
-                bool isDir = (data.dwFileAttributes & 0x10) != 0;
-                long size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
-                DateTime lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
-
-                yield return new DosFileEntry(
-                    data.cFileName,
-                    isDir,
-                    data.cAlternateFileName ?? "",
-                    size,
-                    lastWrite,
-                    (FileAttributes)data.dwFileAttributes);
+                    yield return new DosFileEntry(
+                        data.cFileName,
+                        isDir,
+                        data.cAlternateFileName ?? "",
+                        size,
+                        lastWrite,
+                        (FileAttributes)data.dwFileAttributes,
+                        owner);
+                }
             }
             while (FindNextFileW(handle, out data));
         }
@@ -117,9 +120,25 @@ internal partial class DosFileSystem : FileSystem
 
     private static DateTime FileTimeToDateTime(System.Runtime.InteropServices.ComTypes.FILETIME ft)
     {
-        long fileTime = ((long)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
+        var fileTime = ((long)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
         if (fileTime == 0) return DateTime.MinValue;
-        return DateTime.FromFileTimeUtc(fileTime).ToLocalTime();
+        return DateTime.FromFileTime(fileTime);
+    }
+
+    private static string GetFileOwner(string fullPath)
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows()) return "";
+            var fileInfo = new FileInfo(fullPath);
+            var fileSecurity = fileInfo.GetAccessControl();
+            var owner = fileSecurity.GetOwner(typeof(NTAccount));
+            return owner?.Value ?? "";
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     public override void DeleteFile(char drive, string[] path) =>

@@ -5,7 +5,7 @@ namespace Bat.Context;
 internal abstract class Context(IFileSystem fileSystem) : IContext
 {
     public int ErrorCode { get; set; } = 0;
-    public Dictionary<string, string> EnvironmentVariables { get; } = [];
+    public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
     protected readonly Dictionary<char, string[]> CurrentFolders = [];
     public char CurrentDrive { get; protected set; } = 'C';
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
@@ -30,18 +30,18 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
 
     protected void InitializeFromEnvironment()
     {
-        // Copy all process environment variables into the context
-        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
-            if (entry.Key is string key && entry.Value is string value)
-                EnvironmentVariables[key] = value;
+            if (entry.Key is string key && entry.Value is string value) EnvironmentVariables[key] = value;
         }
 
-        // PROMPT: if not provided by the environment, default to $P$G
-        if (!EnvironmentVariables.ContainsKey("PROMPT"))
-            EnvironmentVariables["PROMPT"] = "$P$G";
+        if (EnvironmentVariables.TryGetValue("PATH", out var hostPath))
+        {
+            EnvironmentVariables["PATH"] = PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
+        }
 
-        // Current drive + path: platform-specific
+        if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
+
         InitializeCurrentDirectory();
     }
 

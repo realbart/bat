@@ -13,7 +13,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NoParameters_ReturnsOriginal()
         {
             // Arrange
-            var bc = new BatchContext();
+            var bc = new BatchContext { Console = null!, Context = null! };
             var line = "echo hello world";
 
             // Act
@@ -27,7 +27,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_SingleParameter_Expands()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", "arg1", "arg2", null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", "arg2", null, null, null, null, null, null, null] };
             var line = "echo %1 and %2";
 
             // Act
@@ -41,7 +41,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NullParameter_RemainsLiteral()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
             var line = "echo %1 and %2";
 
             // Act
@@ -55,7 +55,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_MixedParameters_ExpandsOnlySet()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", "arg1", null, "arg3", null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", null, "arg3", null, null, null, null, null, null] };
             var line = "echo %1 %2 %3";
 
             // Act
@@ -69,7 +69,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_Parameter0_ExpandsToFileName()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", "arg1", null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", null, null, null, null, null, null, null, null] };
             var line = "echo Running %0 with %1";
 
             // Act
@@ -83,7 +83,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_AllParameters_Expands()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null] };
             var line = "echo %*";
 
             // Act
@@ -97,7 +97,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_AllParametersEmpty_ExpandsToEmpty()
         {
             // Arrange
-            var bc = new BatchContext { Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
             var line = "echo %*";
 
             // Act
@@ -113,6 +113,8 @@ public class ExpanderTests
             // Arrange
             var bc = new BatchContext 
             { 
+                Console = null!,
+                Context = null!,
                 Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null],
                 ShiftOffset = 1
             };
@@ -129,7 +131,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_EmptyString_ReturnsEmpty()
         {
             // Arrange
-            var bc = new BatchContext();
+            var bc = new BatchContext { Console = null!, Context = null! };
             var line = "";
 
             // Act
@@ -143,7 +145,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NullString_ReturnsNull()
         {
             // Arrange
-            var bc = new BatchContext();
+            var bc = new BatchContext { Console = null!, Context = null! };
             string? line = null;
 
             // Act

@@ -9,7 +9,7 @@ public class BatchContextTests
     public void BatchContext_DefaultConstruction_InitializesCorrectly()
     {
         // Arrange & Act
-        var bc = new BatchContext();
+        var bc = new BatchContext { Console = null!, Context = null! };
 
         // Assert
         Assert.IsNull(bc.BatchFilePath);
@@ -21,7 +21,7 @@ public class BatchContextTests
         Assert.AreEqual(0, bc.ShiftOffset);
         Assert.IsNotNull(bc.SetLocalStack);
         Assert.IsEmpty(bc.SetLocalStack);
-        Assert.IsNull(bc.prev);
+        Assert.IsNull(bc.Prev);
         Assert.IsNull(bc.LabelPositions);
     }
 
@@ -29,7 +29,7 @@ public class BatchContextTests
     public void BatchContext_IsReplMode_TrueWhenNoFilePath()
     {
         // Arrange
-        var bc = new BatchContext { BatchFilePath = null };
+        var bc = new BatchContext { BatchFilePath = null, Console = null!, Context = null! };
 
         // Act & Assert
         Assert.IsTrue(bc.IsReplMode);
@@ -40,7 +40,7 @@ public class BatchContextTests
     public void BatchContext_IsBatchFile_TrueWhenFilePathSet()
     {
         // Arrange
-        var bc = new BatchContext { BatchFilePath = "test.bat" };
+        var bc = new BatchContext { BatchFilePath = "test.bat", Console = null!, Context = null! };
 
         // Act & Assert
         Assert.IsFalse(bc.IsReplMode);
@@ -51,7 +51,7 @@ public class BatchContextTests
     public void BatchContext_Parameters_CanBeSet()
     {
         // Arrange
-        var bc = new BatchContext();
+        var bc = new BatchContext { Console = null!, Context = null! };
 
         // Act
         bc.Parameters[0] = "test.bat";
@@ -68,7 +68,7 @@ public class BatchContextTests
     public void BatchContext_SetLocalStack_CanPushAndPop()
     {
         // Arrange
-        var bc = new BatchContext();
+        var bc = new BatchContext { Console = null!, Context = null! };
         var snapshot = new EnvironmentSnapshot(
             new Dictionary<string, string> { ["TEST"] = "value" },
             new Dictionary<char, string[]> { ['C'] = ["Users", "Test"] },
@@ -89,12 +89,12 @@ public class BatchContextTests
     public void BatchContext_CallNesting_CanBeLinked()
     {
         // Arrange
-        var parent = new BatchContext { BatchFilePath = "parent.bat" };
-        var child = new BatchContext { BatchFilePath = "child.bat", prev = parent };
+        var parent = new BatchContext { BatchFilePath = "parent.bat", Console = null!, Context = null! };
+        var child = new BatchContext { BatchFilePath = "child.bat", Prev = parent, Console = null!, Context = null! };
 
         // Assert
-        Assert.AreEqual(parent, child.prev);
-        Assert.IsNull(parent.prev);
+        Assert.AreEqual(parent, child.Prev);
+        Assert.IsNull(parent.Prev);
     }
 
     [TestMethod]

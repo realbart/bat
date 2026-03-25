@@ -1,11 +1,10 @@
-﻿namespace Bat.Console
+﻿namespace Bat.Console;
+
+internal interface IConsole
 {
-    internal interface IConsole
-    {
-        TextWriter Error { get; }
-        TextReader In { get; }
-        TextWriter Out { get; }
-        int WindowWidth { get; }
-        int WindowHeight { get; }
-    }
+    TextWriter Error { get; }
+    TextReader In { get; }
+    TextWriter Out { get; }
+    int WindowWidth { get; }
+    int WindowHeight { get; }
 }

@@ -51,6 +51,34 @@ public class BasicTokenization
         Assert.IsFalse(lines[0] is EmptyLine);
         Assert.AreEqual("echo 1", result.ToString());
     }
+
+    [TestMethod]
+    public void BackslashCommand_TokenizesWithoutHang()
+    {
+        var result = Parser.Parse(@"\notepad");
+
+        var tokens = result.FirstLine.ToList();
+        Assert.IsTrue(tokens.Any(t => t is CommandToken cmd && cmd.Raw == @"\notepad"));
+    }
+
+    [TestMethod]
+    public void BackslashPath_TokenizesAsOneToken()
+    {
+        var result = Parser.Parse(@"\Windows\notepad.exe");
+
+        var tokens = result.FirstLine.ToList();
+        Assert.IsTrue(tokens.Any(t => t is CommandToken cmd && cmd.Raw == @"\Windows\notepad.exe"));
+    }
+
+    [TestMethod]
+    public void DirSlashW_StillSplitsOnSlash()
+    {
+        var result = Parser.Parse("dir/w");
+
+        var tokens = result.FirstLine.ToList();
+        Assert.IsTrue(tokens[0] is BuiltInCommandToken<DirCommand>);
+        Assert.IsTrue(tokens.Any(t => t is TextToken txt && txt.Raw == "/w"));
+    }
 }
 
 [TestClass]
@@ -436,7 +464,7 @@ public class ComplexScenarios
     {
         var fileSystem = new DosFileSystem();
         context = new DosContext(fileSystem);
-        context.EnvironmentVariables.Add("PATH", "C:\\Windows\\System32");
+        context.EnvironmentVariables["PATH"] = "C:\\Windows\\System32";
     }
 
     [TestMethod]
@@ -557,6 +585,8 @@ public class ComplexScenarios
     [DataRow("for %%i in (*.txt) do (echo %%i)")]
     [DataRow("if else == foo echo match")]
     [DataRow("setlocal")]
+    [DataRow(@"\notepad")]
+    [DataRow(@"\Windows\notepad.exe")]
     [DataRow("endlocal")]
     [DataRow("exit")]
     [DataRow("quit")]
@@ -994,27 +1024,27 @@ public class MixedEscapeScenarios
 public class DirCommandSyntaxVariants
 {
     // CMD:  dir\w  →  dir \w  (lists root-relative path \w; "File Not Found" if absent)
-    // BAT:  "dir\w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    // BAT:  "dir\w" is read as one CommandToken by the tokenizer; the Dispatcher splits at \
+    //       and runs DirCommand with argument \w — same end result.
     [TestMethod]
-    public void DirBackslashW_ParsesAsGenericCommand()
+    public void DirBackslashW_ParsesAsCommandToken()
     {
         var result = Parser.Parse(@"dir\w");
 
         var token = result.LastLine.First();
-        Assert.IsTrue(token is CommandToken);
-        Assert.IsFalse(token is IBuiltInCommandToken);
+        Assert.IsTrue(token is CommandToken, $"Expected CommandToken, got {token.GetType().Name}");
+        Assert.AreEqual(@"dir\w", token.Raw);
     }
 
     // CMD:  dir/w  →  dir /w  (wide format; exit 0)
-    // BAT:  "dir/w" is read as one word by ReadWord → resolves to CommandToken, not DirCommand.
+    // BAT:  "dir/w" is now split by ReadWord at / → BuiltInCommandToken<DirCommand> + /w flag
     [TestMethod]
-    public void DirSlashW_ParsesAsGenericCommand()
+    public void DirSlashW_ParsesAsBuiltInCommand()
     {
         var result = Parser.Parse("dir/w");
 
         var token = result.LastLine.First();
-        Assert.IsTrue(token is CommandToken);
-        Assert.IsFalse(token is IBuiltInCommandToken);
+        Assert.IsTrue(token is BuiltInCommandToken<DirCommand>, $"Expected BuiltInCommandToken<DirCommand>, got {token.GetType().Name}");
     }
 
     // CMD:  dir-w  →  not recognised as internal/external command; exit 1.

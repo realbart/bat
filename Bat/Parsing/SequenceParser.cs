@@ -86,7 +86,7 @@ internal static class SequenceParser
         var leadingWs = reader.ConsumeWhitespace();
         var current = reader.Current;
 
-        bool matches = level switch
+        var matches = level switch
         {
             OpLevel.Multi => current is CommandSeparatorToken,
             OpLevel.Or => current is ConditionalOrToken,

@@ -26,14 +26,21 @@ internal static class CommandTokenizer
     /// <summary>
     /// Reads characters until a special character or whitespace is encountered.
     /// Forms the basis for command names and text arguments.
+    /// If expectingCommand is true, / terminates the word after the first character (for dir/w → dir + /w).
+    /// \ is never a terminator: it is a path separator and part of the command name.
     /// </summary>
     private static string ReadWord(ref Scanner scanner)
     {
         var start = scanner.Position;
-        while (!scanner.IsAtEnd && scanner.Ch0 is not ' ' and not '\t' and not '\r' and not '\n'
-               and not '(' and not ')' and not '"' and not '\'' and not '%' and not '!' 
-               and not '&' and not '|' and not '<' and not '>' and not '=' and not '^')
+        var expectingCommand = TokenizerHelpers.IsExpectingCommand(ref scanner);
+        while (!scanner.IsAtEnd)
         {
+            var ch = scanner.Ch0;
+            if (ch is ' ' or '\t' or '\r' or '\n' or '(' or ')' or '"' or '\'' or '%' or '!'
+                or '&' or '|' or '<' or '>' or '=' or '^')
+                break;
+            if (expectingCommand && scanner.Position > start && ch == '/')
+                break;
             scanner.Advance();
         }
         return scanner.Substring(start);

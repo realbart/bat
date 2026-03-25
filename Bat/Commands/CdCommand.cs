@@ -45,20 +45,24 @@ internal class CdCommand : ICommand
 
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteAsync(HelpText); return 0; }
-
-        var context = batchContext.Context!;
-        bool slashD = arguments.GetFlagValue('D');
-        string positional = arguments.Positionals.FirstOrDefault() ?? "";
-
-        if (positional.Length == 0)
+        if (arguments.IsHelpRequest)
         {
-            await batchContext.Console!.Out.WriteLineAsync(context.CurrentPathDisplayName);
+            await batchContext.Console.Out.WriteAsync(HelpText);
             return 0;
         }
 
-        char targetDrive = context.CurrentDrive;
-        string pathPart = positional;
+        var context = batchContext.Context;
+        var slashD = arguments.GetFlagValue('D');
+        var positional = arguments.Positionals.FirstOrDefault() ?? "";
+
+        if (positional.Length == 0)
+        {
+            await batchContext.Console.Out.WriteLineAsync(context.CurrentPathDisplayName);
+            return 0;
+        }
+
+        var targetDrive = context.CurrentDrive;
+        var pathPart = positional;
 
         if (positional.Length >= 2 && char.IsLetter(positional[0]) && positional[1] == ':')
         {
@@ -66,32 +70,28 @@ internal class CdCommand : ICommand
             pathPart = positional.Substring(2);
         }
 
-        // CD D: (no path, no /D) → display current directory of that drive without switching
         if (pathPart.Length == 0 && !slashD)
         {
-            await batchContext.Console!.Out.WriteLineAsync(
-                context.FileSystem.GetFullPathDisplayName(targetDrive, context.GetPathForDrive(targetDrive)));
+            await batchContext.Console!.Out.WriteLineAsync(context.FileSystem.GetFullPathDisplayName(targetDrive, context.GetPathForDrive(targetDrive)));
             return 0;
         }
 
-        // CD /D D: (no path, with /D) → switch to that drive's current directory
         if (pathPart.Length == 0)
         {
             context.SetCurrentDrive(targetDrive);
             return 0;
         }
 
-        string[] newPath = ResolvePath(context, targetDrive, pathPart);
+        var newPath = ResolvePath(context, targetDrive, pathPart);
 
         if (!context.FileSystem.DirectoryExists(targetDrive, newPath))
         {
-            await batchContext.Console!.Error.WriteLineAsync("The system cannot find the path specified.");
+            await batchContext.Console.Error.WriteLineAsync("The system cannot find the path specified.");
             return 1;
         }
 
         context.SetPath(targetDrive, newPath);
-        if (slashD || targetDrive == context.CurrentDrive)
-            context.SetCurrentDrive(targetDrive);
+        if (slashD || targetDrive == context.CurrentDrive) context.SetCurrentDrive(targetDrive);
         return 0;
     }
 
