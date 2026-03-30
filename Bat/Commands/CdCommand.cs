@@ -45,11 +45,7 @@ internal class CdCommand : ICommand
 
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        if (arguments.IsHelpRequest)
-        {
-            await batchContext.Console.Out.WriteAsync(HelpText);
-            return 0;
-        }
+        if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteAsync(HelpText); return 0; }
 
         var context = batchContext.Context;
         var slashD = arguments.GetFlagValue('D');
