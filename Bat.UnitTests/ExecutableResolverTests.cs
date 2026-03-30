@@ -167,10 +167,9 @@ public class ExecutableResolverTests
         Assert.AreEqual(@"Z:\myprog.com", result);
     }
 
-    // Our priority is .bat > .cmd > .exe > .com > .dll
-    // CMD.EXE uses .COM > .EXE > .BAT > .CMD — documented deviation.
+    // CMD.EXE priority: .bat > .cmd > .com > .exe > .dll  — .com beats .exe
     [TestMethod]
-    public void Resolve_ExePriorityOverCom_MatchesOurOrder()
+    public void Resolve_ComPriorityOverExe_MatchesCmdOrder()
     {
         var fs = new TestFileSystem();
         fs.AddDir('Z', []);
@@ -182,6 +181,6 @@ public class ExecutableResolverTests
         var result = ExecutableResolver.Resolve("prog", context);
 
         Assert.IsNotNull(result);
-        Assert.IsTrue(result!.EndsWith(".exe"), ".exe has priority over .com in our implementation");
+        Assert.IsTrue(result!.EndsWith(".com"), ".com has priority over .exe, matching CMD.EXE order");
     }
 }
