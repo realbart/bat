@@ -38,17 +38,17 @@ internal static class ExecutableTypeDetector
 
     private static ExecutableType DetectFromHeaders(FileStream fs, BinaryReader br)
     {
-        if (br.BaseStream.Length < 4) return ExecutableType.Unknown;
+        if (br.BaseStream.Length < 4) return ExecutableType.Document;
 
         var firstBytes = br.ReadUInt16();
         if (firstBytes == 0x2123) return ExecutableType.WindowsConsole;
-        if (br.BaseStream.Length < 64) return ExecutableType.Unknown;
+        if (br.BaseStream.Length < 64) return ExecutableType.Document;
 
         fs.Seek(0, SeekOrigin.Begin);
         var signature = br.ReadUInt32();
 
         if (signature == ELF_SIGNATURE) return ExecutableType.WindowsConsole;
-        if ((signature & 0xFFFF) != IMAGE_DOS_SIGNATURE) return ExecutableType.Unknown;
+        if ((signature & 0xFFFF) != IMAGE_DOS_SIGNATURE) return ExecutableType.Document;
 
         return DetectPeSubsystem(fs, br);
     }

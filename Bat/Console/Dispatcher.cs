@@ -148,6 +148,7 @@ internal class Dispatcher : IDispatcher
             ExecutableType.DotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false)),
             ExecutableType.WindowsGui => new NativeExecutor(waitForExit: false, isGuiApp: true),
             ExecutableType.WindowsConsole => new NativeExecutor(waitForExit: true, isGuiApp: false),
+            ExecutableType.Document => new NativeExecutor(waitForExit: false, isGuiApp: true),
             _ => new NativeExecutor(waitForExit: true, isGuiApp: false)
         };
     }

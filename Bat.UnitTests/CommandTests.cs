@@ -1975,3 +1975,60 @@ public class DirQFlagTests
     }
 }
 
+[TestClass]
+public class ExecutableTypeDetectorTests : IDisposable
+{
+    private readonly string _testDir = Path.Combine(Path.GetTempPath(), $"BatDetectorTest_{Guid.NewGuid():N}");
+
+    public ExecutableTypeDetectorTests() => Directory.CreateDirectory(_testDir);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_testDir)) Directory.Delete(_testDir, recursive: true);
+    }
+
+    private string Write(string name, string content)
+    {
+        var path = Path.Combine(_testDir, name);
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    [TestMethod]
+    public void GetExecutableType_TextFile_ReturnsDocument()
+    {
+        var path = Write("hi.txt", "hello world");
+        Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
+    }
+
+    [TestMethod]
+    public void GetExecutableType_JsonFile_ReturnsDocument()
+    {
+        var path = Write("config.json", """{"key":"value"}""");
+        Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
+    }
+
+    [TestMethod]
+    public void GetExecutableType_EmptyFile_ReturnsDocument()
+    {
+        var path = Write("empty.txt", "");
+        Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
+    }
+
+    [TestMethod]
+    public void GetExecutableType_NonExistentFile_ReturnsUnknown()
+    {
+        var path = Path.Combine(_testDir, "doesnotexist.txt");
+        Assert.AreEqual(ExecutableType.Unknown, ExecutableTypeDetector.GetExecutableType(path));
+    }
+
+    [TestMethod]
+    public void GetExecutableType_BatchFile_ReturnsDocument()
+    {
+        // A .bat file with plain text content (no MZ header) is a Document at the header level.
+        // The dispatcher handles .bat by extension before reaching the type detector.
+        var path = Write("script.bat", "@echo off\r\necho hello");
+        Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
+    }
+}
+
