@@ -362,6 +362,7 @@ internal sealed class TestFileSystem : IFileSystem
     }
 
     public void CreateDirectory(char drive, string[] path) => throw new NotImplementedException();
+    public bool IsExecutable(char drive, string[] path) => false;
     public void DeleteFile(char drive, string[] path) => throw new NotImplementedException();
     public void DeleteDirectory(char drive, string[] path, bool recursive) => throw new NotImplementedException();
     public Stream OpenRead(char drive, string[] path) => throw new NotImplementedException();

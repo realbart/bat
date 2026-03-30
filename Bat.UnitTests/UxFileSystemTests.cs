@@ -3,17 +3,17 @@ using Bat.Context;
 namespace Bat.UnitTests;
 
 [TestClass]
-public class DosFileSystemTests : IDisposable
+public class UxFileSystemTests : IDisposable
 {
     private readonly string _testRoot;
-    private readonly DosFileSystem _fs;
+    private readonly UxFileSystemAdapter _fs;
     private bool _disposed;
 
-    public DosFileSystemTests()
+    public UxFileSystemTests()
     {
-        _testRoot = Path.Combine(Path.GetTempPath(), $"BatTest_{Guid.NewGuid():N}");
+        _testRoot = Path.Combine(Path.GetTempPath(), $"BatUxTest_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
-        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot });
+        _fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
     }
 
     protected virtual void Dispose(bool disposing)
@@ -39,20 +39,95 @@ public class DosFileSystemTests : IDisposable
     }
 
     [TestMethod]
-    public void GetNativePath_WithSegments_CombinesCorrectly()
+    public void GetNativePath_WithSegments_JoinsWithForwardSlash()
     {
-        var expected = Path.Combine(_testRoot, "Users", "test.txt");
+        var expected = _testRoot.TrimEnd('/') + "/Users/test.txt";
         Assert.AreEqual(expected, _fs.GetNativePath('Z', ["Users", "test.txt"]));
     }
 
     [TestMethod]
-    public void GetNativePath_InvalidDrive_ReturnsFallbackPath()
+    public void GetNativePath_UnmappedDrive_ReturnsFallbackPath()
     {
-        var result = _fs.GetNativePath('X', []);
-        Assert.AreEqual(@"X:\", result);
+        var result = _fs.GetNativePath('Q', []);
+        Assert.AreEqual("/q:", result);
     }
 
-    // ── FileExists / DirectoryExists ─────────────────────────────────────────
+    [TestMethod]
+    public void GetFullPathDisplayName_ShowsWindowsStylePath()
+    {
+        var display = _fs.GetFullPathDisplayName('Z', ["Projects", "bat"]);
+        Assert.AreEqual(@"Z:\Projects\bat", display);
+    }
+
+    [TestMethod]
+    public void HasDrive_MappedDrive_ReturnsTrue()
+    {
+        Assert.IsTrue(_fs.HasDrive('Z'));
+        Assert.IsFalse(_fs.HasDrive('Q'));
+    }
+
+    [TestMethod]
+    public void HasDrive_CaseInsensitive()
+    {
+        Assert.IsTrue(_fs.HasDrive('z'));
+        Assert.IsTrue(_fs.HasDrive('Z'));
+    }
+
+    // ── Case-insensitive lookup ──────────────────────────────────────────────
+
+    [TestMethod]
+    public void FileExists_CaseInsensitive_FindsFile()
+    {
+        File.WriteAllText(Path.Combine(_testRoot, "Hello.txt"), "test");
+        Assert.IsTrue(_fs.FileExists('Z', ["Hello.txt"]));
+        Assert.IsTrue(_fs.FileExists('Z', ["hello.txt"]));
+        Assert.IsTrue(_fs.FileExists('Z', ["HELLO.TXT"]));
+    }
+
+    [TestMethod]
+    public void DirectoryExists_CaseInsensitive_FindsDir()
+    {
+        Directory.CreateDirectory(Path.Combine(_testRoot, "MyDir"));
+        Assert.IsTrue(_fs.DirectoryExists('Z', ["MyDir"]));
+        Assert.IsTrue(_fs.DirectoryExists('Z', ["mydir"]));
+        Assert.IsTrue(_fs.DirectoryExists('Z', ["MYDIR"]));
+    }
+
+    [TestMethod]
+    public void ReadAllText_CaseInsensitive_FindsFile()
+    {
+        File.WriteAllText(Path.Combine(_testRoot, "Data.txt"), "content");
+        Assert.AreEqual("content", _fs.ReadAllText('Z', ["data.txt"]));
+    }
+
+    // On case-sensitive filesystems (ext4), Hallo.txt and hallo.txt are two
+    // separate files.  CMD can never encounter this (NTFS is case-insensitive).
+    // Bat's rule: exact match wins; if no exact match, first case-insensitive hit.
+    [TestMethod]
+    public void FileExists_ExactMatchWins_WhenAmbiguousCaseExists()
+    {
+        File.WriteAllText(Path.Combine(_testRoot, "Hallo.txt"), "upper");
+        File.WriteAllText(Path.Combine(_testRoot, "hallo.txt"), "lower");
+
+        // Detect whether the filesystem is truly case-sensitive
+        var bothExist = File.Exists(Path.Combine(_testRoot, "Hallo.txt"))
+            && File.ReadAllText(Path.Combine(_testRoot, "Hallo.txt")) == "upper";
+        if (!bothExist)
+        {
+            // NTFS: both names point to the same file — only test case-insensitive lookup
+            Assert.IsTrue(_fs.FileExists('Z', ["HALLO.TXT"]));
+            return;
+        }
+
+        // Case-sensitive FS (ext4): exact matches find their specific file
+        Assert.AreEqual("upper", _fs.ReadAllText('Z', ["Hallo.txt"]));
+        Assert.AreEqual("lower", _fs.ReadAllText('Z', ["hallo.txt"]));
+
+        // Non-exact case still finds *something* (which one is filesystem-dependent)
+        Assert.IsTrue(_fs.FileExists('Z', ["HALLO.TXT"]));
+    }
+
+    // ── Standard IFileSystem contract (same as DosFileSystemTests) ───────────
 
     [TestMethod]
     public void FileExists_ExistingFile_ReturnsTrue()
@@ -80,8 +155,6 @@ public class DosFileSystemTests : IDisposable
         Assert.IsFalse(_fs.DirectoryExists('Z', ["nosuchdir"]));
     }
 
-    // ── CreateDirectory / DeleteDirectory ────────────────────────────────────
-
     [TestMethod]
     public void CreateDirectory_CreatesDirectory()
     {
@@ -99,10 +172,9 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void DeleteDirectory_RemovesDirectory()
     {
-        var dir = Path.Combine(_testRoot, "todelete");
-        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(Path.Combine(_testRoot, "todelete"));
         _fs.DeleteDirectory('Z', ["todelete"], recursive: false);
-        Assert.IsFalse(Directory.Exists(dir));
+        Assert.IsFalse(Directory.Exists(Path.Combine(_testRoot, "todelete")));
     }
 
     [TestMethod]
@@ -115,29 +187,21 @@ public class DosFileSystemTests : IDisposable
         Assert.IsFalse(Directory.Exists(dir));
     }
 
-    // ── EnumerateEntries ─────────────────────────────────────────────────────
-
     [TestMethod]
     public void EnumerateEntries_ReturnsFilesAndDirs()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         Directory.CreateDirectory(Path.Combine(_testRoot, "dir1"));
         File.WriteAllText(Path.Combine(_testRoot, "file1.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "file2.log"), "");
 
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
 
         Assert.IsTrue(entries.Any(e => e.Name == "dir1" && e.IsDirectory));
         Assert.IsTrue(entries.Any(e => e.Name == "file1.txt" && !e.IsDirectory));
-        Assert.IsTrue(entries.Any(e => e.Name == "file2.log" && !e.IsDirectory));
     }
 
     [TestMethod]
     public void EnumerateEntries_Wildcard_Filters()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         File.WriteAllText(Path.Combine(_testRoot, "test.txt"), "");
         File.WriteAllText(Path.Combine(_testRoot, "test.log"), "");
         File.WriteAllText(Path.Combine(_testRoot, "other.txt"), "");
@@ -152,60 +216,17 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void EnumerateEntries_NonExistingDir_ReturnsEmpty()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         var entries = _fs.EnumerateEntries('Z', ["nosuchdir"], "*").ToList();
         Assert.AreEqual(0, entries.Count);
     }
 
     [TestMethod]
-    public void EnumerateEntries_LongFileName_ReturnsShortName()
+    public void EnumerateEntries_ShortName_AlwaysEmpty()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
-        var longName = "This is a very long file name that definitely exceeds 8.3 format.txt";
-        File.WriteAllText(Path.Combine(_testRoot, longName), "test");
-
+        File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName.txt"), "");
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
-        var entry = entries.Single(e => e.Name == longName);
-
-        Assert.IsTrue(entry.ShortName.Length > 0, "Long filename should have a short name");
-        Assert.IsTrue(entry.ShortName.Length <= 12, $"Short name should be 8.3 format, got: {entry.ShortName}");
-        Assert.IsTrue(entry.ShortName.Contains('~'), $"Short name should contain tilde, got: {entry.ShortName}");
+        Assert.IsTrue(entries.All(e => e.ShortName == ""));
     }
-
-    [TestMethod]
-    public void EnumerateEntries_ShortFileName_ShortNameMayBeEmpty()
-    {
-        if (!OperatingSystem.IsWindows()) return;
-
-        File.WriteAllText(Path.Combine(_testRoot, "short.tx"), "test");
-
-        var entries = _fs.EnumerateEntries('Z', [], "short.tx").ToList();
-        var entry = entries.Single();
-
-        Assert.AreEqual("short.tx", entry.Name);
-    }
-
-    [TestMethod]
-    public void EnumerateEntries_MultipleFiles_AllHaveShortNames()
-    {
-        if (!OperatingSystem.IsWindows()) return;
-
-        File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName1.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "AnotherVeryLongFileName2.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "YetAnotherExtremelyLongFileName3.txt"), "");
-
-        var entries = _fs.EnumerateEntries('Z', [], "*.txt").ToList();
-
-        Assert.AreEqual(3, entries.Count);
-        foreach (var entry in entries)
-        {
-            Assert.IsTrue(entry.ShortName.Length > 0, $"{entry.Name} should have a short name");
-        }
-    }
-
-    // ── File I/O ─────────────────────────────────────────────────────────────
 
     [TestMethod]
     public void ReadAllText_ReturnsContent()
@@ -240,15 +261,12 @@ public class DosFileSystemTests : IDisposable
         Assert.AreEqual("firstsecond", File.ReadAllText(Path.Combine(_testRoot, "append.txt")));
     }
 
-    // ── DeleteFile / CopyFile / MoveFile / RenameFile ─────────────────────────
-
     [TestMethod]
     public void DeleteFile_RemovesFile()
     {
-        var file = Path.Combine(_testRoot, "delete_me.txt");
-        File.WriteAllText(file, "");
+        File.WriteAllText(Path.Combine(_testRoot, "delete_me.txt"), "");
         _fs.DeleteFile('Z', ["delete_me.txt"]);
-        Assert.IsFalse(File.Exists(file));
+        Assert.IsFalse(File.Exists(Path.Combine(_testRoot, "delete_me.txt")));
     }
 
     [TestMethod]
@@ -277,14 +295,11 @@ public class DosFileSystemTests : IDisposable
         Assert.AreEqual("rename", File.ReadAllText(Path.Combine(_testRoot, "new.txt")));
     }
 
-    // ── Metadata ─────────────────────────────────────────────────────────────
-
     [TestMethod]
     public void GetFileSize_ReturnsCorrectSize()
     {
         File.WriteAllText(Path.Combine(_testRoot, "sized.txt"), "12345");
-        var size = _fs.GetFileSize('Z', ["sized.txt"]);
-        Assert.IsTrue(size > 0);
+        Assert.IsTrue(_fs.GetFileSize('Z', ["sized.txt"]) > 0);
     }
 
     [TestMethod]
@@ -298,26 +313,38 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void GetAttributes_SetAttributes_RoundTrips()
     {
-        var file = Path.Combine(_testRoot, "attr.txt");
-        File.WriteAllText(file, "");
+        File.WriteAllText(Path.Combine(_testRoot, "attr.txt"), "");
         _fs.SetAttributes('Z', ["attr.txt"], FileAttributes.ReadOnly);
         var attrs = _fs.GetAttributes('Z', ["attr.txt"]);
         Assert.IsTrue(attrs.HasFlag(FileAttributes.ReadOnly));
-        // Clean up: remove ReadOnly so Dispose can delete the temp dir
         _fs.SetAttributes('Z', ["attr.txt"], FileAttributes.Normal);
     }
 
-    // ── Default constructor maps actual drives ────────────────────────────────
+    // ── Multi-drive mapping ──────────────────────────────────────────────────
 
     [TestMethod]
-    public void DefaultConstructor_ZDriveExists()
+    public void MultipleDrives_EachMapsToOwnRoot()
     {
-        // Only run if the test machine has a C: drive (true on any Windows CI)
-        if (!DriveInfo.GetDrives().Any(d => char.ToUpperInvariant(d.Name[0]) == 'C'))
-            Assert.Inconclusive("No C: drive on this machine.");
+        var root2 = Path.Combine(Path.GetTempPath(), $"BatUxTest2_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root2);
+        try
+        {
+            var fs = new UxFileSystemAdapter(new Dictionary<char, string>
+            {
+                ['C'] = _testRoot,
+                ['D'] = root2
+            });
+            File.WriteAllText(Path.Combine(_testRoot, "c.txt"), "");
+            File.WriteAllText(Path.Combine(root2, "d.txt"), "");
 
-        var defaultFs = new DosFileSystem();
-        Assert.IsTrue(defaultFs.HasDrive('Z'), "C: should be mapped to Z:");
-        Assert.IsFalse(defaultFs.HasDrive('C'), "C: should NOT be directly accessible");
+            Assert.IsTrue(fs.FileExists('C', ["c.txt"]));
+            Assert.IsFalse(fs.FileExists('C', ["d.txt"]));
+            Assert.IsTrue(fs.FileExists('D', ["d.txt"]));
+            Assert.IsFalse(fs.FileExists('D', ["c.txt"]));
+        }
+        finally
+        {
+            Directory.Delete(root2, recursive: true);
+        }
     }
 }

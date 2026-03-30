@@ -219,15 +219,13 @@ public void GetNativePath_ConvertsVirtualToNative()
 }
 ```
 
-**Test 10: Invalid drive throws**
+**Test 10: Invalid drive returns false**
 ```csharp
 [Fact]
-public void InvalidDrive_ThrowsException()
+public void InvalidDrive_ReturnsFalse()
 {
     // Act & Assert
-    Assert.Throws<DriveNotFoundException>(() => 
-        _fs.FileExists('X', ["test.txt"])
-    );
+    Assert.False(_fs.FileExists('X', ["test.txt"]));
 }
 ```
 
@@ -309,8 +307,8 @@ public class DosFileSystem : IFileSystem
     public string GetNativePath(char drive, string[] path)
     {
         if (!_driveMapping.TryGetValue(char.ToUpper(drive), out var root))
-            throw new DriveNotFoundException($"Drive {drive}: not found");
-        
+            root = $@"{char.ToUpper(drive)}:\";
+
         return Path.Combine([root, .. path]);
     }
     

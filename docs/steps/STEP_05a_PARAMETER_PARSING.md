@@ -179,7 +179,7 @@ internal sealed class Arguments : IArgumentSet
 
     /// <summary>
     /// Geeft de enige waarde, of null als de option niet aanwezig was.
-    /// Gooit InvalidOperationException als er meer dan één waarde is.
+    /// Geeft de eerste waarde als er meerdere zijn.
     /// </summary>
     public string? GetValue(char name);
     public string? GetValue(string name);
@@ -277,7 +277,7 @@ Unit test `Arguments.Parse()` direct met `ArgumentSpec`:
 | `/?` | `IsHelpRequest=true` |
 | `"Program Files"` | `Positionals=["Program Files"]` |
 | `/M:a /M:b` | `GetValues('M')=["a","b"]` |
-| `GetValue('M')` met twee waarden | `InvalidOperationException` |
+| `GetValue('M')` met twee waarden | `"a"` (eerste waarde) |
 | leeg | `Positionals=[]`, `FullArgument=""`, `IsHelpRequest=false` |
 
 Daarna: alle bestaande 255 tests slagen na migratie.

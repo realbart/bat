@@ -32,7 +32,7 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | 9 | 🔴 TODO | SUBST + Drive Switching (D:) | [STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md) |
 | 10 | 🔴 TODO | SETLOCAL / ENDLOCAL | [STEP_10_SETLOCAL.md](steps/STEP_10_SETLOCAL.md) |
 | 11 | 🔴 TODO | Command line parameters van Bat | [STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md) |
-| 12 | 🔴 TODO | UxFileSystem / UxContext | [STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md) |
+| 12 | 🟢 DONE | UxFileSystem / UxContext | [STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md) |
 
 ### Commando-implementatiestappen
 
@@ -411,7 +411,7 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - `void RemoveSubst(char drive)` — verwijder virtual drive uit filesystem
 
 **IContext uitbreiding:**
-- `void SwitchDrive(char drive)` — wissel van drive (gooit exception als niet bestaat)
+- `void SwitchDrive(char drive)` — wissel van drive; schrijft foutmelding naar stderr en geeft exit code 1 als drive niet bestaat
 - `string[] GetPathForDrive(char drive)` — per-drive directory
 - `void SetPathForDrive(char drive, string[] path)` — sla per-drive directory op
 - `IReadOnlyDictionary<char, string[]> GetAllDrivePaths()` — voor SETLOCAL snapshots

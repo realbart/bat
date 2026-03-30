@@ -42,8 +42,15 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
 
         if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
 
+        PostProcessEnvironmentVariables();
         InitializeCurrentDirectory();
     }
+
+    /// <summary>
+    /// Override in platform subclasses to translate OS-native paths in environment variables
+    /// to BAT virtual drive paths after the base environment has been loaded.
+    /// </summary>
+    protected virtual void PostProcessEnvironmentVariables() { }
 
     /// <summary>
     /// Platform-specific: map the process working directory into drive + path.

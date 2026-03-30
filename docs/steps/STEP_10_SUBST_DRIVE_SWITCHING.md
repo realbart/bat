@@ -105,7 +105,7 @@ public interface IContext
     IFileSystem FileSystem { get; }
 
     // NIEUW — rijfstation beheer:
-    void SwitchDrive(char drive);                         // Gooit exception als drive niet bestaat
+    bool SwitchDrive(char drive);                         // false als drive niet bestaat
     string[] GetPathForDrive(char drive);                 // Leeg array als nog niet bezocht
     void SetPathForDrive(char drive, string[] path);      // Voor CD /D en interne use
     IReadOnlyDictionary<char, string[]> GetAllDrivePaths(); // Voor SETLOCAL snapshots
@@ -134,12 +134,12 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
         fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
     public IFileSystem FileSystem => fileSystem;
 
-    public void SwitchDrive(char drive)
+    public bool SwitchDrive(char drive)
     {
         if (!fileSystem.DriveExists(drive))
-            throw new DriveNotFoundException(
-                $"The system cannot find the drive specified.");  // Exacte CMD tekst
+            return false;
         _currentDrive = drive;
+        return true;
     }
 
     public string[] GetPathForDrive(char drive) =>
@@ -247,17 +247,16 @@ public void SwitchDrive_ExistingDrive_SwitchesDrive()
 }
 ```
 
-#### Test 2.2: Wisselen naar niet-bestaande drive gooit exception
+#### Test 2.2: Wisselen naar niet-bestaande drive geeft false
 
 ```csharp
 [Fact]
-public void SwitchDrive_NonExistentDrive_ThrowsDriveNotFoundException()
+public void SwitchDrive_NonExistentDrive_ReturnsFalse()
 {
     var fs = new TestFileSystem();
     var ctx = new TestContext(fs);
 
-    var ex = Assert.Throws<DriveNotFoundException>(() => ctx.SwitchDrive('Q'));
-    Assert.Contains("The system cannot find the drive specified.", ex.Message);
+    Assert.False(ctx.SwitchDrive('Q'));
 }
 ```
 
@@ -291,7 +290,7 @@ public void SwitchDrive_RemembersPathPerDrive()
 
 ```csharp
 [Fact]
-public void SwitchDrive_AfterRemoveSubst_ThrowsException()
+public void SwitchDrive_AfterRemoveSubst_ReturnsFalse()
 {
     var fs = new TestFileSystem();
     fs.AddSubst('Q', @"C:\Temp");
@@ -303,8 +302,7 @@ public void SwitchDrive_AfterRemoveSubst_ThrowsException()
 
     // Terug naar Q: is nu niet meer mogelijk
     ctx.SwitchDrive('C');
-    var ex = Assert.Throws<DriveNotFoundException>(() => ctx.SwitchDrive('Q'));
-    Assert.Contains("The system cannot find the drive specified.", ex.Message);
+    Assert.False(ctx.SwitchDrive('Q'));
 }
 ```
 
@@ -495,7 +493,7 @@ public async Task Integration_SubstAndSwitch_FullScenario()
 2. Voeg nieuwe methoden toe aan `IFileSystem` interface
 3. Maak `TestFileSystem` voor unit tests (alleen subst dictionary, geen OS-aanroepen)
 4. Implementeer `IContext` uitbreidingen (SwitchDrive, GetPathForDrive, SetPathForDrive, GetAllDrivePaths)
-5. Implementeer `Context.SwitchDrive` met `DriveNotFoundException`
+5. Implementeer `Context.SwitchDrive` die `false` retourneert als drive niet bestaat
 6. Voeg `DriveExists` toe aan `DosFileSystem` (subst dict + `DriveInfo.GetDrives()`)
 7. Implementeer `DriveCommandNode` en `DriveCommand`
 8. Voeg herkenning van `X:` patroon toe aan parser/dispatcher
@@ -522,7 +520,7 @@ Type SUBST with no parameters to display a list of current virtual drives.
 
 - [ ] `IFileSystem` heeft `DriveExists`, `GetSubsts`, `AddSubst`, `RemoveSubst`
 - [ ] `IContext` heeft `SwitchDrive`, `GetPathForDrive`, `SetPathForDrive`, `GetAllDrivePaths`
-- [ ] `Context.SwitchDrive` gooit `DriveNotFoundException` met exacte CMD-tekst
+- [ ] `Context.SwitchDrive` retourneert `false` als drive niet bestaat; aanroepende code schrijft CMD-tekst naar stderr
 - [ ] `DosFileSystem` implementeert nieuwe methoden (subst dict + echte drives)
 - [ ] `DriveCommand` is in-process commando (herkend door dispatcher/parser)
 - [ ] `Subst.Program.Main(IContext, ...)` parset args en manipuleert FileSystem

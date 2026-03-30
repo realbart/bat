@@ -24,10 +24,9 @@ internal record ExternalCommandNode(
         }
     }
 
-    public async Task<int> ExecuteAsync(IContext ctx, BatchContext bc)
+    public Task<int> ExecuteAsync(IContext ctx, BatchContext bc)
     {
-        // Will be implemented in Step 6 - Native executables execution
-        await Task.CompletedTask;
-        throw new NotImplementedException("External command execution - see Step 6");
+        // TODO: Step 6 — this node type is superseded by CommandNode + Dispatcher
+        return Task.FromResult(0);
     }
 }

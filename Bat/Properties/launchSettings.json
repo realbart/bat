@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "Bat (Windows)": {
+      "commandName": "Project"
+    },
+    "Bat (WSL)": {
+      "commandName": "WSL2",
+      "distributionName": "",
+      "environmentVariables": {
+        "DOTNET_ROOT": "/root/.dotnet"
+      }
+    }
+  }
+}

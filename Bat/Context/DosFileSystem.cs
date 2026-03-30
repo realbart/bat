@@ -14,12 +14,24 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
     public override string GetNativePath(char drive, string[] path)
     {
         var upper = char.ToUpperInvariant(drive);
-        if (!_roots.TryGetValue(upper, out var root))
-            throw new DriveNotFoundException($"Drive {upper}: is not mapped.");
+        _roots.TryGetValue(upper, out var root);
+        root ??= $@"{upper}:\";
         return path.Length == 0 ? root : Path.Combine([root, .. path]);
     }
 
     public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
+
+    public override bool TryGetNativePath(char drive, string[] path, out string nativePath)
+    {
+        var upper = char.ToUpperInvariant(drive);
+        if (!_roots.TryGetValue(upper, out var root))
+        {
+            nativePath = "";
+            return false;
+        }
+        nativePath = path.Length == 0 ? root : Path.Combine([root, .. path]);
+        return true;
+    }
 
     protected override uint GetVolumeSerialNumber(string nativeRoot)
     {
@@ -59,28 +71,6 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
     public override IEnumerable<DosFileEntry> EnumerateEntries(
         char drive, string[] path, string pattern)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            var native = GetNativePath(drive, path);
-            if (!Directory.Exists(native)) yield break;
-            foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
-            {
-                var name = Path.GetFileName(entry);
-                var isDir = Directory.Exists(entry);
-                var info = new FileInfo(entry);
-                var owner = GetFileOwner(entry);
-                yield return new DosFileEntry(
-                    name,
-                    isDir,
-                    "",
-                    isDir ? 0 : info.Length,
-                    File.GetLastWriteTime(entry),
-                    File.GetAttributes(entry),
-                    owner);
-            }
-            yield break;
-        }
-
         var searchPath = Path.Combine(GetNativePath(drive, path), pattern);
         var dirPath = GetNativePath(drive, path);
         var handle = FindFirstFileW(searchPath, out var data);
@@ -129,7 +119,6 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
     {
         try
         {
-            if (!OperatingSystem.IsWindows()) return "";
             var fileInfo = new FileInfo(fullPath);
             var fileSecurity = fileInfo.GetAccessControl();
             var owner = fileSecurity.GetOwner(typeof(NTAccount));

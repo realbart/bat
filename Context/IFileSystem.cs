@@ -8,6 +8,7 @@ public interface IFileSystem
 
     bool FileExists(char drive, string[] path);
     bool DirectoryExists(char drive, string[] path);
+    bool IsExecutable(char drive, string[] path);
     void CreateDirectory(char drive, string[] path);
     void DeleteFile(char drive, string[] path);
     void DeleteDirectory(char drive, string[] path, bool recursive);

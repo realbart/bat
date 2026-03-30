@@ -7,7 +7,10 @@ namespace Bat.Commands;
 [BuiltInCommand("goto")]
 internal class GotoCommand : ICommand
 {
-    public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections) =>
-        // TODO: Implement in Step 8
-        throw new NotImplementedException("GotoCommand - to be implemented in Step 8");
+    public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    {
+        // TODO: Implement GOTO in Step 8 (requires ScanLabels + batch file context)
+        await batchContext.Console.Error.WriteLineAsync("GOTO: requires a batch file context (Step 8).");
+        return 1;
+    }
 }

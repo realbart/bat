@@ -173,11 +173,11 @@ public void FileExists_CaseInsensitive_FindsFile()
 
 ```csharp
 [Fact]
-public void FileExists_UnmappedDrive_ThrowsOrReturnsFalse()
+public void FileExists_UnmappedDrive_ReturnsFalse()
 {
     var fs = new UxFileSystemAdapter(new() { ['C'] = "/tmp" });
-    // Drive Q bestaat niet in mappings
-    Assert.Throws<DriveNotFoundException>(() => fs.FileExists('Q', ["file.txt"]));
+    // Drive Q bestaat niet in mappings → false, geen exception
+    Assert.False(fs.FileExists('Q', ["file.txt"]));
 }
 ```
 
@@ -287,7 +287,7 @@ public async Task BatchFile_WithWindowsPaths_RunsOnUnix()
 - [ ] Case-insensitieve bestandslookup werkt op Unix
 - [ ] `GetNativePath` vertaalt `C:\Users\Bart` → `/home/user/Users/Bart` correct
 - [ ] `GetFullPathDisplayName` toont altijd Windows-stijl (`C:\...`)
-- [ ] Niet-gemapte drives geven `DriveNotFoundException`
+- [ ] Niet-gemapte drives geven `false` terug (geen exception)
 - [ ] Batchbestand met Windows-paden draait correct op Linux/macOS
 - [ ] Modusdetectie in `Program.Main` kiest automatisch de juiste implementatie
 - [ ] Alle bestaande tests slagen nog steeds

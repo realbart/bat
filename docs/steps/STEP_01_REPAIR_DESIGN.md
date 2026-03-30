@@ -289,10 +289,10 @@ internal record ExternalCommandNode(
         }
     }
     
-    public async Task<int> ExecuteAsync(IContext ctx, BatchContext bc)
+    public Task<int> ExecuteAsync(IContext ctx, BatchContext bc)
     {
         // Wordt geïmplementeerd in Step 5
-        throw new NotImplementedException("External command execution - see Step 5");
+        return Task.FromResult(0);
     }
 }
 ```

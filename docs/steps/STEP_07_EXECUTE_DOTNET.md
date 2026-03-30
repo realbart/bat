@@ -274,32 +274,32 @@ public class DotNetExecutableExecutor
             // Geen .NET assembly → fallback
             if (fallbackRunner != null)
                 return await FallbackToProcess(assemblyPath, args, ctx, fallbackRunner);
-            
-            throw;
+
+            return 1;  // Laden mislukt en geen fallback → error exit code
         }
         
         // 2. Zoek library entry point
         var entryPoint = _detector.FindLibraryEntryPoint(assembly);
-        
+
         if (entryPoint == null)
         {
             // Geen library interface → fallback
             if (fallbackRunner != null)
                 return await FallbackToProcess(assemblyPath, args, ctx, fallbackRunner);
-            
-            throw new InvalidOperationException($"{assemblyPath} has no IContext entry point");
+
+            return 1;  // Geen entry point en geen fallback → error exit code
         }
-        
+
         // 3. Invoke met IContext
         var result = entryPoint.Invoke(null, new object[] { ctx, args });
-        
+
         // 4. Handle Task<int> of int
         if (result is Task<int> task)
             return await task;
         else if (result is int exitCode)
             return exitCode;
         else
-            throw new InvalidOperationException("Entry point must return int or Task<int>");
+            return 1;  // Onverwacht return type → error exit code
     }
     
     private async Task<int> FallbackToProcess(string assemblyPath, string[] args, 
@@ -448,7 +448,7 @@ Entry point kan zijn:
 Beide moeten worden ondersteund.
 
 **Assembly loading:**
-- Assembly.LoadFrom kan exceptions gooien (BadImageFormatException)
+- Assembly.LoadFrom kan falen (BadImageFormatException) → fallback naar Process.Start
 - Dependency resolution kan falen
 - Graceful fallback naar Process.Start
 

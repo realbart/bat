@@ -26,6 +26,13 @@ internal class NativeExecutor(bool waitForExit = true, bool isGuiApp = false) : 
             RedirectStandardError = hasRedirections
         };
 
+        if (!psi.UseShellExecute)
+        {
+            // TODO: Cache TranslateBatEnvironmentToHost result per environment snapshot for performance
+            foreach (var (key, value) in PathTranslator.TranslateBatEnvironmentToHost(context.EnvironmentVariables, context.FileSystem))
+                psi.Environment[key] = value;
+        }
+
         var process = Process.Start(psi);
         if (process == null) return 1;
         if (!waitForExit) return 0;

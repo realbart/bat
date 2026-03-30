@@ -8,6 +8,15 @@ internal abstract class FileSystem : IFileSystem
 
     public Dictionary<string, char> Joins { get; } = [];
 
+    /// <summary>Directory separator used by the host filesystem ('\\' on Windows, '/' on Unix).</summary>
+    public virtual char NativeDirectorySeparator => '\\';
+
+    /// <summary>PATH entry separator used by the host OS (';' on Windows, ':' on Unix).</summary>
+    public virtual char NativePathSeparator => ';';
+
+    /// <summary>Returns false by default; Unix filesystem overrides to check the execute bit.</summary>
+    public virtual bool IsExecutable(char drive, string[] path) => false;
+
     public string GetFullPathDisplayName(char drive, string[] path) =>
         path.Length == 0
             ? $"{drive}:\\"

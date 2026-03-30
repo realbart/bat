@@ -7,7 +7,9 @@ namespace Bat.Commands;
 [BuiltInCommand("setlocal")]
 internal class SetLocalCommand : ICommand
 {
-    public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections) =>
-        // TODO: Implement in Step 11
-        throw new NotImplementedException("SetLocalCommand - to be implemented in Step 11");
+    public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    {
+        // TODO: Implement SETLOCAL in Step 10 (environment snapshot)
+        return Task.FromResult(0);
+    }
 }

@@ -74,12 +74,18 @@ internal static class ExecutableResolver
 
     private static string? SearchWithImplicitExtensions(string baseName, IContext context)
     {
+        // Try known extensions first (batch files take priority on all platforms)
         foreach (var ext in ExecutableExtensions)
         {
             string[] currentDirPath = [.. context.CurrentPath, baseName + ext];
             if (context.FileSystem.FileExists(context.CurrentDrive, currentDirPath))
                 return context.FileSystem.GetFullPathDisplayName(context.CurrentDrive, currentDirPath);
         }
+
+        // Try extensionless (Unix executables: ls, bash, apt, etc.)
+        string[] noExtCurrentDir = [.. context.CurrentPath, baseName];
+        if (context.FileSystem.IsExecutable(context.CurrentDrive, noExtCurrentDir))
+            return context.FileSystem.GetFullPathDisplayName(context.CurrentDrive, noExtCurrentDir);
 
         var pathVar = context.EnvironmentVariables.TryGetValue("PATH", out var p) ? p : "";
         foreach (var pathEntry in pathVar.Split(';', StringSplitOptions.RemoveEmptyEntries))
@@ -91,6 +97,11 @@ internal static class ExecutableResolver
                 if (context.FileSystem.FileExists(drive, fullPath))
                     return context.FileSystem.GetFullPathDisplayName(drive, fullPath);
             }
+
+            // Try extensionless in PATH
+            string[] noExtPath = [.. pathSegments, baseName];
+            if (context.FileSystem.IsExecutable(drive, noExtPath))
+                return context.FileSystem.GetFullPathDisplayName(drive, noExtPath);
         }
 
         return null;
