@@ -97,14 +97,18 @@ internal class DirCommand : ICommand
     private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path,
         DirOptions opts, string pattern, bool recurse)
     {
-        if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
-
         var (found, entries) = TryGetFilteredEntries(context, drive, path, pattern, opts);
         if (!found)
         {
-            await console.Out.WriteLineAsync("File Not Found");
+            // Drive root unreachable (e.g. subst deleted): no header, specific message.
+            // Drive reachable but subpath missing: header shown, "File Not Found".
+            var driveReachable = context.FileSystem.DirectoryExists(drive, []);
+            if (!opts.BareNames && driveReachable) await WriteDirectoryHeader(console, context, drive, path);
+            await console.Out.WriteLineAsync(driveReachable ? "File Not Found" : "The system cannot find the path specified.");
             return;
         }
+
+        if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
 
         var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, entries, opts);
 

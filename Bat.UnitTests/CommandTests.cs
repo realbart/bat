@@ -765,6 +765,26 @@ public class DirCommandTests
         Assert.AreEqual("longggggg.txt", contentLine[26..39]);
     }
 
+    // Real CMD: after deleting the subst for the current drive while in a subdirectory,
+    // dir (no args) shows "The system cannot find the path specified." with no volume header.
+    // The prompt still shows the last-known path (e.g. B:\net10.0).
+    [TestMethod]
+    public async Task Dir_NoArgs_DeletedSubstCurrentDrive_ShowsPathNotSpecified()
+    {
+        var fs = new TestFileSystem();
+        // B: has no dirs — simulates a drive whose subst has been deleted
+        var (cmd, console, bc) = Setup(fs, 'B', ["net10.0"]);
+
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
+
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("The system cannot find the path specified.")));
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("Volume")), "Must not show volume header for unreachable drive");
+
+        // Context unchanged — prompt still shows B:\net10.0
+        Assert.AreEqual('B', bc.Context.CurrentDrive);
+        CollectionAssert.AreEqual(new[] { "net10.0" }, bc.Context.CurrentPath);
+    }
+
     // "dir C:" with current drive Z: should list C:'s root — not inject Z:'s path segments.
     [TestMethod]
     public async Task Dir_DriveColonOnly_ListsRootOfSpecifiedDrive()
