@@ -2,7 +2,7 @@
 
 namespace Bat.Context;
 
-internal class UxFileSystemAdapter(Dictionary<char, string> mappings) : FileSystem
+internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string, string>? getOwner = null) : FileSystem
 {
     public UxFileSystemAdapter() : this(new Dictionary<char, string> { ['Z'] = "/" }) { }
 
@@ -18,9 +18,10 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings) : FileSyst
         var mode = File.GetUnixFileMode(native);
         return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
     }
-    public override bool TryGetNativePath(char drive, string[] path, out string nativePath)    {
-        var upper = char.ToUpperInvariant(drive);
-        if (!mappings.TryGetValue(upper, out var root))
+
+    protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
+    {
+        if (!mappings.TryGetValue(drive, out var root))
         {
             nativePath = "";
             return false;
@@ -29,11 +30,10 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings) : FileSyst
         return true;
     }
 
-    public override string GetNativePath(char drive, string[] path)
+    protected override string GetNativePathCore(char drive, string[] path)
     {
-        var upper = char.ToUpperInvariant(drive);
-        mappings.TryGetValue(upper, out var root);
-        root ??= $"/{char.ToLowerInvariant(upper)}:";
+        mappings.TryGetValue(drive, out var root);
+        root ??= $"/{char.ToLowerInvariant(drive)}:";
         if (path.Length == 0) return root;
         return root.TrimEnd('/') + '/' + string.Join('/', path);
     }
@@ -92,19 +92,22 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings) : FileSyst
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
         if (!Directory.Exists(native)) yield break;
 
+        EnsureShortNamesForDirectory(native);
+
         foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
         {
             var name = Path.GetFileName(entry);
             var isDir = Directory.Exists(entry);
             var info = new FileInfo(entry);
+            _shortNameCache.TryGetValue(entry, out var shortName);
             yield return new DosFileEntry(
                 name,
                 isDir,
-                "",
+                shortName ?? "",
                 isDir ? 0 : info.Length,
                 File.GetLastWriteTime(entry),
                 File.GetAttributes(entry),
-                "");
+                GetFileOwner(entry));
         }
     }
 
@@ -152,4 +155,63 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings) : FileSyst
 
     protected override uint GetVolumeSerialNumber(string nativeRoot) =>
         (uint)nativeRoot.GetHashCode(StringComparison.Ordinal);
+
+    // ── Owner ────────────────────────────────────────────────────────────────
+
+    private string GetFileOwner(string fullPath) => getOwner?.Invoke(fullPath) ?? "";
+
+    // ── 8.3 short-name generation ─────────────────────────────────────────────
+    //
+    // Format:  {stem[0..2].ToUpper()}{((short)fullname.GetHashCode()):X4}~{n}.{ext[0..3].ToUpper()}
+    // Collision (~2, ~3, …): files sorted by creation date within the same directory.
+    // Results are cached for the lifetime of the adapter so names stay stable.
+
+    private readonly Dictionary<string, string> _shortNameCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _processedDirs = new(StringComparer.OrdinalIgnoreCase);
+
+    private void EnsureShortNamesForDirectory(string nativeDir)
+    {
+        if (!_processedDirs.Add(nativeDir)) return;
+
+        var candidates = Directory.EnumerateFileSystemEntries(nativeDir)
+            .Where(e => NeedsShortName(Path.GetFileName(e)))
+            .OrderBy(File.GetCreationTime)
+            .ToList();
+
+        var counters = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in candidates)
+        {
+            var name = Path.GetFileName(entry);
+            var base8 = ShortNameBase(name);
+            counters.TryGetValue(base8, out var n);
+            n++;
+            counters[base8] = n;
+            var ext = ShortNameExt(name);
+            _shortNameCache[entry] = ext.Length > 0 ? $"{base8}~{n}.{ext}" : $"{base8}~{n}";
+        }
+    }
+
+    private static bool NeedsShortName(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        var stem = dot < 0 ? name : name[..dot];
+        var ext = dot < 0 ? "" : name[(dot + 1)..];
+        return stem.Length > 8 || ext.Length > 3;
+    }
+
+    private static string ShortNameBase(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        var stem = (dot < 0 ? name : name[..dot]).ToUpperInvariant();
+        var prefix = stem.Length >= 2 ? stem[..2] : stem;
+        return prefix + ((short)name.GetHashCode()).ToString("X4");
+    }
+
+    private static string ShortNameExt(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        if (dot < 0) return "";
+        var ext = name[(dot + 1)..].ToUpperInvariant();
+        return ext.Length > 3 ? ext[..3] : ext;
+    }
 }

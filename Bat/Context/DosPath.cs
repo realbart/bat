@@ -28,6 +28,7 @@ internal static class DosPath
         var lastSep = argPath.LastIndexOf('\\');
         if (lastSep >= 0) return ParseSeparatedPath(argPath, lastSep, drive);
         if (argPath.Contains('*') || argPath.Contains('?')) return (drive, path, argPath);
+        if (argPath.Length == 0) return (drive, [], "*");
         return (drive, [.. path, argPath], "*");
     }
 

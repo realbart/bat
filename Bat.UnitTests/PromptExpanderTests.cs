@@ -35,6 +35,7 @@ public class PromptExpanderTests
         public void SetPath(char drive, string[] path) { }
         public void SetCurrentDrive(char drive) { }
         public string[] GetPathForDrive(char drive) => [];
+        public (bool Found, string NativePath) TryGetCurrentFolder() => (false, "");
     }
 
     // ── tests ────────────────────────────────────────────────────────────────

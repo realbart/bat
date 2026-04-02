@@ -171,14 +171,17 @@ internal sealed class ArgumentSet : IArgumentSet
                     }
                     else if (switchName.Length == 1)
                     {
-                        return new ArgumentSet(
-                            fullArgument,
-                            [],
-                            isHelpRequest: false,
-                            FrozenSet<string>.Empty,
-                            FrozenSet<string>.Empty,
-                            FrozenDictionary<string, string[]>.Empty,
-                            errorMessage: $"Invalid switch - \"{switchName.ToLowerInvariant()}\".");
+                        if (spec.Flags.Count == 0 && spec.Options.Count == 0)
+                            flags.Add(switchName);
+                        else
+                            return new ArgumentSet(
+                                fullArgument,
+                                [],
+                                isHelpRequest: false,
+                                FrozenSet<string>.Empty,
+                                FrozenSet<string>.Empty,
+                                FrozenDictionary<string, string[]>.Empty,
+                                errorMessage: $"Invalid switch - \"{switchName.ToLowerInvariant()}\".");
                     }
                     else
                     {

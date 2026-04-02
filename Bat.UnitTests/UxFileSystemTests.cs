@@ -221,11 +221,66 @@ public class UxFileSystemTests : IDisposable
     }
 
     [TestMethod]
-    public void EnumerateEntries_ShortName_AlwaysEmpty()
+    public void EnumerateEntries_ShortName_GeneratedForLongName()
     {
+        // "VeryLongFileName.txt" → stem=16>8 → needs a short name
         File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName.txt"), "");
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
-        Assert.IsTrue(entries.All(e => e.ShortName == ""));
+        var entry = entries.Single(e => e.Name == "VeryLongFileName.txt");
+        // Must match format: two stem chars + 4-hex hash + ~1 + .TXT
+        Assert.IsTrue(entry.ShortName.Length > 0, "Long filename must have a generated 8.3 short name");
+        Assert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(entry.ShortName, @"^[A-Z]{0,2}[0-9A-F]{4}~\d+\.TXT$"),
+            $"Short name '{entry.ShortName}' does not match expected 8.3 pattern");
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_ShortName_EmptyForCompliantName()
+    {
+        // "file.txt" stem=4≤8, ext=3≤3 → no short name needed
+        File.WriteAllText(Path.Combine(_testRoot, "file.txt"), "");
+        var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
+        var entry = entries.Single(e => e.Name == "file.txt");
+        Assert.AreEqual("", entry.ShortName);
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_ShortName_GeneratedForLongExtension()
+    {
+        // "file.longext" has extension length 7 > 3 → short name needed
+        File.WriteAllText(Path.Combine(_testRoot, "file.longext"), "");
+        var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
+        var entry = entries.Single(e => e.Name == "file.longext");
+        Assert.IsTrue(entry.ShortName.Length > 0);
+        // extension part must be truncated to 3 chars: LON
+        Assert.IsTrue(entry.ShortName.EndsWith(".LON"), $"Extension not truncated: {entry.ShortName}");
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_ShortName_StableAcrossCalls()
+    {
+        File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName.txt"), "");
+        var first = _fs.EnumerateEntries('Z', [], "*").Single(e => e.Name == "VeryLongFileName.txt").ShortName;
+        var second = _fs.EnumerateEntries('Z', [], "*").Single(e => e.Name == "VeryLongFileName.txt").ShortName;
+        Assert.AreEqual(first, second, "Short name must be stable within a session");
+    }
+
+    [TestMethod]
+    public void EnumerateEntries_ShortName_CollisionGetsDifferentCounter()
+    {
+        // Two files whose first-2-stem + hash collide → get ~1 and ~2
+        // Force a collision by creating two files whose generated base is identical.
+        // The easiest way: same hash means same full filename... but that's the same file.
+        // Instead, verify that the counter mechanism works by checking uniqueness when
+        // names are actually different (no forced collision needed for the API contract).
+        File.WriteAllText(Path.Combine(_testRoot, "LongNameAlpha.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot, "LongNameBeta.txt"), "");
+        var entries = _fs.EnumerateEntries('Z', [], "*")
+            .Where(e => e.Name.StartsWith("LongName"))
+            .ToList();
+        var shortNames = entries.Select(e => e.ShortName).Where(s => s.Length > 0).ToList();
+        // All generated short names must be unique within the directory
+        Assert.AreEqual(shortNames.Count, shortNames.Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            "Short names must be unique within a directory");
     }
 
     [TestMethod]

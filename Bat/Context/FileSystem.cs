@@ -43,21 +43,42 @@ internal abstract class FileSystem : IFileSystem
                 }
             });
 
-    public virtual bool TryGetNativePath(char drive, string[] path, out string nativePath)
+    public string GetNativePath(char drive, string[] path)
     {
-        try
-        {
-            nativePath = GetNativePath(drive, path);
-            return true;
-        }
-        catch
-        {
-            nativePath = "";
-            return false;
-        }
+        var upper = char.ToUpperInvariant(drive);
+        var depth = 0;
+        while (depth++ < 16 && Substs.TryGetValue(upper, out var substBatPath))
+            (upper, path) = ParseSubstTarget(substBatPath, path);
+        return GetNativePathCore(upper, path);
     }
 
-    public abstract string GetNativePath(char drive, string[] path);
+    // Parses a stored BAT path ("X:\seg1\seg2") and appends tail segments.
+    private static (char Drive, string[] Path) ParseSubstTarget(string batPath, string[] tail)
+    {
+        if (batPath.Length < 2 || !char.IsAsciiLetter(batPath[0]) || batPath[1] != ':')
+            return ('C', tail);
+        var drive = char.ToUpperInvariant(batPath[0]);
+        var rest = batPath.Length > 2 && batPath[2] == '\\' ? batPath[3..] : "";
+        var head = rest.Length == 0
+            ? Array.Empty<string>()
+            : rest.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        return (drive, tail.Length == 0 ? head : [..head, ..tail]);
+    }
+
+    public bool TryGetNativePath(char drive, string[] path, out string nativePath)
+    {
+        var upper = char.ToUpperInvariant(drive);
+        if (Substs.ContainsKey(upper)) { nativePath = GetNativePath(upper, path); return true; }
+        return TryGetNativePathCore(upper, path, out nativePath);
+    }
+
+    protected abstract string GetNativePathCore(char drive, string[] path);
+
+    protected virtual bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
+    {
+        nativePath = GetNativePathCore(drive, path);
+        return true;
+    }
 
     public abstract bool FileExists(char drive, string[] path);
     public abstract bool DirectoryExists(char drive, string[] path);
@@ -79,4 +100,8 @@ internal abstract class FileSystem : IFileSystem
     public uint GetVolumeSerialNumber(char drive)
         => GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), []));
     protected abstract uint GetVolumeSerialNumber(string nativeRoot);
+
+    public IReadOnlyDictionary<char, string> GetSubsts() => Substs;
+    public void AddSubst(char drive, string nativePath) => Substs[char.ToUpperInvariant(drive)] = nativePath;
+    public void RemoveSubst(char drive) => Substs.Remove(char.ToUpperInvariant(drive));
 }

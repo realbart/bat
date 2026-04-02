@@ -24,4 +24,5 @@ public interface IContext
     void SetPath(char drive, string[] path);
     void SetCurrentDrive(char drive);
     string[] GetPathForDrive(char drive);
+    (bool Found, string NativePath) TryGetCurrentFolder();
 }

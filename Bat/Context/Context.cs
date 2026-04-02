@@ -28,6 +28,13 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     public void SetCurrentDrive(char drive) => CurrentDrive = drive;
     public string[] GetPathForDrive(char drive) => CurrentFolders.TryGetValue(drive, out var p) ? p : [];
 
+    public (bool Found, string NativePath) TryGetCurrentFolder()
+    {
+        if (!fileSystem.DirectoryExists(CurrentDrive, CurrentPath))
+            return (false, "");
+        return (true, fileSystem.GetNativePath(CurrentDrive, CurrentPath));
+    }
+
     protected void InitializeFromEnvironment()
     {
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())

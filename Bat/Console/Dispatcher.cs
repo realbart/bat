@@ -84,6 +84,20 @@ internal class Dispatcher : IDispatcher
         if (cmd.Head is IBuiltInCommandToken builtIn) return await ExecuteBuiltInAsync(bc, builtIn, cmd);
 
         var rawName = cmd.Head.Raw;
+
+        // Drive switch: X: (single letter + colon, nothing else)
+        if (rawName.Length == 2 && char.IsAsciiLetter(rawName[0]) && rawName[1] == ':')
+        {
+            var targetDrive = char.ToUpperInvariant(rawName[0]);
+            if (bc.Context.FileSystem.DirectoryExists(targetDrive, []))
+            {
+                bc.Context.SetCurrentDrive(targetDrive);
+                return 0;
+            }
+            await bc.Console.Error.WriteLineAsync("The system cannot find the drive specified.");
+            return 1;
+        }
+
         var splitAt = rawName.IndexOfAny(['/', '\\', '.']);
         if (splitAt > 0 && IsPathSuffix(rawName[splitAt..]))
         {
@@ -96,6 +110,13 @@ internal class Dispatcher : IDispatcher
         {
             await bc.Console.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
             await bc.Console.Error.WriteLineAsync("operable program or batch file.");
+            return 1;
+        }
+
+        var (folderFound, _) = bc.Context.TryGetCurrentFolder();
+        if (!folderFound)
+        {
+            await bc.Console.Error.WriteLineAsync("The current directory is invalid.");
             return 1;
         }
 

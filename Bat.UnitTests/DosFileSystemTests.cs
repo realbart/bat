@@ -153,7 +153,6 @@ public class DosFileSystemTests : IDisposable
     public void EnumerateEntries_NonExistingDir_ReturnsEmpty()
     {
         if (!OperatingSystem.IsWindows()) return;
-
         var entries = _fs.EnumerateEntries('Z', ["nosuchdir"], "*").ToList();
         Assert.AreEqual(0, entries.Count);
     }

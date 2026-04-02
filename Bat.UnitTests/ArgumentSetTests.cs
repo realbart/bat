@@ -1,4 +1,5 @@
 using Bat.Commands;
+using Bat.Context;
 using Bat.Tokens;
 
 namespace Bat.UnitTests;
@@ -348,5 +349,61 @@ public class ArgumentSetTests
         Assert.IsNull(args.ErrorMessage, $"Should not have error, got: {args.ErrorMessage}");
         Assert.IsTrue(args.GetFlagValue('Q'), $"Q should be flag. Positionals: {string.Join(", ", args.Positionals)}");
         Assert.AreEqual(1, args.Positionals.Count, $"Should have one positional. Got: {string.Join(", ", args.Positionals)}");
+    }
+}
+
+[TestClass]
+public class DosPathTests
+{
+    [TestMethod]
+    public void ParseArgPath_DriveOnly_ReturnsEmptyPathAndWildcard()
+    {
+        var (drive, path, pattern) = DosPath.ParseArgPath("C:", 'Z', ["Users", "Bart"]);
+        Assert.AreEqual('C', drive);
+        Assert.AreEqual(0, path.Length, "Drive-only arg must return empty path (root of that drive)");
+        Assert.AreEqual("*", pattern);
+    }
+
+    [TestMethod]
+    public void ParseArgPath_DriveOnly_Lowercase_Uppercased()
+    {
+        var (drive, path, pattern) = DosPath.ParseArgPath("c:", 'Z', ["Users"]);
+        Assert.AreEqual('C', drive);
+        Assert.AreEqual(0, path.Length);
+    }
+
+    [TestMethod]
+    public void ParseArgPath_DriveAndAbsolutePath_UsesSpecifiedPath()
+    {
+        var (drive, path, pattern) = DosPath.ParseArgPath(@"C:\Windows", 'Z', ["Users"]);
+        Assert.AreEqual('C', drive);
+        CollectionAssert.AreEqual(new[] { "Windows" }, path);
+        Assert.AreEqual("*", pattern);
+    }
+
+    [TestMethod]
+    public void ParseArgPath_RelativeFileName_AppendsToCurrentPath()
+    {
+        var (drive, path, pattern) = DosPath.ParseArgPath("readme.txt", 'C', ["Users"]);
+        Assert.AreEqual('C', drive);
+        CollectionAssert.AreEqual(new[] { "Users", "readme.txt" }, path);
+        Assert.AreEqual("*", pattern);
+    }
+
+    [TestMethod]
+    public void ParseArgPath_Wildcard_PatternFromCurrentPath()
+    {
+        var (drive, path, pattern) = DosPath.ParseArgPath("*.txt", 'C', ["Users"]);
+        Assert.AreEqual('C', drive);
+        CollectionAssert.AreEqual(new[] { "Users" }, path);
+        Assert.AreEqual("*.txt", pattern);
+    }
+
+    [TestMethod]
+    public void ParseArgPath_NoDriveNoPath_NoAppendedEmptyString()
+    {
+        // Regression: old code returned [..currentPath, ""] when argPath was empty.
+        var (_, path, _) = DosPath.ParseArgPath("C:", 'Z', ["a", "b"]);
+        Assert.IsFalse(path.Any(s => s.Length == 0), "Must not contain empty string segments");
     }
 }

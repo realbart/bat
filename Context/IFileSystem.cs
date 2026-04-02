@@ -30,4 +30,8 @@ public interface IFileSystem
     DateTime GetLastWriteTime(char drive, string[] path);
 
     uint GetVolumeSerialNumber(char drive);
+
+    IReadOnlyDictionary<char, string> GetSubsts();
+    void AddSubst(char drive, string nativePath);
+    void RemoveSubst(char drive);
 }

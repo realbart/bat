@@ -11,20 +11,18 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
 
     public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
 
-    public override string GetNativePath(char drive, string[] path)
+    protected override string GetNativePathCore(char drive, string[] path)
     {
-        var upper = char.ToUpperInvariant(drive);
-        _roots.TryGetValue(upper, out var root);
-        root ??= $@"{upper}:\";
+        _roots.TryGetValue(drive, out var root);
+        root ??= $@"{drive}:\";
         return path.Length == 0 ? root : Path.Combine([root, .. path]);
     }
 
     public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
 
-    public override bool TryGetNativePath(char drive, string[] path, out string nativePath)
+    protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
     {
-        var upper = char.ToUpperInvariant(drive);
-        if (!_roots.TryGetValue(upper, out var root))
+        if (!_roots.TryGetValue(drive, out var root))
         {
             nativePath = "";
             return false;

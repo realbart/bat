@@ -99,15 +99,14 @@ internal class DirCommand : ICommand
     {
         if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
 
-        var entries = GetFilteredEntries(context, drive, path, pattern, opts);
-        if (entries == null)
+        var (found, entries) = TryGetFilteredEntries(context, drive, path, pattern, opts);
+        if (!found)
         {
-            await console.Error.WriteLineAsync("File Not Found");
+            await console.Out.WriteLineAsync("File Not Found");
             return;
         }
 
-        var list = entries.ToList();
-        var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, list, opts);
+        var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, entries, opts);
 
         if (!opts.BareNames) await WriteDirectorySummary(console, fileCount, dirCount, totalSize, opts);
 
@@ -138,21 +137,16 @@ internal class DirCommand : ICommand
         await console.Out.WriteLineAsync();
     }
 
-    private static List<DosFileEntry>? GetFilteredEntries(IContext context, char drive, string[] path, string pattern, DirOptions opts)
+    private static (bool Found, List<DosFileEntry> Entries) TryGetFilteredEntries(IContext context, char drive, string[] path, string pattern, DirOptions opts)
     {
-        IEnumerable<DosFileEntry> entries;
-        try
-        {
-            entries = context.FileSystem.EnumerateEntries(drive, path, pattern).ToList();
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return null;
-        }
+        if (!context.FileSystem.DirectoryExists(drive, path))
+            return (false, []);
+
+        IEnumerable<DosFileEntry> entries = context.FileSystem.EnumerateEntries(drive, path, pattern).ToList();
 
         if (opts.AttributeFilter.Length > 0) entries = entries.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));
         entries = ApplySortOrder(entries, opts);
-        return entries.ToList();
+        return (true, entries.ToList());
     }
 
     private static IEnumerable<DosFileEntry> ApplySortOrder(IEnumerable<DosFileEntry> entries, DirOptions opts)

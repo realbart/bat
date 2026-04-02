@@ -232,6 +232,12 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public void SetPath(char drive, string[] path) => _paths[drive] = path;
     public void SetCurrentDrive(char drive) => CurrentDrive = drive;
     public string[] GetPathForDrive(char drive) => _paths.TryGetValue(drive, out var p) ? p : [];
+    public (bool Found, string NativePath) TryGetCurrentFolder()
+    {
+        if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
+            return (false, "");
+        return (true, FileSystem.GetNativePath(CurrentDrive, CurrentPath));
+    }
 }
 
 /// <summary>In-memory IFileSystem for unit tests.</summary>
@@ -242,6 +248,7 @@ internal sealed class TestFileSystem : IFileSystem
         = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _shortNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _fileContents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<char, string> _substs = [];
 
     public void AddDir(char drive, string[] path) => _dirs.Add(Key(drive, path));
 
@@ -374,6 +381,9 @@ internal sealed class TestFileSystem : IFileSystem
     public void RenameFile(char drive, string[] path, string newName) => throw new NotImplementedException();
     public void SetAttributes(char drive, string[] path, FileAttributes attributes) => throw new NotImplementedException();
     public uint GetVolumeSerialNumber(char drive) => 0;
+    public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
+    public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
+    public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
 }
 
 [TestClass]
@@ -754,6 +764,31 @@ public class DirCommandTests
         Assert.AreEqual("b.txt".PadRight(13), contentLine[13..26]);
         Assert.AreEqual("longggggg.txt", contentLine[26..39]);
     }
+
+    // "dir C:" with current drive Z: should list C:'s root — not inject Z:'s path segments.
+    [TestMethod]
+    public async Task Dir_DriveColonOnly_ListsRootOfSpecifiedDrive()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "on_c.txt", false);
+        var (cmd, console, bc) = Setup(fs, 'Z', []);  // current drive is Z, not C
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("C:")), bc, []);
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("on_c.txt")), "Should list C:'s root entries");
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory of C:\\")), "Header must show C:\\ not Z:'s path");
+    }
+
+    [TestMethod]
+    public async Task Dir_DriveColonOnly_DoesNotContainCurrentDrivePath()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('Z', ["deeply", "nested"]);
+        fs.AddDir('C', []);
+        var (cmd, console, bc) = Setup(fs, 'Z', ["deeply", "nested"]);
+        await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("C:")), bc, []);
+        // Must NOT contain Z:'s current path segments in the header
+        Assert.IsFalse(console.OutLines.Any(l => l.Contains("deeply")), "Z:'s path must not bleed into C: listing");
+    }
 }
 
 internal static class TestArgs
@@ -1082,6 +1117,64 @@ public class DispatcherIntegrationTests
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         CollectionAssert.AreEqual(new[] { "Users", "Bart", "Documents" }, ctx.CurrentPath);
+    }
+
+    // "D:" alone switches to drive D when its root is accessible.
+    [TestMethod]
+    public async Task DriveSwitch_AccessibleDrive_SwitchesCurrentDrive()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('D', []);
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("D:"));
+
+        Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
+        Assert.AreEqual('D', ctx.CurrentDrive);
+    }
+
+    // "X:" where X: is not mapped → error message, drive unchanged.
+    [TestMethod]
+    public async Task DriveSwitch_NonExistentDrive_ShowsError()
+    {
+        var fs = new TestFileSystem();
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("X:"));
+
+        Assert.AreEqual(1, ctx.ErrorCode);
+        Assert.AreEqual('C', ctx.CurrentDrive);
+        Assert.IsTrue(console.ErrLines.Any(l => l.Contains("cannot find the drive")));
+    }
+
+    // Per-drive directory is retained when switching back to a previously visited drive.
+    [TestMethod]
+    public async Task DriveSwitch_RetainsPerDriveDirectory()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('D', []);
+        fs.AddDir('D', ["Work"]);
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+        ctx.SetPath('D', ["Work"]);  // D: was last visited at D:\Work
+
+        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("D:"));
+
+        Assert.AreEqual('D', ctx.CurrentDrive);
+        CollectionAssert.AreEqual(new[] { "Work" }, ctx.CurrentPath);
+    }
+
+    // Case insensitive: "d:" should work the same as "D:".
+    [TestMethod]
+    public async Task DriveSwitch_LowercaseDrive_SwitchesDrive()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('D', []);
+        var (dispatcher, console, ctx) = Setup(fs, 'C', []);
+
+        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("d:"));
+
+        Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
+        Assert.AreEqual('D', ctx.CurrentDrive);
     }
 }
 

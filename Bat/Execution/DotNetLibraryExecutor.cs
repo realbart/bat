@@ -19,7 +19,7 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback) : IExecutor
 
         try
         {
-            var assembly = Assembly.Load(assemblyPath);
+            var assembly = Assembly.LoadFrom(assemblyPath);
             var entryPoint = FindIContextMain(assembly);
             if (entryPoint == null) return await nativeFallback.ExecuteAsync(executablePath, arguments, batchContext, redirections);
 
@@ -32,7 +32,8 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback) : IExecutor
         }
         catch
         {
-            return await nativeFallback.ExecuteAsync(executablePath, arguments, batchContext, redirections);
+            try { return await nativeFallback.ExecuteAsync(executablePath, arguments, batchContext, redirections); }
+            catch { return 1; }
         }
     }
 
