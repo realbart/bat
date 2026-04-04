@@ -19,8 +19,11 @@ public class LineEditorTests
     private static ConsoleKeyInfo UpArrow() => new('\0', ConsoleKey.UpArrow, false, false, false);
     private static ConsoleKeyInfo DownArrow() => new('\0', ConsoleKey.DownArrow, false, false, false);
     private static ConsoleKeyInfo LeftArrow() => new('\0', ConsoleKey.LeftArrow, false, false, false);
+    private static ConsoleKeyInfo RightArrow() => new('\0', ConsoleKey.RightArrow, false, false, false);
     private static ConsoleKeyInfo PageUp() => new('\0', ConsoleKey.PageUp, false, false, false);
     private static ConsoleKeyInfo PageDown() => new('\0', ConsoleKey.PageDown, false, false, false);
+    private static ConsoleKeyInfo F7() => new('\0', ConsoleKey.F7, false, false, false);
+    private static ConsoleKeyInfo AltF7() => new('\0', ConsoleKey.F7, false, true, false);
     private static ConsoleKeyInfo Tab() => new('\t', ConsoleKey.Tab, false, false, false);
     private static ConsoleKeyInfo ShiftTab() => new('\t', ConsoleKey.Tab, true, false, false);
 
@@ -60,6 +63,33 @@ public class LineEditorTests
         var result = new LineEditor().ReadLine("", Build(
             Key('a'), Key('b'), Key('c'), LeftArrow(), LeftArrow(), Delete(), Enter()));
         Assert.AreEqual("ac", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_RightArrow_WithinBuffer_MovesCursor()
+    {
+        // Type "ac", move left, type "b", move right past "c", Enter — cursor movement within buffer
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('c'), LeftArrow(), Key('b'), RightArrow(), Enter()));
+        Assert.AreEqual("abc", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_RightArrow_AtEndOfBuffer_CopiesFromTemplate()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello");  // template = "hello"
+        // Type "he" (2 chars), then Right Arrow 3 times to copy "llo" from template
+        var result = editor.ReadLine("", Build(
+            Key('h'), Key('e'), RightArrow(), RightArrow(), RightArrow(), Enter()));
+        Assert.AreEqual("hello", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_RightArrow_AtEndWithNoTemplate_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(Key('x'), RightArrow(), Enter()));
+        Assert.AreEqual("x", result);
     }
 
     [TestMethod]
@@ -161,6 +191,59 @@ public class LineEditorTests
     public void ReadLine_PageDownWithNoHistory_DoesNothing()
     {
         Assert.AreEqual("x", new LineEditor().ReadLine("", Build(PageDown(), Key('x'), Enter())));
+    }
+
+    [TestMethod]
+    public void ReadLine_F7_DisplaysHistoryList()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("first");
+        editor.AddToHistory("second");
+        editor.AddToHistory("third");
+
+        var console = Build(F7(), Escape(), Enter());
+        editor.ReadLine("", console);
+
+        var output = console.OutText;
+        Assert.IsTrue(output.Contains("0: first"));
+        Assert.IsTrue(output.Contains("1: second"));
+        Assert.IsTrue(output.Contains("2: third"));
+        Assert.IsTrue(output.Contains("▸"), "Selected line should have ▸ marker");
+        Assert.IsTrue(output.Contains("\x1b[107m"), "All lines should have white background in first column");
+    }
+
+    [TestMethod]
+    public void ReadLine_F7_EnterSelectsCommand()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("first");
+        editor.AddToHistory("second");
+        editor.AddToHistory("third");
+
+        // F7, Up twice to select "first", Enter
+        var result = editor.ReadLine("", Build(F7(), UpArrow(), UpArrow(), Enter()));
+        Assert.AreEqual("first", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F7_EscapeDismisses_BufferPreserved()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("old");
+
+        // Type "new", F7, Escape (dismiss), Enter — buffer unchanged
+        var result = editor.ReadLine("", Build(Key('n'), Key('e'), Key('w'), F7(), Escape(), Enter()));
+        Assert.AreEqual("new", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_AltF7_ClearsHistory()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("cmd");
+
+        editor.ReadLine("", Build(AltF7(), Enter()));
+        Assert.AreEqual(0, editor.History.Count);
     }
 
     // ── tab completion ────────────────────────────────────────────────────────

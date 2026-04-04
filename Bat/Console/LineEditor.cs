@@ -159,9 +159,17 @@ internal class LineEditor
                 continue;
             }
 
-            if (key.Key == ConsoleKey.F7 && key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+            if (key.Key == ConsoleKey.F7)
             {
-                ClearHistory();
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+                {
+                    ClearHistory();
+                }
+                else
+                {
+                    var selected = ShowHistoryList(console, prompt, promptLength, buffer, ref cursor);
+                    if (selected != null) return selected;
+                }
                 continue;
             }
 
@@ -205,6 +213,11 @@ internal class LineEditor
                     MoveCursorWordRight(buffer, ref cursor);
                 else if (cursor < buffer.Count)
                     cursor++;
+                else if (template != null && cursor < template.Length)
+                {
+                    InsertChar(console, buffer, ref cursor, template[cursor], insertMode, promptLength);
+                    continue;
+                }
                 console.CursorLeft = promptLength + cursor;
                 continue;
             }
@@ -274,6 +287,72 @@ internal class LineEditor
 
     private static void SetCursorShape(IConsole console, bool insertMode) =>
         console.Out.Write(insertMode ? "\e[5 q" : "\e[3 q");
+
+    private string? ShowHistoryList(IConsole console, string prompt, int promptLength, List<char> buffer, ref int cursor)
+    {
+        if (_history.Count == 0) return null;
+
+        console.Out.Write("\x1b[?25l");
+        var selectedIndex = _history.Count - 1;
+
+        while (true)
+        {
+            console.Out.WriteLine();
+            for (var i = 0; i < _history.Count; i++)
+            {
+                if (i == selectedIndex)
+                {
+                    var indicator = $"▸{i}";
+                    console.Out.WriteLine($"\x1b[107m \x1b[0m\x1b[107;35m{indicator}: {_history[i]}\x1b[0m");
+                }
+                else
+                {
+                    console.Out.WriteLine($"\x1b[107m \x1b[0m {i}: {_history[i]}");
+                }
+            }
+
+            var key = console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.UpArrow && selectedIndex > 0)
+                selectedIndex--;
+            else if (key.Key == ConsoleKey.DownArrow && selectedIndex < _history.Count - 1)
+                selectedIndex++;
+            else if (key.Key == ConsoleKey.Enter)
+            {
+                console.Out.Write("\x1b[?25h");
+                ClearHistoryPopup(console, _history.Count);
+                console.CursorLeft = 0;
+                console.Out.Write(prompt);
+                console.Out.Write(_history[selectedIndex]);
+                console.Out.WriteLine();
+                return _history[selectedIndex];
+            }
+            else if (key.Key == ConsoleKey.Escape)
+            {
+                console.Out.Write("\x1b[?25h");
+                ClearHistoryPopup(console, _history.Count);
+                console.CursorLeft = 0;
+                console.Out.Write(new string([.. buffer]));
+                console.CursorLeft = promptLength + cursor;
+                return null;
+            }
+
+            console.CursorLeft = 0;
+            console.Out.Write($"\x1b[{_history.Count + 1}A");
+        }
+    }
+
+    private static void ClearHistoryPopup(IConsole console, int lineCount)
+    {
+        var totalLines = lineCount + 1; // blank line + history lines
+        console.Out.Write($"\x1b[{lineCount}A");
+        for (var i = 0; i < totalLines; i++)
+        {
+            console.Out.Write("\x1b[2K");
+            if (i < totalLines - 1) console.Out.WriteLine();
+        }
+        console.Out.Write($"\x1b[{totalLines}A");
+    }
 
     // ── Tab completion ────────────────────────────────────────────────────────
 
