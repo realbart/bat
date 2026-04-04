@@ -418,4 +418,17 @@ public class LineEditorTests
             Tab(), Enter()), ctx);
         Assert.AreEqual(@"\Users\Bart\", result);
     }
+
+    [TestMethod]
+    public void ReadLine_Tab_SwitchPrefix_CompletesFromCurrentDir()
+    {
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        fs.AddEntry('C', [], "file.txt", false);
+        var ctx = MakeCtx(fs);
+
+        var result = new LineEditor().ReadLine("", Build(
+            Key('d'), Key('i'), Key('r'), Key(' '), Key('/'), Tab(), Enter()), ctx);
+        Assert.AreEqual("dir file.txt", result);
+    }
 }

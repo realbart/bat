@@ -93,10 +93,10 @@ internal class CdCommand : ICommand
 
     private static string[] ResolvePath(IContext context, char drive, string pathPart)
     {
-        pathPart = pathPart.Replace('/', '\\');
-
         if (pathPart.StartsWith('\\'))
+        {
             return pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        }
 
         var current = new List<string>(context.GetPathForDrive(drive));
         foreach (var part in pathPart.Split('\\', StringSplitOptions.RemoveEmptyEntries))

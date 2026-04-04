@@ -425,7 +425,7 @@ internal class LineEditor
             rest = partial[2..];
         }
 
-        var lastSep = rest.LastIndexOfAny(['\\', '/']);
+        var lastSep = rest.LastIndexOf('\\');
         if (lastSep < 0)
             return (drive, context.GetPathForDrive(drive), rest);
 
@@ -433,7 +433,7 @@ internal class LineEditor
         var prefix = rest[(lastSep + 1)..];
         var dir = dirStr.Length == 0
             ? []
-            : dirStr.TrimStart('\\', '/').Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+            : dirStr.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
 
         return (drive, dir, prefix);
     }

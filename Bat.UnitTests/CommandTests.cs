@@ -556,13 +556,14 @@ public class CdCommandTests
     }
 
     [TestMethod]
-    public async Task Cd_MixedSlashes_Normalized()
+    public async Task Cd_ForwardSlashInPath_IsNotPathSeparator()
     {
         var fs = new TestFileSystem();
         fs.AddDir('C', ["Users", "Bart"]);
-        var (cmd, _, bc, ctx) = Setup(fs, 'C', []);
-        await cmd.ExecuteAsync(TestArgs.For<CdCommand>(Token.Text(@"\Users/Bart")), bc, []);
-        CollectionAssert.AreEqual(new[] { "Users", "Bart" }, ctx.CurrentPath);
+        var (cmd, console, bc, ctx) = Setup(fs, 'C', []);
+        var result = await cmd.ExecuteAsync(TestArgs.For<CdCommand>(Token.Text(@"\Users/Bart")), bc, []);
+        Assert.AreEqual(1, result);
+        Assert.IsTrue(console.ErrLines[0].Contains("cannot find"));
     }
 }
 
