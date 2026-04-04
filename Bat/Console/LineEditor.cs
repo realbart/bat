@@ -378,11 +378,7 @@ internal class LineEditor
         var candidates = context.FileSystem
             .EnumerateEntries(drive, dir, prefix + "*")
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(e =>
-            {
-                var wordPrefix = partial[..^prefix.Length];
-                return wordPrefix + e.Name + (e.IsDirectory ? "\\" : "");
-            })
+            .Select(e => partial[..^prefix.Length] + e.Name)
             .ToList();
 
         if (candidates.Count == 0) return;

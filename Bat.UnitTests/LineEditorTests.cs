@@ -266,7 +266,7 @@ public class LineEditorTests
 
         var result = new LineEditor().ReadLine("", Build(
             Key('c'), Key('d'), Key(' '), Key('\\'), Key('U'), Tab(), Enter()), ctx);
-        Assert.AreEqual(@"cd \Users\", result);
+        Assert.AreEqual(@"cd \Users", result);
     }
 
     [TestMethod]
@@ -278,7 +278,7 @@ public class LineEditorTests
         var ctx = MakeCtx(fs);
 
         var result = new LineEditor().ReadLine("", Build(Key('U'), Key('s'), Tab(), Enter()), ctx);
-        Assert.AreEqual(@"Users\", result);
+        Assert.AreEqual(@"Users", result);
     }
 
     [TestMethod]
@@ -320,10 +320,10 @@ public class LineEditorTests
         fs.AddEntry('C', [], "Users", true);     // alphabetically second
         var ctx = MakeCtx(fs);
 
-        // \U<Tab> -> \Uploads\, <Tab> -> \Users\, <Enter>
+        // \U<Tab> -> \Uploads, <Tab> -> \Users, <Enter>
         var result = new LineEditor().ReadLine("", Build(
             Key('\\'), Key('U'), Tab(), Tab(), Enter()), ctx);
-        Assert.AreEqual(@"\Users\", result);
+        Assert.AreEqual(@"\Users", result);
     }
 
     [TestMethod]
@@ -335,10 +335,10 @@ public class LineEditorTests
         fs.AddEntry('C', [], "Users", true);
         var ctx = MakeCtx(fs);
 
-        // \U<Tab> -> \Uploads\, <Shift+Tab> -> \Users\ (wraps to last), <Enter>
+        // \U<Tab> -> \Uploads, <Shift+Tab> -> \Users (wraps to last), <Enter>
         var result = new LineEditor().ReadLine("", Build(
             Key('\\'), Key('U'), Tab(), ShiftTab(), Enter()), ctx);
-        Assert.AreEqual(@"\Users\", result);
+        Assert.AreEqual(@"\Users", result);
     }
 
     [TestMethod]
@@ -350,14 +350,14 @@ public class LineEditorTests
         fs.AddEntry('C', [], "LongDirectory", true);  // long   — alphabetically second
         var ctx = MakeCtx(fs);
 
-        // \<Tab> -> \A\, <Tab> -> \LongDirectory\, <Tab> -> wraps to \A\ — must erase 12 extra chars
+        // \<Tab> -> \A, <Tab> -> \LongDirectory, <Tab> -> wraps to \A — must erase 12 extra chars
         var console = Build(Key('\\'), Tab(), Tab(), Tab(), Enter());
         var result = new LineEditor().ReadLine("", console, ctx);
 
-        Assert.AreEqual(@"\A\", result);
+        Assert.AreEqual(@"\A", result);
 
-        // Screen write after third Tab must contain \A\ followed by >= 12 spaces
-        Assert.IsTrue(console.OutText.Contains(@"\A\" + new string(' ', 12)),
+        // Screen write after third Tab must contain \A followed by >= 12 spaces
+        Assert.IsTrue(console.OutText.Contains(@"\A" + new string(' ', 12)),
             $"Must erase leftover chars from longer name. OutText={console.OutText}");
     }
 
@@ -370,9 +370,9 @@ public class LineEditorTests
         fs.AddEntry('C', [], "VeryLongDirectoryName", true);
         var ctx = MakeCtx(fs);
 
-        // \<Tab> -> \Short\, <Tab> -> \VeryLongDirectoryName\, <Enter>
+        // \<Tab> -> \Short, <Tab> -> \VeryLongDirectoryName, <Enter>
         var result = new LineEditor().ReadLine("", Build(Key('\\'), Tab(), Tab(), Enter()), ctx);
-        Assert.AreEqual(@"\VeryLongDirectoryName\", result);
+        Assert.AreEqual(@"\VeryLongDirectoryName", result);
     }
 
     [TestMethod]
@@ -384,10 +384,10 @@ public class LineEditorTests
         fs.AddEntry('C', [], "Ufo", true);
         var ctx = MakeCtx(fs);
 
-        // \U<Tab> -> \Ufo\ (first match alphabetically), 'x' resets candidates
+        // \U<Tab> -> \Ufo (first match alphabetically), 'x' resets candidates
         var result = new LineEditor().ReadLine("", Build(
             Key('\\'), Key('U'), Tab(), Key('x'), Enter()), ctx);
-        Assert.IsTrue(result == @"\Ufo\x" || result == @"\Users\x");
+        Assert.IsTrue(result == @"\Ufox" || result == @"\Usersx");
     }
 
     [TestMethod]
@@ -401,7 +401,7 @@ public class LineEditorTests
 
         var result = new LineEditor().ReadLine("", Build(
             Key('D'), Key(':'), Key('\\'), Key('W'), Tab(), Enter()), ctx);
-        Assert.AreEqual(@"D:\Work\", result);
+        Assert.AreEqual(@"D:\Work", result);
     }
 
     [TestMethod]
@@ -416,6 +416,6 @@ public class LineEditorTests
         var result = new LineEditor().ReadLine("", Build(
             Key('\\'), Key('U'), Key('s'), Key('e'), Key('r'), Key('s'), Key('\\'), Key('B'),
             Tab(), Enter()), ctx);
-        Assert.AreEqual(@"\Users\Bart\", result);
+        Assert.AreEqual(@"\Users\Bart", result);
     }
 }
