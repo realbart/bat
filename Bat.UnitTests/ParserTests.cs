@@ -155,7 +155,7 @@ public class VariableTokenization
 
     public VariableTokenization()
     {
-        var fileSystem = new DosFileSystem();
+        var fileSystem = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         context = new DosContext(fileSystem);
         // Set environment variable for testing
         context.EnvironmentVariables.Add("TESTVAR", "TestValue");
@@ -462,7 +462,7 @@ public class ComplexScenarios
 
     public ComplexScenarios()
     {
-        var fileSystem = new DosFileSystem();
+        var fileSystem = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         context = new DosContext(fileSystem);
         context.EnvironmentVariables["PATH"] = "C:\\Windows\\System32";
     }

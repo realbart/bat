@@ -7,4 +7,7 @@ internal interface IConsole
     TextWriter Out { get; }
     int WindowWidth { get; }
     int WindowHeight { get; }
+    int CursorLeft { get; set; }
+    bool IsInteractive { get; }
+    ConsoleKeyInfo ReadKey(bool intercept);
 }

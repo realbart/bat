@@ -15,4 +15,7 @@ internal class Console : IConsole
     public TextReader In => SC.In;
     public int WindowWidth => SC.WindowWidth;
     public int WindowHeight => SC.WindowHeight;
+    public int CursorLeft { get => SC.CursorLeft; set => SC.CursorLeft = value; }
+    public bool IsInteractive => !SC.IsInputRedirected;
+    public ConsoleKeyInfo ReadKey(bool intercept) => SC.ReadKey(intercept);
 }

@@ -46,10 +46,10 @@ public class DosFileSystemTests : IDisposable
     }
 
     [TestMethod]
-    public void GetNativePath_InvalidDrive_ReturnsFallbackPath()
+    public void GetNativePath_UnmappedDrive_ReturnsNonExistentPath()
     {
         var result = _fs.GetNativePath('X', []);
-        Assert.AreEqual(@"X:\", result);
+        Assert.IsFalse(Directory.Exists(result), "Unmapped drive must not resolve to an existing directory");
     }
 
     // ── FileExists / DirectoryExists ─────────────────────────────────────────
@@ -315,7 +315,7 @@ public class DosFileSystemTests : IDisposable
         if (!DriveInfo.GetDrives().Any(d => char.ToUpperInvariant(d.Name[0]) == 'C'))
             Assert.Inconclusive("No C: drive on this machine.");
 
-        var defaultFs = new DosFileSystem();
+        var defaultFs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         Assert.IsTrue(defaultFs.HasDrive('Z'), "C: should be mapped to Z:");
         Assert.IsFalse(defaultFs.HasDrive('C'), "C: should NOT be directly accessible");
     }

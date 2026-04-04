@@ -21,7 +21,7 @@ public class SubstFileSystemTests : IDisposable
     {
         _testRoot = Path.Combine(Path.GetTempPath(), $"BatSubstFsTest_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
-        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot });
+        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot, ['C'] = @"C:\" });
     }
 
     protected virtual void Dispose(bool disposing)

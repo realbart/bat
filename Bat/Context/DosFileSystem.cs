@@ -9,12 +9,10 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
 {
     private readonly Dictionary<char, string> _roots = new Dictionary<char, string>(roots);
 
-    public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
-
     protected override string GetNativePathCore(char drive, string[] path)
     {
-        _roots.TryGetValue(drive, out var root);
-        root ??= $@"{drive}:\";
+        if (!_roots.TryGetValue(drive, out var root))
+            root = $@"{drive}:\does-not-exist";
         return path.Length == 0 ? root : Path.Combine([root, .. path]);
     }
 

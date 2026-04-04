@@ -5,11 +5,15 @@ namespace Bat.Context;
 
 internal static class ContextFactory
 {
-    public static IContext CreateContext() => OperatingSystem.IsWindows()
-        ? new DosContext()
-        : new UxContextAdapter(new UxFileSystemAdapter(
-            new Dictionary<char, string> { ['Z'] = "/" },
-            UnixOwnerGetter()));
+    public static IContext CreateContext()
+    {
+        IContext context = OperatingSystem.IsWindows()
+            ? new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }))
+            : new UxContextAdapter(new UxFileSystemAdapter(
+                new Dictionary<char, string> { ['Z'] = "/" },
+                UnixOwnerGetter()));
+        return context;
+    }
 
     private static Func<string, string> UnixOwnerGetter()
     {

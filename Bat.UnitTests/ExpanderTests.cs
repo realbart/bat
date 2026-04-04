@@ -163,7 +163,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NoVariables_ReturnsOriginal()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             var line = "echo hello world";
 
             // Act
@@ -177,7 +177,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SingleVariable_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST%";
 
@@ -192,7 +192,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UndefinedVariable_RemainsLiteral()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             var line = "echo %NOTFOUND%";
 
             // Act
@@ -206,7 +206,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MultipleVariables_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["VAR1"] = "value1";
             ctx.EnvironmentVariables["VAR2"] = "value2";
             var line = "echo %VAR1% and %VAR2%";
@@ -222,7 +222,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MixedDefinedAndUndefined_ExpandsOnlyDefined()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["DEFINED"] = "exists";
             var line = "echo %DEFINED% and %UNDEFINED%";
 
@@ -237,7 +237,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_IgnoresBatchParameters()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["1"] = "should_not_expand";
             var line = "echo %1";
 
@@ -252,7 +252,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyVariable_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["EMPTY"] = "";
             var line = "echo %EMPTY%";
 
@@ -267,7 +267,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyString_ReturnsEmpty()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             var line = "";
 
             // Act
@@ -281,7 +281,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NullString_ReturnsNull()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             string? line = null;
 
             // Act
@@ -295,7 +295,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UnclosedPercent_LeavesAsIs()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem());
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST";
 

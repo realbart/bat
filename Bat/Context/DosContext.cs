@@ -2,8 +2,6 @@
 
 internal class DosContext : Context
 {
-    public DosContext() : this(new DosFileSystem()) { }
-
     public DosContext(DosFileSystem fs) : base(fs)
     {
         InitializeFromEnvironment();
