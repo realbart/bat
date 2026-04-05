@@ -118,6 +118,13 @@ internal class LineEditor
                 return null;
             }
 
+            // Ctrl+Z — insert EOF marker (ascii 26)
+            if (key.Key == ConsoleKey.Z && key.Modifiers.HasFlag(ConsoleModifiers.Control))
+            {
+                InsertChar(console, buffer, ref cursor, '\x1a', insertMode, promptLength);
+                continue;
+            }
+
             // ── History ──────────────────────────────────────────────────
 
             if (key.Key == ConsoleKey.UpArrow)
@@ -185,12 +192,91 @@ internal class LineEditor
                 continue;
             }
 
+            if (key.Key == ConsoleKey.F5)
+            {
+                template = new string([.. buffer]);
+                ClearLine(console, buffer, promptLength);
+                buffer.Clear();
+                cursor = 0;
+                continue;
+            }
+
             if (key.Key == ConsoleKey.F1)
             {
                 if (template != null && cursor < template.Length)
                 {
                     var c = template[cursor];
                     InsertChar(console, buffer, ref cursor, c, insertMode, promptLength);
+                }
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.F2)
+            {
+                var next = console.ReadKey(intercept: true);
+                if (template != null && cursor < template.Length)
+                {
+                    var idx = template.IndexOf(next.KeyChar, cursor);
+                    if (idx > cursor)
+                    {
+                        var span = template[cursor..idx];
+                        foreach (var c in span)
+                            InsertChar(console, buffer, ref cursor, c, insertMode, promptLength);
+                    }
+                }
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.F4)
+            {
+                var next = console.ReadKey(intercept: true);
+                if (template != null && cursor < template.Length)
+                {
+                    var idx = template.IndexOf(next.KeyChar, cursor);
+                    if (idx >= 0)
+                        template = template[..cursor] + template[idx..];
+                }
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.F8)
+            {
+                var prefix = new string([.. buffer[..cursor]]);
+                var searchFrom = historyIndex < _history.Count ? historyIndex - 1 : _history.Count - 1;
+                for (var i = searchFrom; i >= 0; i--)
+                {
+                    if (_history[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        historyIndex = i;
+                        ReplaceBuffer(console, buffer, ref cursor, _history[i], promptLength);
+                        cursor = prefix.Length;
+                        console.CursorLeft = promptLength + cursor;
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.F9)
+            {
+                var numKey = console.ReadKey(intercept: true);
+                if (numKey.Key == ConsoleKey.Enter
+                    && int.TryParse(numKey.KeyChar.ToString(), out _)) { }
+                else if (char.IsDigit(numKey.KeyChar))
+                {
+                    var sb = new List<char> { numKey.KeyChar };
+                    while (true)
+                    {
+                        var nk = console.ReadKey(intercept: true);
+                        if (nk.Key == ConsoleKey.Enter) break;
+                        if (char.IsDigit(nk.KeyChar)) sb.Add(nk.KeyChar);
+                    }
+                    if (int.TryParse(new string([.. sb]), out var idx)
+                        && idx >= 0 && idx < _history.Count)
+                    {
+                        historyIndex = idx;
+                        ReplaceBuffer(console, buffer, ref cursor, _history[idx], promptLength);
+                    }
                 }
                 continue;
             }
@@ -224,15 +310,43 @@ internal class LineEditor
 
             if (key.Key == ConsoleKey.Home)
             {
-                console.CursorLeft = promptLength;
-                cursor = 0;
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                {
+                    if (cursor > 0)
+                    {
+                        buffer.RemoveRange(0, cursor);
+                        cursor = 0;
+                        console.CursorLeft = promptLength;
+                        console.Out.Write(new string([.. buffer]) + " ");
+                        console.CursorLeft = promptLength;
+                    }
+                }
+                else
+                {
+                    cursor = 0;
+                }
+                console.CursorLeft = promptLength + cursor;
                 continue;
             }
 
             if (key.Key == ConsoleKey.End)
             {
-                console.CursorLeft = promptLength + buffer.Count;
-                cursor = buffer.Count;
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                {
+                    if (cursor < buffer.Count)
+                    {
+                        var eraseCount = buffer.Count - cursor;
+                        buffer.RemoveRange(cursor, eraseCount);
+                        console.CursorLeft = promptLength + cursor;
+                        console.Out.Write(new string(' ', eraseCount));
+                        console.CursorLeft = promptLength + cursor;
+                    }
+                }
+                else
+                {
+                    cursor = buffer.Count;
+                    console.CursorLeft = promptLength + cursor;
+                }
                 continue;
             }
 

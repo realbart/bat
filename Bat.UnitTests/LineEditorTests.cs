@@ -26,6 +26,21 @@ public class LineEditorTests
     private static ConsoleKeyInfo AltF7() => new('\0', ConsoleKey.F7, false, true, false);
     private static ConsoleKeyInfo Tab() => new('\t', ConsoleKey.Tab, false, false, false);
     private static ConsoleKeyInfo ShiftTab() => new('\t', ConsoleKey.Tab, true, false, false);
+    private static ConsoleKeyInfo Home() => new('\0', ConsoleKey.Home, false, false, false);
+    private static ConsoleKeyInfo End() => new('\0', ConsoleKey.End, false, false, false);
+    private static ConsoleKeyInfo CtrlHome() => new('\0', ConsoleKey.Home, false, false, true);
+    private static ConsoleKeyInfo CtrlEnd() => new('\0', ConsoleKey.End, false, false, true);
+    private static ConsoleKeyInfo CtrlLeft() => new('\0', ConsoleKey.LeftArrow, false, false, true);
+    private static ConsoleKeyInfo CtrlRight() => new('\0', ConsoleKey.RightArrow, false, false, true);
+    private static ConsoleKeyInfo Insert() => new('\0', ConsoleKey.Insert, false, false, false);
+    private static ConsoleKeyInfo F1() => new('\0', ConsoleKey.F1, false, false, false);
+    private static ConsoleKeyInfo F2() => new('\0', ConsoleKey.F2, false, false, false);
+    private static ConsoleKeyInfo F3() => new('\0', ConsoleKey.F3, false, false, false);
+    private static ConsoleKeyInfo F4() => new('\0', ConsoleKey.F4, false, false, false);
+    private static ConsoleKeyInfo F5() => new('\0', ConsoleKey.F5, false, false, false);
+    private static ConsoleKeyInfo F8() => new('\0', ConsoleKey.F8, false, false, false);
+    private static ConsoleKeyInfo F9() => new('\0', ConsoleKey.F9, false, false, false);
+    private static ConsoleKeyInfo CtrlZ() => new('\x1a', ConsoleKey.Z, false, false, true);
 
     private static TestConsole Build(params ConsoleKeyInfo[] keys)
     {
@@ -417,5 +432,410 @@ public class LineEditorTests
             Key('\\'), Key('U'), Key('s'), Key('e'), Key('r'), Key('s'), Key('\\'), Key('B'),
             Tab(), Enter()), ctx);
         Assert.AreEqual(@"\Users\Bart", result);
+    }
+
+    // ── Ctrl+Home / Ctrl+End ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_CtrlHome_DeletesFromCursorToStart()
+    {
+        // Type "abcde", move left 2, Ctrl+Home → "de"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Key('d'), Key('e'),
+            LeftArrow(), LeftArrow(), CtrlHome(), Enter()));
+        Assert.AreEqual("de", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlHome_AtStart_DoesNothing()
+    {
+        // Move to start first, then Ctrl+Home — nothing to delete
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'),
+            LeftArrow(), LeftArrow(), LeftArrow(),
+            CtrlHome(), Enter()));
+        Assert.AreEqual("abc", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlEnd_DeletesFromCursorToEnd()
+    {
+        // Type "abcde", move left 2, Ctrl+End → "abc"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Key('d'), Key('e'),
+            LeftArrow(), LeftArrow(), CtrlEnd(), Enter()));
+        Assert.AreEqual("abc", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlEnd_AtEnd_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), CtrlEnd(), Enter()));
+        Assert.AreEqual("abc", result);
+    }
+
+    // ── F5 (move to template, clear line) ────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F5_MovesBufferToTemplate_ClearsLine()
+    {
+        var editor = new LineEditor();
+        // Type "new", F5 moves it to template and clears, then F3 copies from template
+        var result = editor.ReadLine("", Build(
+            Key('n'), Key('e'), Key('w'), F5(), F3(), Enter()));
+        Assert.AreEqual("new", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F5_ThenF1_CopiesFromNewTemplate()
+    {
+        var editor = new LineEditor();
+        // Type "abc", F5 clears and sets template to "abc", F1 copies 'a'
+        var result = editor.ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), F5(), F1(), Enter()));
+        Assert.AreEqual("a", result);
+    }
+
+    // ── F2 + char (copy from template up to char) ────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F2_CopiesFromTemplateUpToChar()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello world");
+        // F2 + 'w' → copies "hello " (up to but not including 'w')
+        var result = editor.ReadLine("", Build(F2(), Key('w'), Enter()));
+        Assert.AreEqual("hello ", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F2_CharNotFound_CopiesNothing()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello");
+        // F2 + 'z' → 'z' not in template, copies nothing
+        var result = editor.ReadLine("", Build(F2(), Key('z'), Enter()));
+        Assert.AreEqual("", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F2_FromMiddle_CopiesFromCursor()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("abcdef");
+        // Type "ab" (cursor at 2), F2 + 'e' → copies "cd" from template positions 2..4
+        var result = editor.ReadLine("", Build(
+            Key('a'), Key('b'), F2(), Key('e'), Enter()));
+        Assert.AreEqual("abcd", result);
+    }
+
+    // ── F4 + char (delete from current position up to char in template) ──────
+
+    [TestMethod]
+    public void ReadLine_F4_SkipsTemplateUpToChar()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello world");
+        // F4 + 'w' → skips template to 'w', then F3 copies "world"
+        var result = editor.ReadLine("", Build(F4(), Key('w'), F3(), Enter()));
+        Assert.AreEqual("world", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F4_CharNotFound_DoesNothing()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello");
+        // F4 + 'z' → 'z' not found, template unchanged, F3 copies all
+        var result = editor.ReadLine("", Build(F4(), Key('z'), F3(), Enter()));
+        Assert.AreEqual("hello", result);
+    }
+
+    // ── F8 (search history by prefix) ────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F8_SearchesByPrefix()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("dir /b");
+        editor.AddToHistory("echo hello");
+        editor.AddToHistory("dir /s");
+        // Type "dir", F8 → finds "dir /s" (most recent match)
+        var result = editor.ReadLine("", Build(
+            Key('d'), Key('i'), Key('r'), F8(), Enter()));
+        Assert.AreEqual("dir /s", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F8_CyclesMatches()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("dir /b");
+        editor.AddToHistory("echo hello");
+        editor.AddToHistory("dir /s");
+        // Type "dir", F8 → "dir /s", F8 → "dir /b"
+        var result = editor.ReadLine("", Build(
+            Key('d'), Key('i'), Key('r'), F8(), F8(), Enter()));
+        Assert.AreEqual("dir /b", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F8_NoMatch_DoesNothing()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("echo hello");
+        // Type "xyz", F8 → no match, buffer unchanged
+        var result = editor.ReadLine("", Build(
+            Key('x'), Key('y'), Key('z'), F8(), Enter()));
+        Assert.AreEqual("xyz", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F8_EmptyPrefix_RecallsMostRecent()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("first");
+        editor.AddToHistory("second");
+        // F8 with empty prefix → "second" (most recent)
+        var result = editor.ReadLine("", Build(F8(), Enter()));
+        Assert.AreEqual("second", result);
+    }
+
+    // ── F9 (select command by history number) ────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F9_SelectsByNumber()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("zero");
+        editor.AddToHistory("one");
+        editor.AddToHistory("two");
+        // F9, type "1", Enter → selects "one"
+        var result = editor.ReadLine("", Build(F9(), Key('1'), Enter(), Enter()));
+        Assert.AreEqual("one", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F9_InvalidNumber_DoesNothing()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("zero");
+        // F9, type "9", Enter → out of range, buffer unchanged
+        var result = editor.ReadLine("", Build(F9(), Key('9'), Enter(), Enter()));
+        Assert.AreEqual("", result);
+    }
+
+    // ── Ctrl+Z (EOF marker) ──────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_CtrlZ_InsertsEofChar()
+    {
+        var result = new LineEditor().ReadLine("", Build(Key('a'), CtrlZ(), Enter()));
+        Assert.AreEqual("a\x1a", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlZ_AtEmptyLine_InsertsEofChar()
+    {
+        var result = new LineEditor().ReadLine("", Build(CtrlZ(), Enter()));
+        Assert.AreEqual("\x1a", result);
+    }
+
+    // ── Home / End ───────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_Home_MovesCursorToStart()
+    {
+        // Type "abc", Home, type "x" → "xabc"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Home(), Key('x'), Enter()));
+        Assert.AreEqual("xabc", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_Home_AtStart_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Home(), Home(), Key('x'), Enter()));
+        Assert.AreEqual("xa", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_End_MovesCursorToEnd()
+    {
+        // Type "abc", Home, End, type "x" → "abcx"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Home(), End(), Key('x'), Enter()));
+        Assert.AreEqual("abcx", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_End_AtEnd_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), End(), Key('x'), Enter()));
+        Assert.AreEqual("abx", result);
+    }
+
+    // ── Ctrl+← / Ctrl+→ (word navigation) ───────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_CtrlLeft_MovesToPreviousWordBoundary()
+    {
+        // "hello world", Ctrl+Left → cursor before 'w', type 'X' → "hello Xworld"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('h'), Key('e'), Key('l'), Key('l'), Key('o'), Key(' '),
+            Key('w'), Key('o'), Key('r'), Key('l'), Key('d'),
+            CtrlLeft(), Key('X'), Enter()));
+        Assert.AreEqual("hello Xworld", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlLeft_AtStart_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Home(), CtrlLeft(), Key('x'), Enter()));
+        Assert.AreEqual("xab", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlRight_MovesToNextWordBoundary()
+    {
+        // "hello world", Home, Ctrl+Right → cursor after 'o' and space, type 'X' → "hello Xworld"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('h'), Key('e'), Key('l'), Key('l'), Key('o'), Key(' '),
+            Key('w'), Key('o'), Key('r'), Key('l'), Key('d'),
+            Home(), CtrlRight(), Key('X'), Enter()));
+        Assert.AreEqual("hello Xworld", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_CtrlRight_AtEnd_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), CtrlRight(), Key('x'), Enter()));
+        Assert.AreEqual("abx", result);
+    }
+
+    // ── Delete (second test) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_Delete_AtEnd_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Delete(), Enter()));
+        Assert.AreEqual("ab", result);
+    }
+
+    // ── Insert toggle (overwrite mode) ───────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_Insert_TogglesOverwriteMode()
+    {
+        // Type "abc", Home, Insert (switch to overwrite), type "XY" → "XYc"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Home(),
+            Insert(), Key('X'), Key('Y'), Enter()));
+        Assert.AreEqual("XYc", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_Insert_ToggleBackToInsertMode()
+    {
+        // Type "abc", Home, Insert (overwrite), Insert (back to insert), type "X" → "Xabc"
+        var result = new LineEditor().ReadLine("", Build(
+            Key('a'), Key('b'), Key('c'), Home(),
+            Insert(), Insert(), Key('X'), Enter()));
+        Assert.AreEqual("Xabc", result);
+    }
+
+    // ── Escape (second test) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_Escape_EmptyBuffer_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(Escape(), Key('a'), Enter()));
+        Assert.AreEqual("a", result);
+    }
+
+    // ── DownArrow (second test) ──────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_DownArrow_NavigatesForwardThroughHistory()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("first");
+        editor.AddToHistory("second");
+        // Up, Up → "first", Down → "second"
+        var result = editor.ReadLine("", Build(
+            UpArrow(), UpArrow(), DownArrow(), Enter()));
+        Assert.AreEqual("second", result);
+    }
+
+    // ── PageUp (second test) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_PageUp_WithNoHistory_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(PageUp(), Key('x'), Enter()));
+        Assert.AreEqual("x", result);
+    }
+
+    // ── Alt+F7 (second test) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_AltF7_EmptyHistory_DoesNothing()
+    {
+        var editor = new LineEditor();
+        editor.ReadLine("", Build(AltF7(), Enter()));
+        Assert.AreEqual(0, editor.History.Count);
+    }
+
+    // ── F1 (dedicated tests) ────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F1_CopiesOneCharFromTemplate()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello");
+        // F1 twice → copies 'h', 'e'
+        var result = editor.ReadLine("", Build(F1(), F1(), Enter()));
+        Assert.AreEqual("he", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F1_NoTemplate_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(F1(), Key('x'), Enter()));
+        Assert.AreEqual("x", result);
+    }
+
+    // ── F3 (dedicated tests) ────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_F3_CopiesRemainderFromTemplate()
+    {
+        var editor = new LineEditor();
+        editor.AddToHistory("hello world");
+        // Type "he", F3 → copies "llo world"
+        var result = editor.ReadLine("", Build(
+            Key('h'), Key('e'), F3(), Enter()));
+        Assert.AreEqual("hello world", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_F3_NoTemplate_DoesNothing()
+    {
+        var result = new LineEditor().ReadLine("", Build(F3(), Key('x'), Enter()));
+        Assert.AreEqual("x", result);
+    }
+
+    // ── Ctrl+C (second test) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_CtrlC_WithEmptyBuffer_ReturnsNull()
+    {
+        Assert.IsNull(new LineEditor().ReadLine("", Build(CtrlC())));
     }
 }
