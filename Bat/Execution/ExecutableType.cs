@@ -11,5 +11,7 @@ internal enum ExecutableType
     Document,
     WindowsConsole,
     WindowsGui,
-    DotNetAssembly
+    DotNetAssembly,
+    /// <summary>File prefixed with the bat launcher stub (first 2 KB) followed by a .NET assembly.</summary>
+    PrefixedDotNetAssembly
 }

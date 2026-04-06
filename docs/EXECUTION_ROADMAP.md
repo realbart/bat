@@ -26,13 +26,14 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | 3 | 🟢 DONE | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
 | 4 | 🟢 DONE | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
 | 5 | 🟢 DONE | CD en DIR commands | [STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md) |
-| 6 | 🟡 NEXT | Executable resolution & execution | [STEP_06_EXECUTABLE_RESOLUTION.md](steps/STEP_06_EXECUTABLE_RESOLUTION.md) |
+| 6 | 🟢 DONE | Executable resolution & execution | [STEP_06_EXECUTABLE_RESOLUTION.md](steps/STEP_06_EXECUTABLE_RESOLUTION.md) |
 | 7 | 🔴 TODO | Piping + bestandsredirectie | [STEP_07_REDIRECTIONS.md](steps/STEP_07_REDIRECTIONS.md) |
 | 8 | 🔴 TODO | GOTO, CALL, advanced batch features | [STEP_08_ADVANCED_BATCH.md](steps/STEP_08_ADVANCED_BATCH.md) |
-| 9 | 🔴 TODO | SUBST + Drive Switching (D:) | [STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md) |
+| 9 | 🟡 PARTIAL | SUBST + Drive Switching (D:) | [STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md) |
 | 10 | 🔴 TODO | SETLOCAL / ENDLOCAL | [STEP_10_SETLOCAL.md](steps/STEP_10_SETLOCAL.md) |
-| 11 | 🔴 TODO | Command line parameters van Bat | [STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md) |
+| 11 | 🟢 DONE | Command line parameters van Bat | [STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md) |
 | 12 | 🟢 DONE | UxFileSystem / UxContext | [STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md) |
+| 13 | 🔴 TODO | Platform-specifieke compilatie | [STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md) |
 
 ### Commando-implementatiestappen
 
@@ -490,6 +491,34 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 
 → **[STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md)**
 
+## Stap 13: Platform-specifieke compilatie
+
+**Doel:** Windows-only code is niet aanwezig in Unix-binaries en vice versa.
+
+**Achtergrond:**
+`DosFileSystem` en `DosContext` zijn uitsluitend zinvol op Windows; `UxFileSystemAdapter`, `UxContextAdapter` en `UnixFileOwner` uitsluitend op Unix. Momenteel worden ze wel meegecompileerd in elke binary (ook al worden ze nooit aangeroepen). De `ContextFactory` is bewust de enige plek met OS-detectie en blijft dat ook na deze stap.
+
+**Scope:**
+- Definieer MSBuild-constante `WINDOWS` wanneer `RuntimeIdentifier` begint met `win-`, en `UNIX` voor `linux-` en `osx-`
+- Gebruik `<Compile Remove="...">` met RID-condities in `Bat.csproj` om platform-specifieke bestanden uit te sluiten
+- Splits `ContextFactory` in een gemeenschappelijk gedeelte + platform-specifieke partial files (`ContextFactory.Windows.cs` / `ContextFactory.Unix.cs`)
+- Vervang **alle** runtime OS-checks buiten `ContextFactory` (`OperatingSystem.IsWindows()`, `Path.DirectorySeparatorChar`, `Path.PathSeparator`, `RuntimeInformation`, enz.) door compile-time `#if WINDOWS` / `#if UNIX` guards
+- Verwijder `OperatingSystem.IsWindows()` / `RuntimeInformation` uit de gedeelde file; die mogen uitsluitend in de platform-specifieke partial files staan (conform de bestaande copilot-instructies)
+
+**Betrokken bestanden:**
+- `Bat/Context/ContextFactory.cs` → opsplitsen
+- `Bat/Context/DosFileSystem.cs`, `DosContext.cs`, `DosPath.cs` → uitsluiten van Unix-builds
+- `Bat/Context/UxFileSystemAdapter.cs`, `UxContextAdapter.cs`, `UnixFileOwner.cs` → uitsluiten van Windows-builds
+- `Bat/Bat.csproj` → `<Compile Remove>` + `<DefineConstants>`
+
+**Acceptance criteria:**
+- `dotnet publish -r win-x64` compileert zonder `UxFileSystemAdapter`
+- `dotnet publish -r linux-x64` compileert zonder `DosFileSystem`
+- Alle bestaande tests slagen ongewijzigd
+- Debug-builds (zonder RID) compileren nog steeds beide paden (voor ontwikkeling op elk OS)
+
+→ **[STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md)**
+
 ## Afhankelijkheden
 
 ```
@@ -514,8 +543,9 @@ Stap 10 (SETLOCAL) ← Vereist Stap 9 (drive paden snapshot)
   ↓
 Stap 11 (Bat cmdline) ← Vereist Stap 1 (IContext startup)
 Stap 12 (UxFileSystem) ← Vereist Stap 3 (referentie-implementatie)
+Stap 13 (Platform compilatie) ← Vereist Stap 12 (beide filesystem-implementaties bestaan)
   ↓
-Stap 13–51 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
+Stap 14–51 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
 ```
 
 **Kritiek pad:** 1 → 3 → 4 → 5 → 6 → 7 → 8  
@@ -524,13 +554,13 @@ Stap 13–51 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten
 
 ## Uitvoering
 
-Voor infrastructuurstappen (1–12):
+Voor infrastructuurstappen (1–13):
 1. Lees het instructiebestand volledig
 2. Vraag: "Voer STEP_0X uit"
 3. Implementeer volgens TDD
 4. Alle tests slagen → volgende stap
 
-Voor commando-stappen (13–51):
+Voor commando-stappen (14–51):
 1. Verwijs naar de [Generieke implementatieregels](#generieke-implementatieregels-voor-commandos)
 2. Vraag: "Implementeer stap XX: COMMAND"
 3. Implementeer — geen apart bestand nodig

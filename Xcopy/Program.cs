@@ -5,12 +5,6 @@ namespace XCopy;
 
 public static class Program
 {
-    public static int Main()
-    {
-        Console.WriteLine("This application needs Bat to run");
-        return 1;
-    }
-
     public static async Task<int> Main(IContext context, IArgumentSet args)
     {
         Console.WriteLine("XCopy Main (through {0})", context);

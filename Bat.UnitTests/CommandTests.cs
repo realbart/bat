@@ -381,6 +381,7 @@ internal sealed class TestFileSystem : IFileSystem
     public void RenameFile(char drive, string[] path, string newName) => throw new NotImplementedException();
     public void SetAttributes(char drive, string[] path, FileAttributes attributes) => throw new NotImplementedException();
     public uint GetVolumeSerialNumber(char drive) => 0;
+    public IReadOnlyDictionary<string, string> GetFileAssociations() => new Dictionary<string, string>();
     public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
     public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));

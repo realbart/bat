@@ -43,7 +43,9 @@ bat [-a | -u] [-q] [-d] [-e:on | -e:off] [-f:on | -f:off]
 
 Combinatievoorbeelden:
 - `-cq`  = `/C /Q`
-- `-kve:on` = `/K /V:ON /E:ON`
+- `-kqa` = `/K /Q /A`
+
+**Opmerking:** Vlaggen met `:` waarden (zoals `-v:on`) kunnen niet worden gecombineerd.
 
 ## Vlagbeschrijvingen
 
@@ -52,11 +54,22 @@ Combinatievoorbeelden:
 ```
 /C string   Voer de opgegeven opdracht uit en sluit daarna af.
 /K string   Voer de opdracht uit maar blijf actief (interactieve REPL).
-/S          Pas de behandeling van string na /C of /K aan (zie hieronder).
 ```
+Note: /S bestaat wel in CMD maar in BAT gedraagt zich alsof dit argument altijd gegeven wordt.
+bat "program.exe "argument met spaties"" voert program.exe "argument met spaties" uit, met aanhalingstekens. 
 
-**`/S`-gedrag:** Zet de string tussen dubbele aanhalingstekens als hij begint en eindigt
-met `"`. Anders wordt de string ongewijzigd doorgegeven.
+Note:
+- Bat (zonder string argument) start altijd in REPL-modus, ongeacht of /C of /K is opgegeven.
+- Bat (met string argument) maar zonder /C of /K gedraagt zich alsof /C is opgegeven (uitvoeren en afsluiten).
+
+Note:
+Bij het opstarten van bat wordt versie-informatie gegevens
+🦇Bat [Version 10.0.26200.8037]
+(c) Bart Kemps. Released under GPLv3+.
+
+Deze regel kan worden onderdrukt met de opstartparameter /S (of in linux-modus -s of --silent)
+Dit is iets anders dan quiet; dat beinvloedt alleen de echo van commando's, niet de opstartbanner.
+
 
 ### Uitvoercodering
 
@@ -119,6 +132,29 @@ Elke `/M`-mapping roept intern `FileSystem.AddSubst()` aan (dezelfde infrastruct
 
 Gebruik: roep een native tool aan met een Windows-pad, en `/T` zorgt dat het vertaald
 wordt naar een intern Bat-commando zodat het werkt binnen de virtuele filesysteemlaag.
+
+### Help-tekst
+
+```
+/?          Toon help-informatie (Windows-modus).
+-h, --help  Toon help-informatie (Unix-modus).
+```
+
+**Implementatie:** Twee aparte help-teksten als `const string` (raw string literals):
+- `HelpTextWindows` — bevat Windows-syntax met `/`-vlaggen
+- `HelpTextUnix` — bevat Unix-syntax met `-`-vlaggen
+
+Selectie op basis van `Path.DirectorySeparatorChar`:
+- `'\\'` → Windows help
+- `'/'` → Unix help
+
+**Positional argument:** Als het eerste argument geen vlag is (begint niet met `/` of `-`),
+wordt het geïnterpreteerd als een batch-bestand om uit te voeren:
+
+```
+BAT script.bat          # Voer script.bat uit
+bat -c "echo hello"     # Unix: voer inline commando uit
+```
 
 ## Context-initialisatie
 
@@ -312,6 +348,51 @@ public void Parse_NoFlags_DefaultValues()
 }
 ```
 
+### Test 7a: Help-vlaggen
+
+```csharp
+[Fact]
+public void Parse_Windows_SlashQuestion_SetsShowHelp()
+{
+    var args = ParseWindows("/?");
+    Assert.True(args.ShowHelp);
+}
+
+[Fact]
+public void Parse_Unix_MinusH_SetsShowHelp()
+{
+    var args = ParseUnix("-h");
+    Assert.True(args.ShowHelp);
+}
+
+[Fact]
+public void Parse_Unix_DoubleDashHelp_SetsShowHelp()
+{
+    var args = ParseUnix("--help");
+    Assert.True(args.ShowHelp);
+}
+```
+
+### Test 7b: Positional argument (batch bestand)
+
+```csharp
+[Fact]
+public void Parse_PositionalArgument_SetsBatchFile()
+{
+    var args = ParseWindows("script.bat");
+    Assert.Equal("script.bat", args.BatchFile);
+    Assert.Equal(BatExitBehavior.TerminateAfterCommand, args.ExitBehavior);
+}
+
+[Fact]
+public void Parse_PositionalArgument_WithFlags_ParsesBoth()
+{
+    var args = ParseWindows("/Q", "script.bat");
+    Assert.Equal("script.bat", args.BatchFile);
+    Assert.False(args.EchoEnabled);
+}
+```
+
 ### Test 8: Context-initialisatie vanuit BatArguments
 
 ```csharp
@@ -356,4 +437,6 @@ public void BuildContext_AppliesMappingsToFileSystem()
 - [ ] Initiële werkdirectory wordt gezet via longest-prefix-match op de `/M`-mappings
 - [ ] Fallback naar root van eerste drive als CWD niet mappeerbaar is
 - [ ] `/T` markeert vertaalverzoek van hostcommando (implementatie mag stub zijn)
+- [ ] `/?` (Windows) en `-h` / `--help` (Unix) tonen platform-specifieke help-tekst
+- [ ] Positional argument wordt geïnterpreteerd als batch-bestand om uit te voeren
 - [ ] Alle bestaande tests slagen nog steeds

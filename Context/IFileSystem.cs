@@ -31,6 +31,8 @@ public interface IFileSystem
 
     uint GetVolumeSerialNumber(char drive);
 
+    IReadOnlyDictionary<string, string> GetFileAssociations();
+
     IReadOnlyDictionary<char, string> GetSubsts();
     void AddSubst(char drive, string nativePath);
     void RemoveSubst(char drive);

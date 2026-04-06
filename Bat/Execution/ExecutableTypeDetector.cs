@@ -7,6 +7,7 @@ namespace Bat.Execution;
 /// - Windows PE executables (GUI vs Console subsystem)
 /// - Unix ELF binaries
 /// - Shell scripts with shebang (#!)
+/// - Bat-prefixed DLLs (prefix.bin + .NET assembly)
 /// </summary>
 internal static class ExecutableTypeDetector
 {
@@ -15,6 +16,8 @@ internal static class ExecutableTypeDetector
     private const ushort IMAGE_SUBSYSTEM_WINDOWS_GUI = 2;
     private const ushort IMAGE_SUBSYSTEM_WINDOWS_CUI = 3;
     private const uint ELF_SIGNATURE = 0x464C457F;
+    private const int PrefixLength = 2048;
+    private static readonly byte[] PrefixedDllMagic = [0x4D, 0x5A, 0x74, 0x3E, 0x3D, 0x0A, 0x65];
 
     /// <summary>
     /// Determines executable type by reading file header.
@@ -22,6 +25,16 @@ internal static class ExecutableTypeDetector
     /// </summary>
     public static ExecutableType GetExecutableType(string path)
     {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+
+            if (HasPrefixedDllMagic(fs, br) && HasValidEmbeddedDll(fs))
+                return ExecutableType.PrefixedDotNetAssembly;
+        }
+        catch { }
+
         if (IsDotNetAssembly(path)) return ExecutableType.DotNetAssembly;
 
         try
@@ -34,6 +47,22 @@ internal static class ExecutableTypeDetector
         {
             return ExecutableType.Unknown;
         }
+    }
+
+    private static bool HasPrefixedDllMagic(FileStream fs, BinaryReader br)
+    {
+        if (fs.Length < PrefixLength + 2) return false;
+        fs.Seek(0, SeekOrigin.Begin);
+        var header = br.ReadBytes(PrefixedDllMagic.Length);
+        return header.SequenceEqual(PrefixedDllMagic);
+    }
+
+    private static bool HasValidEmbeddedDll(FileStream fs)
+    {
+        if (fs.Length < PrefixLength + 2) return false;
+        fs.Seek(PrefixLength, SeekOrigin.Begin);
+        using var br = new BinaryReader(fs, System.Text.Encoding.UTF8, leaveOpen: true);
+        return br.ReadUInt16() == IMAGE_DOS_SIGNATURE;
     }
 
     private static ExecutableType DetectFromHeaders(FileStream fs, BinaryReader br)

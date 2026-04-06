@@ -167,6 +167,7 @@ internal class Dispatcher : IDispatcher
         return peType switch
         {
             ExecutableType.DotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false)),
+            ExecutableType.PrefixedDotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false), isPrefixed: true),
             ExecutableType.WindowsGui => new NativeExecutor(waitForExit: false, isGuiApp: true),
             ExecutableType.WindowsConsole => new NativeExecutor(waitForExit: true, isGuiApp: false),
             ExecutableType.Document => new NativeExecutor(waitForExit: false, isGuiApp: true),

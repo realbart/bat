@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Solution Items/">
+    <File Path="cmdhelp.txt" />
     <File Path="docs/EXECUTION_ROADMAP.md" />
     <File Path="docs/steps/STEP_01_REPAIR_DESIGN.md" />
     <File Path="docs/steps/STEP_02_PROMPT_EXPANSION.md" />
@@ -15,6 +16,7 @@
     <File Path="docs/steps/STEP_12_BAT_CMDLINE.md" />
     <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
+    <File Path="prefix.bin" />
   </Folder>
   <Project Path="Bat.UnitTests/Bat.UnitTests.csproj" />
   <Project Path="Bat/Bat.csproj" />

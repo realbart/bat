@@ -101,6 +101,8 @@ internal abstract class FileSystem : IFileSystem
         => GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), []));
     protected abstract uint GetVolumeSerialNumber(string nativeRoot);
 
+    public abstract IReadOnlyDictionary<string, string> GetFileAssociations();
+
     public IReadOnlyDictionary<char, string> GetSubsts() => Substs;
     public void AddSubst(char drive, string nativePath) => Substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => Substs.Remove(char.ToUpperInvariant(drive));

@@ -20,12 +20,6 @@ public static class Program
         Type SUBST with no parameters to display a list of current virtual drives.
         """;
 
-    public static int Main()
-    {
-        Console.WriteLine("This application needs Bat to run");
-        return 1;
-    }
-
     public static Task<int> Main(IContext context, IArgumentSet args) =>
         Main(context, args, Console.Out);
 

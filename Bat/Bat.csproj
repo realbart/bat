@@ -8,6 +8,17 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+
+  <PropertyGroup>
+    <_VersionDay>$([System.String]::Format("{0:D3}", $([System.DateTime]::UtcNow.DayOfYear)))</_VersionDay>
+    <_VersionBuild>$([System.DateTime]::UtcNow.ToString("yy"))$(_VersionDay)</_VersionBuild>
+    <_VersionRevision>$([System.Int32]::Parse($([System.DateTime]::UtcNow.ToString("HHmm"))))</_VersionRevision>
+    <Version>10.0.$(_VersionBuild).$(_VersionRevision)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <AssemblyName>bat</AssemblyName>
+  </PropertyGroup>
+
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>Bat.UnitTests</_Parameter1>
@@ -17,5 +28,28 @@
   <ItemGroup>
     <ProjectReference Include="..\Context\Context.csproj" />
   </ItemGroup>
+
+  <Target Name="PublishAllPlatforms" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
+    <Message Text="Publishing single-file executables for all platforms..." Importance="high" />
+
+    <Exec Command="dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\win-x64" WorkingDirectory="$(MSBuildProjectDirectory)" />
+
+    <Exec Command="dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\linux-x64" WorkingDirectory="$(MSBuildProjectDirectory)" />
+
+    <Exec Command="dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\osx-arm64" WorkingDirectory="$(MSBuildProjectDirectory)" />
+
+    <Message Text="✅ Published to publish\win-x64\bat.exe, publish\linux-x64\bat, publish\osx-arm64\bat" Importance="high" />
+  </Target>
+
+  <Target Name="PackagePrefixedLibraries" AfterTargets="PublishAllPlatforms" Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
+    <MSBuild Projects="$(MSBuildProjectDirectory)\..\Subst\Subst.csproj" Properties="Configuration=Release" Targets="Build" />
+    <MSBuild Projects="$(MSBuildProjectDirectory)\..\Xcopy\Xcopy.csproj" Properties="Configuration=Release" Targets="Build" />
+
+    <Message Text="Packaging prefixed executables..." Importance="high" />
+
+    <Exec Command="pwsh -NoProfile -Command &quot;$p=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\prefix.bin'); foreach ($rid in 'win-x64','linux-x64','osx-arm64') { foreach ($lib in 'Subst','Xcopy') { $dll=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\' + $lib + '\bin\Release\net10.0\' + $lib + '.dll'); $out='$(MSBuildProjectDirectory)\..\publish\' + $rid + '\' + $lib.ToLower() + '.exe'; [System.IO.File]::WriteAllBytes($out, [byte[]]($p + $dll)); Write-Host ('Wrote ' + $out) } }&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
+
+    <Message Text="✅ Packaged subst.exe and xcopy.exe for all platforms" Importance="high" />
+  </Target>
 
 </Project>

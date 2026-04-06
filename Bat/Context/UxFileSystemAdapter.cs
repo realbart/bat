@@ -4,9 +4,20 @@ namespace Bat.Context;
 
 internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string, string>? getOwner = null) : FileSystem
 {
+    private static readonly Dictionary<string, string> UnixAssociations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".bat"] = "batfile",
+        [".cmd"] = "cmdfile",
+        [".com"] = "comfile",
+        [".dll"] = "dllfile",
+        [".exe"] = "exefile"
+    };
+
     public UxFileSystemAdapter() : this(new Dictionary<char, string> { ['Z'] = "/" }) { }
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
+
+    public override IReadOnlyDictionary<string, string> GetFileAssociations() => UnixAssociations;
 
     public override char NativeDirectorySeparator => '/';
     public override char NativePathSeparator => ':';

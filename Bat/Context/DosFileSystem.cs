@@ -9,6 +9,8 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
 {
     private readonly Dictionary<char, string> _roots = new Dictionary<char, string>(roots);
 
+    public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
+
     protected override string GetNativePathCore(char drive, string[] path)
     {
         if (!_roots.TryGetValue(drive, out var root))
@@ -17,6 +19,27 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
     }
 
     public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
+
+    public char FirstDrive() => _roots.Keys.First();
+
+    public override IReadOnlyDictionary<string, string> GetFileAssociations()
+    {
+        var assoc = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var classesRoot = Microsoft.Win32.Registry.ClassesRoot;
+            foreach (var keyName in classesRoot.GetSubKeyNames())
+            {
+                if (!keyName.StartsWith('.')) continue;
+                using var extKey = classesRoot.OpenSubKey(keyName);
+                var type = extKey?.GetValue("")?.ToString();
+                if (!string.IsNullOrEmpty(type))
+                    assoc[keyName] = type;
+            }
+        }
+        catch { }
+        return assoc;
+    }
 
     protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
     {

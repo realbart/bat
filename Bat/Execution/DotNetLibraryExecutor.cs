@@ -8,18 +8,32 @@ namespace Bat.Execution;
 /// <summary>
 /// Executes .NET assemblies (.dll, .exe) that have a Main(IContext, IArgumentSet) entry point.
 /// Falls back to NativeExecutor if no IContext signature is found.
+/// When <paramref name="isPrefixed"/> is true the file starts with a 2 KB launcher stub;
+/// the embedded assembly is read from byte offset 2048.
 /// </summary>
-internal class DotNetLibraryExecutor(NativeExecutor nativeFallback) : IExecutor
+internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefixed = false) : IExecutor
 {
+    private const int PrefixLength = 2048;
+
     public async Task<int> ExecuteAsync(string executablePath, string arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         var hostPath = PathTranslator.TranslateBatPathToHost(executablePath, batchContext.Context.FileSystem);
-        var dllPath = Path.ChangeExtension(hostPath, ".dll");
-        var assemblyPath = File.Exists(dllPath) ? dllPath : hostPath;
 
         try
         {
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            Assembly assembly;
+            if (isPrefixed)
+            {
+                var fileBytes = await File.ReadAllBytesAsync(hostPath);
+                assembly = Assembly.Load(fileBytes[PrefixLength..]);
+            }
+            else
+            {
+                var dllPath = Path.ChangeExtension(hostPath, ".dll");
+                var assemblyPath = File.Exists(dllPath) ? dllPath : hostPath;
+                assembly = Assembly.LoadFrom(assemblyPath);
+            }
+
             var entryPoint = FindIContextMain(assembly);
             if (entryPoint == null) return await nativeFallback.ExecuteAsync(executablePath, arguments, batchContext, redirections);
 
