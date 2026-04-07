@@ -292,18 +292,77 @@ public class ExpanderTests
         }
 
         [TestMethod]
-        public void ExpandEnvironmentVariables_UnclosedPercent_LeavesAsIs()
+        public void ExpandEnvironmentVariables_UnclosedPercent_StripsLonePercent()
         {
-            // Arrange
+            // CMD strips a lone % when there is no closing % — batch mode behavior
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST";
 
-            // Act
             var result = Expander.ExpandEnvironmentVariables(line, ctx);
 
-            // Assert
-            Assert.AreEqual("echo %TEST", result);
+            Assert.AreEqual("echo TEST", result);
+        }
+
+        [TestMethod]
+        public void ExpandEnvironmentVariables_StringSubstitution_ReplacesStr1WithStr2()
+        {
+            // From SET /? help: "%PATH:str1=str2% would expand the PATH variable,
+            // substituting each occurrence of str1 with str2."
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            ctx.EnvironmentVariables["MYVAR"] = "hello world hello";
+
+            var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:hello=hi%", ctx);
+
+            Assert.AreEqual("echo hi world hi", result);
+        }
+
+        [TestMethod]
+        public void ExpandEnvironmentVariables_StringSubstitution_EmptyStr2_DeletesOccurrences()
+        {
+            // From SET /? help: "str2 can be the empty string to effectively delete all occurrences of str1"
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            ctx.EnvironmentVariables["MYVAR"] = "abcXdefXghi";
+
+            var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:X=%", ctx);
+
+            Assert.AreEqual("echo abcdefghi", result);
+        }
+
+        [TestMethod]
+        public void ExpandEnvironmentVariables_SubstringExtraction_OffsetAndLength()
+        {
+            // From SET /? help: "%PATH:~10,5% would use 5 characters starting at offset 10"
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE";
+
+            var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~10,5%", ctx);
+
+            Assert.AreEqual("echo ABCDE", result);
+        }
+
+        [TestMethod]
+        public void ExpandEnvironmentVariables_SubstringExtraction_NegativeOffset_FromEnd()
+        {
+            // From SET /? help: "%PATH:~-10% would extract the last 10 characters"
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE"; // 15 chars
+
+            var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~-10%", ctx);
+
+            Assert.AreEqual("echo 56789ABCDE", result);
+        }
+
+        [TestMethod]
+        public void ExpandEnvironmentVariables_SubstringExtraction_NegativeLength_ExcludesFromEnd()
+        {
+            // From SET /? help: "%PATH:~0,-2% would extract all but the last 2 characters"
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            ctx.EnvironmentVariables["MYVAR"] = "Hello";
+
+            var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~0,-2%", ctx);
+
+            Assert.AreEqual("echo Hel", result);
         }
     }
 }

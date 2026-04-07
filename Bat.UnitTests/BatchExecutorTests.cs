@@ -226,4 +226,57 @@ public class BatchExecutorTests
 
         Assert.IsTrue(console.ErrLines.Any(l => l.Contains("nesting")));
     }
+
+    // === GOTO :EOF after CALL ===
+
+    [TestMethod]
+    public async Task GotoEof_AfterCallLabel_ReturnsToCaller()
+    {
+        // From GOTO /? help: "Executing GOTO :EOF after a CALL with a target label will return control
+        // to the statement immediately following the CALL."
+        var fs = new TestFileSystem();
+        fs.AddDir('Z', []);
+        fs.AddBatchFile('Z', [], "test.bat",
+            "call :sub\r\necho after_call\r\ngoto :eof\r\n:sub\r\ngoto :eof");
+        var (executor, console, ctx, bc) = Setup(fs);
+
+        await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
+
+        Assert.IsTrue(console.OutLines.Contains("after_call"));
+    }
+
+    // === SHIFT /2 in batch ===
+
+    [TestMethod]
+    public async Task Shift2_InBatch_LeavesLowerParamsUnaffected()
+    {
+        // From SHIFT /? help: "SHIFT /2 would shift %3 to %2, %4 to %3, etc. and leave %0 and %1 unaffected."
+        var fs = new TestFileSystem();
+        fs.AddDir('Z', []);
+        fs.AddBatchFile('Z', [], "test.bat",
+            "shift /2\r\necho %1 %2 %3");
+        var (executor, console, ctx, bc) = Setup(fs);
+
+        await executor.ExecuteAsync("Z:\\test.bat", "first second third fourth", bc, []);
+
+        // After SHIFT /2: %1 stays "first", %2=old %3="third", %3=old %4="fourth"
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("first") && l.Contains("third") && l.Contains("fourth")));
+    }
+
+    // === CALL :label with arguments ===
+
+    [TestMethod]
+    public async Task Call_Label_PassesArgumentsToSubroutine()
+    {
+        // From CALL /? help: "CALL :label arguments" — arguments available as %1 %2 in the label
+        var fs = new TestFileSystem();
+        fs.AddDir('Z', []);
+        fs.AddBatchFile('Z', [], "test.bat",
+            "call :greet World\r\ngoto :eof\r\n:greet\r\necho Hello %1\r\nexit /b");
+        var (executor, console, ctx, bc) = Setup(fs);
+
+        await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
+
+        Assert.IsTrue(console.OutLines.Any(l => l.Contains("Hello") && l.Contains("World")));
+    }
 }

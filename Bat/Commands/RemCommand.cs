@@ -7,7 +7,16 @@ namespace Bat.Commands;
 [BuiltInCommand("rem")]
 internal class RemCommand : ICommand
 {
-    public Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections) =>
-        // TODO: Implement in Step 4 (no-op for comments)
-        Task.FromResult(0);
+    private const string HelpText =
+        """
+        Records comments (remarks) in a batch file or CONFIG.SYS.
+
+        REM [comment]
+        """;
+
+    public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
+    {
+        if (arguments.IsHelpRequest) { await batchContext.Console.Out.WriteLineAsync(HelpText); return 0; }
+        return 0;
+    }
 }

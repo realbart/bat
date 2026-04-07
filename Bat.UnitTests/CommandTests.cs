@@ -72,6 +72,17 @@ public class EchoCommandTests
         await cmd.ExecuteAsync(TestArgs.For<EchoCommand>(Token.Text("ON")), bc, []);
         Assert.IsTrue(ctx.EchoEnabled);
     }
+
+    [TestMethod]
+    public async Task Echo_HelpRequest_DisplaysHelp()
+    {
+        // From ECHO /? help: "ECHO [ON | OFF]" and "ECHO [message]"
+        var (cmd, console, bc, _) = Setup();
+        var result = await cmd.ExecuteAsync(TestArgs.For<EchoCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("ECHO [ON | OFF]"));
+        Assert.IsTrue(console.OutText.Contains("ECHO [message]"));
+    }
 }
 
 [TestClass]
@@ -117,6 +128,17 @@ public class ExitCommandTests
         var (cmd, _, bc, _) = Setup();
         var result = await cmd.ExecuteAsync(TestArgs.For<ExitCommand>(Token.Text("/B")), bc, []);
         Assert.AreEqual(ExitCommand.ExitSentinel, result);
+    }
+
+    [TestMethod]
+    public async Task Exit_HelpRequest_DisplaysHelp()
+    {
+        // From EXIT /? help: "EXIT [/B] [exitCode]"
+        var (cmd, console, bc, _) = Setup();
+        var result = await cmd.ExecuteAsync(TestArgs.For<ExitCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("/B"));
+        Assert.IsTrue(console.OutText.Contains("exitCode"));
     }
 }
 
@@ -196,6 +218,63 @@ public class SetCommandTests
         await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/P"), Token.Whitespace(" "), Token.Text("VAR=Enter value: ")), bc, []);
         Assert.AreEqual("hello", ctx.EnvironmentVariables["VAR"]);
     }
+
+    [TestMethod]
+    public async Task Set_HelpRequest_DisplaysHelp()
+    {
+        // From SET /? help: "SET [variable=[string]]", "/A", "/P"
+        var (cmd, console, bc, _) = Setup();
+        var result = await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("/A"));
+        Assert.IsTrue(console.OutText.Contains("/P"));
+        Assert.IsTrue(console.OutText.Contains("SET [variable=[string]]"));
+    }
+
+    [TestMethod]
+    public async Task Set_Arithmetic_HexNumber_SameAs18()
+    {
+        // From SET /? help: "0x12 is the same as 18 is the same as 022"
+        var (cmd, _, bc, ctx) = Setup();
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=0x12")), bc, []);
+        Assert.AreEqual("18", ctx.EnvironmentVariables["X"]);
+    }
+
+    [TestMethod]
+    public async Task Set_Arithmetic_OctalNumber_SameAs18()
+    {
+        // From SET /? help: "022 is the same as 18 is the same as 0x12"
+        var (cmd, _, bc, ctx) = Setup();
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=022")), bc, []);
+        Assert.AreEqual("18", ctx.EnvironmentVariables["X"]);
+    }
+
+    [TestMethod]
+    public async Task Set_Arithmetic_BitwiseAnd()
+    {
+        // From SET /? help: "&  - bitwise and"
+        var (cmd, _, bc, ctx) = Setup();
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=5&3")), bc, []);
+        Assert.AreEqual("1", ctx.EnvironmentVariables["X"]);
+    }
+
+    [TestMethod]
+    public async Task Set_Arithmetic_BitwiseOr()
+    {
+        // From SET /? help: "|  - bitwise or"
+        var (cmd, _, bc, ctx) = Setup();
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=5|3")), bc, []);
+        Assert.AreEqual("7", ctx.EnvironmentVariables["X"]);
+    }
+
+    [TestMethod]
+    public async Task Set_Arithmetic_BitwiseXor()
+    {
+        // From SET /? help: "^  - bitwise exclusive or"
+        var (cmd, _, bc, ctx) = Setup();
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=5^3")), bc, []);
+        Assert.AreEqual("6", ctx.EnvironmentVariables["X"]);
+    }
 }
 
 [TestClass]
@@ -208,6 +287,18 @@ public class RemCommandTests
         var bc = new BatchContext { Context = new TestCommandContext(), Console = null! };
         var result = await cmd.ExecuteAsync(TestArgs.For<RemCommand>(Token.Text("this is a comment")), bc, []);
         Assert.AreEqual(0, result);
+    }
+
+    [TestMethod]
+    public async Task Rem_HelpRequest_DisplaysHelp()
+    {
+        // From REM /? help: "REM [comment]"
+        var cmd = new RemCommand();
+        var console = new TestConsole();
+        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        var result = await cmd.ExecuteAsync(TestArgs.For<RemCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("REM [comment]"));
     }
 }
 
@@ -398,6 +489,112 @@ internal sealed class TestFileSystem : IFileSystem
     public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
     public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
+}
+
+[TestClass]
+public class ClsCommandTests
+{
+    [TestMethod]
+    public async Task Cls_ClearsScreen_WritesAnsiEscape()
+    {
+        // From CLS /? help: "Clears the screen."
+        var cmd = new ClsCommand();
+        var console = new TestConsole();
+        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(), bc, []);
+        Assert.IsTrue(console.OutText.Contains("\x1b[2J"));
+    }
+
+    [TestMethod]
+    public async Task Cls_HelpRequest_DisplaysHelp()
+    {
+        // From CLS /? help: "CLS"
+        var cmd = new ClsCommand();
+        var console = new TestConsole();
+        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        var result = await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("CLS"));
+    }
+}
+
+[TestClass]
+public class ShiftCommandTests
+{
+    private static (ShiftCommand cmd, TestConsole console, BatchContext bc) Setup(string?[] parameters, int shiftOffset = 0)
+    {
+        var cmd = new ShiftCommand();
+        var console = new TestConsole();
+        var ctx = new TestCommandContext();
+        var bc = new BatchContext { Console = console, Context = ctx, Parameters = parameters, ShiftOffset = shiftOffset };
+        return (cmd, console, bc);
+    }
+
+    [TestMethod]
+    public async Task Shift_HelpRequest_DisplaysHelp()
+    {
+        // From SHIFT /? help: "SHIFT [/n]"
+        var (cmd, console, bc) = Setup(new string?[10]);
+        var result = await cmd.ExecuteAsync(TestArgs.For<ShiftCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("SHIFT [/n]"));
+    }
+
+    [TestMethod]
+    public async Task Shift_NoSwitch_IncrementsOffset()
+    {
+        var (cmd, _, bc) = Setup(["test.bat", "a", "b", "c", null, null, null, null, null, null]);
+        await cmd.ExecuteAsync(TestArgs.For<ShiftCommand>(), bc, []);
+        Assert.AreEqual(1, bc.ShiftOffset);
+    }
+
+    [TestMethod]
+    public async Task Shift2_LeavesPercent0And1Unchanged_ShiftsFrom2()
+    {
+        // From SHIFT /? help: "SHIFT /2 would shift %3 to %2, %4 to %3, etc. and leave %0 and %1 unaffected."
+        var (cmd, _, bc) = Setup(["test.bat", "arg1", "arg2", "arg3", "arg4", null, null, null, null, null]);
+        await cmd.ExecuteAsync(TestArgs.For<ShiftCommand>(Token.Text("/2")), bc, []);
+        Assert.AreEqual(0, bc.ShiftOffset);
+        Assert.AreEqual("test.bat", bc.Parameters[0]);
+        Assert.AreEqual("arg1", bc.Parameters[1]);
+        Assert.AreEqual("arg3", bc.Parameters[2]);
+        Assert.AreEqual("arg4", bc.Parameters[3]);
+        Assert.IsNull(bc.Parameters[4]);
+    }
+}
+
+[TestClass]
+public class GotoCommandTests
+{
+    [TestMethod]
+    public async Task Goto_HelpRequest_DisplaysHelp()
+    {
+        // From GOTO /? help: mentions ":EOF" and returning control after CALL
+        var cmd = new GotoCommand();
+        var console = new TestConsole();
+        var bc = new BatchContext { Console = console, Context = new TestCommandContext() };
+        var result = await cmd.ExecuteAsync(TestArgs.For<GotoCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains(":EOF"));
+        Assert.IsTrue(console.OutText.Contains("GOTO label"));
+    }
+}
+
+[TestClass]
+public class CallCommandTests
+{
+    [TestMethod]
+    public async Task Call_HelpRequest_DisplaysHelp()
+    {
+        // From CALL /? help: "CALL [drive:][path]filename [batch-parameters]" and "CALL :label arguments"
+        var cmd = new CallCommand();
+        var console = new TestConsole();
+        var bc = new BatchContext { Console = console, Context = new TestCommandContext() };
+        var result = await cmd.ExecuteAsync(TestArgs.For<CallCommand>(Token.Text("/?")), bc, []);
+        Assert.AreEqual(0, result);
+        Assert.IsTrue(console.OutText.Contains("CALL :label"));
+        Assert.IsTrue(console.OutText.Contains("batch-parameters"));
+    }
 }
 
 /// <summary>
@@ -594,14 +791,25 @@ public class CdCommandTests
     }
 
     [TestMethod]
-    public async Task Cd_ForwardSlashInPath_IsNotPathSeparator()
+    public async Task Cd_ForwardSlashInPath_IsTreatedAsBackslash()
     {
+        // CMD: cd \Users/Bart works the same as cd \Users\Bart
         var fs = new TestFileSystem();
         fs.AddDir('C', ["Users", "Bart"]);
-        var (cmd, console, bc, ctx) = Setup(fs, 'C', []);
-        var result = await cmd.ExecuteAsync(TestArgs.For<CdCommand>(Token.Text(@"\Users/Bart")), bc, []);
-        Assert.AreEqual(1, result);
-        Assert.IsTrue(console.ErrLines[0].Contains("cannot find"));
+        var (cmd, _, bc, ctx) = Setup(fs, 'C', []);
+        await cmd.ExecuteAsync(TestArgs.For<CdCommand>(Token.Text(@"\Users/Bart")), bc, []);
+        CollectionAssert.AreEqual(new[] { "Users", "Bart" }, ctx.CurrentPath);
+    }
+
+    [TestMethod]
+    public async Task Cd_ForwardSlash_GoesToRoot()
+    {
+        // CMD: cd / goes to root (same as cd \)
+        var fs = new TestFileSystem();
+        fs.AddDir('C', []);
+        var (cmd, _, bc, ctx) = Setup(fs, 'C', ["Users", "Bart"]);
+        await cmd.ExecuteAsync(TestArgs.For<CdCommand>(Token.Text("/")), bc, []);
+        CollectionAssert.AreEqual(Array.Empty<string>(), ctx.CurrentPath);
     }
 }
 

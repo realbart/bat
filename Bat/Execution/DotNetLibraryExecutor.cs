@@ -31,7 +31,9 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefi
             {
                 var dllPath = Path.ChangeExtension(hostPath, ".dll");
                 var assemblyPath = File.Exists(dllPath) ? dllPath : hostPath;
+#pragma warning disable S3885 // Assembly.LoadFrom is intentional: preserves load context for dependency resolution
                 assembly = Assembly.LoadFrom(assemblyPath);
+#pragma warning restore S3885
             }
 
             var entryPoint = FindIContextMain(assembly);

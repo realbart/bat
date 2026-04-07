@@ -40,12 +40,25 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 
 De volgende commando's worden geïmplementeerd volgens de **[Generieke implementatieregels](#generieke-implementatieregels-voor-commandos)** — geen apart instructiebestand.
 
-Commando's die al gedekt worden door infrastructuurstappen (niet hieronder):
-- Stap 4: `ECHO`, `SET`, `REM`, `EXIT`, `CLS` (basaal, nog uit te breiden volgens de Generieke implementatieregels)
-- Stap 5: `CD` / `CHDIR`, `DIR`
-- Stap 8: `GOTO`, `CALL`, `SHIFT` (advanced batch features)
-- Stap 9: `SUBST`, drive switching (`D:`)
-- Stap 10: `SETLOCAL`, `ENDLOCAL`
+### Al geïmplementeerde commands — resterende acties
+
+| Command | `/?` help | Opmerkingen |
+|---|---|---|
+| ECHO | ✅ | |
+| REM | ✅ | |
+| CLS | ✅ | |
+| EXIT | ✅ | |
+| CALL | ✅ | |
+| SHIFT | ✅ | `/n` switch geïmplementeerd |
+| SET | ✅ | |
+| GOTO | ✅ | |
+| CD / CHDIR | ✅ | |
+| DIR | ✅ | |
+| SETLOCAL | ✅ | |
+| ENDLOCAL | ✅ | |
+| SUBST | ✅ | extern .NET |
+| IF | — | Stap 38, nog niet geïmplementeerd |
+| FOR | — | Stap 39, nog niet geïmplementeerd |
 
 **Opmerking:** Stap 14 (Daemon-architectuur) is optioneel — het project kan zonder daemon volledig functioneel zijn. De daemon-stap voegt performance-optimalisatie toe (gedeelde runtime, snellere tweede sessie, systeem-brede SUBST).
 

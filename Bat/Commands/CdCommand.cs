@@ -45,25 +45,38 @@ internal class CdCommand : ICommand
 
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteAsync(HelpText); return 0; }
+        if (arguments.IsHelpRequest) { await batchContext.Console!.Out.WriteLineAsync(HelpText); return 0; }
 
         var context = batchContext.Context;
-        var slashD = arguments.GetFlagValue('D');
-        var positional = arguments.Positionals.FirstOrDefault() ?? "";
 
-        if (positional.Length == 0)
+        // CD takes the raw argument as path (no token-splitting; spaces are NOT delimiters in CD).
+        // Only /D is a recognized switch — detect it manually from the raw argument.
+        var raw = arguments.FullArgument.Trim();
+
+        // CMD strips surrounding quotes from the path
+        if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
+            raw = raw[1..^1];
+
+        var slashD = false;
+        if (raw.StartsWith("/D", StringComparison.OrdinalIgnoreCase) && (raw.Length == 2 || raw[2] == ' '))
+        {
+            slashD = true;
+            raw = raw[2..].TrimStart();
+        }
+
+        if (raw.Length == 0)
         {
             await batchContext.Console.Out.WriteLineAsync(context.CurrentPathDisplayName);
             return 0;
         }
 
         var targetDrive = context.CurrentDrive;
-        var pathPart = positional;
+        var pathPart = raw;
 
-        if (positional.Length >= 2 && char.IsLetter(positional[0]) && positional[1] == ':')
+        if (raw.Length >= 2 && char.IsLetter(raw[0]) && raw[1] == ':')
         {
-            targetDrive = char.ToUpperInvariant(positional[0]);
-            pathPart = positional.Substring(2);
+            targetDrive = char.ToUpperInvariant(raw[0]);
+            pathPart = raw[2..];
         }
 
         if (pathPart.Length == 0 && !slashD)
@@ -93,13 +106,13 @@ internal class CdCommand : ICommand
 
     private static string[] ResolvePath(IContext context, char drive, string pathPart)
     {
-        if (pathPart.StartsWith('\\'))
+        if (pathPart.StartsWith('\\') || pathPart.StartsWith('/'))
         {
-            return pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+            return pathPart.TrimStart('\\', '/').Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
         }
 
         var current = new List<string>(context.GetPathForDrive(drive));
-        foreach (var part in pathPart.Split('\\', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in pathPart.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries))
         {
             if (part == "..")
             {

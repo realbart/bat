@@ -178,9 +178,26 @@ internal class Dispatcher : IDispatcher
         var commandType = BuiltInCommandRegistry.GetCommandType(rawName[..splitAt]);
         if (commandType == null) return null;
 
+        // CMD treats . as a word separator only for ECHO (echo. → blank line, echo.text → outputs "text")
+        // For other commands (cd.., cd.\sub), . is part of the path argument.
+        var isEchoDotSeparator = rawName[splitAt] == '.' && commandType == typeof(EchoCommand);
+        var suffix = isEchoDotSeparator ? rawName[(splitAt + 1)..] : rawName[splitAt..];
+
         var spec = ArgumentSpec.From(commandType.GetCustomAttributes<BuiltInCommandAttribute>());
-        var allArgs = new List<IToken> { Token.Text(rawName[splitAt..]) };
+        var allArgs = new List<IToken>();
+        if (suffix.Length > 0) allArgs.Add(Token.Text(suffix));
         allArgs.AddRange(cmd.Tail.SkipWhile(static t => t is WhitespaceToken));
+
+        // echo. (dot separator, empty suffix, no tail text) → output blank line, not echo status
+        if (isEchoDotSeparator && allArgs.All(static t => t is WhitespaceToken))
+        {
+            return await WithRedirections(bc, cmd.Redirections, async () =>
+            {
+                await bc.Console.Out.WriteLineAsync();
+                return 0;
+            });
+        }
+
         var args = ArgumentSet.Parse(allArgs, spec);
         if (args.ErrorMessage != null)
         {

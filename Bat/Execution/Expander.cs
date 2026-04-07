@@ -85,15 +85,99 @@ internal static class Expander
     private static bool TryExpandEnvVariable(string line, ref int i, IContext ctx, StringBuilder result)
     {
         var closeIndex = line.IndexOf('%', i + 1);
-        if (closeIndex <= i + 1) return false;
 
-        var varName = line.Substring(i + 1, closeIndex - i - 1);
-        if (varName.Length == 1 && char.IsDigit(varName[0])) return false;
+        // No closing % found — CMD strips the lone % in batch mode
+        // Exception: %N (batch parameter refs) are kept as-is
+        if (closeIndex < 0)
+        {
+            if (i + 1 < line.Length && char.IsDigit(line[i + 1]))
+                return false;
+            i++;
+            return true;
+        }
 
-        if (!ctx.EnvironmentVariables.TryGetValue(varName, out var value)) return false;
+        // %% → literal % (escape sequence, both batch and interactive)
+        if (closeIndex == i + 1)
+        {
+            result.Append('%');
+            i = closeIndex + 1;
+            return true;
+        }
+
+        var token = line.Substring(i + 1, closeIndex - i - 1);
+        if (token.Length == 1 && char.IsDigit(token[0])) return false;
+
+        var colonIndex = token.IndexOf(':');
+        string varName, modifier;
+        if (colonIndex >= 0)
+        {
+            varName = token[..colonIndex];
+            modifier = token[(colonIndex + 1)..];
+        }
+        else
+        {
+            varName = token;
+            modifier = "";
+        }
+
+        if (!ctx.EnvironmentVariables.TryGetValue(varName, out var value))
+        {
+            // Variable not found — keep %TOKEN% literally and advance past closing %
+            // This prevents the closing % from being treated as a lone % later
+            result.Append(line, i, closeIndex - i + 1);
+            i = closeIndex + 1;
+            return true;
+        }
+
+        if (modifier.Length > 0)
+            value = ApplyModifier(value, modifier);
 
         result.Append(value);
         i = closeIndex + 1;
         return true;
+    }
+
+    private static string ApplyModifier(string value, string modifier)
+    {
+        if (modifier.StartsWith('~'))
+            return ApplySubstring(value, modifier[1..]);
+
+        var eqIndex = modifier.IndexOf('=');
+        if (eqIndex >= 0)
+        {
+            var str1 = modifier[..eqIndex];
+            var str2 = modifier[(eqIndex + 1)..];
+            return value.Replace(str1, str2, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return value;
+    }
+
+    private static string ApplySubstring(string value, string spec)
+    {
+        var commaIndex = spec.IndexOf(',');
+        int offset;
+        int? length = null;
+
+        if (commaIndex >= 0)
+        {
+            if (!int.TryParse(spec[..commaIndex], out offset)) return value;
+            if (!int.TryParse(spec[(commaIndex + 1)..], out var len)) return value;
+            length = len;
+        }
+        else
+        {
+            if (!int.TryParse(spec, out offset)) return value;
+        }
+
+        if (offset < 0) offset = Math.Max(0, value.Length + offset);
+        if (offset >= value.Length) return "";
+
+        var maxLength = value.Length - offset;
+        var actualLength = length.HasValue
+            ? (length.Value < 0 ? maxLength + length.Value : Math.Min(length.Value, maxLength))
+            : maxLength;
+
+        return actualLength <= 0 ? "" : value.Substring(offset, actualLength);
     }
 }

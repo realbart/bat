@@ -24,7 +24,7 @@ internal class BatchExecutor(IConsole console) : IExecutor
         {
             Context = context,
             Console = console,
-            Parameters = CreateParameters(Path.GetFileName(executablePath), ParseArguments(arguments)),
+            Parameters = CreateParameters(executablePath, ParseArguments(arguments)),
             BatchFilePath = executablePath,
             FileContent = content,
             FilePosition = 0,
@@ -59,15 +59,19 @@ internal class BatchExecutor(IConsole console) : IExecutor
             var expanded = Expander.ExpandBatchParameters(line, bc);
             expanded = Expander.ExpandEnvironmentVariables(expanded, context);
 
+            var trimmedExpanded = expanded.TrimStart();
+            var isQuiet = trimmedExpanded.StartsWith('@');
+            if (context.EchoEnabled && !isQuiet)
+                await bc.Console.Out.WriteAsync($"\r\n{context.CurrentPathDisplayName}>{trimmedExpanded}\r\n");
+
             var parser = new Parser();
             parser.Append(expanded);
             var result = parser.ParseCommand();
 
             if (result.HasError)
             {
-                await bc.Console.Error.WriteLineAsync("Syntax error");
-                EndLocalCommand.UnwindSetLocalStack(bc);
-                return 1;
+                await bc.Console.Error.WriteLineAsync($"Syntax error in: {trimmedExpanded}");
+                continue;
             }
 
             var exitCode = await Dispatcher.ExecuteNodeAsync(bc, result.Root);
