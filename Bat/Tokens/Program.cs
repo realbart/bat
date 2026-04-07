@@ -17,8 +17,7 @@ public static class Program
 
         """;
 
-    private static string? _cachedWindowsHelp;
-    private static string? _cachedUnixHelp;
+    private static string GetHelp() => GenerateHelp(ContextFactory.IsWindows);
 
     private static readonly (string Win, string Unix, string Description)[] HelpFlags =
     [
@@ -95,17 +94,9 @@ public static class Program
         return sb.ToString();
     }
 
-    private static string GetHelp(bool isWindows)
-    {
-        if (isWindows)
-            return _cachedWindowsHelp ??= GenerateHelp(true);
-        return _cachedUnixHelp ??= GenerateHelp(false);
-    }
-
     public static Task<int> Main(params string[] args)
     {
-        var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-            System.Runtime.InteropServices.OSPlatform.Windows);
+        var isWindows = ContextFactory.IsWindows;
         var dirSeparator = isWindows ? '\\' : '/';
 
         var parser = new BatArgumentParser(dirSeparator);
@@ -113,7 +104,7 @@ public static class Program
 
         if (batArgs.ShowHelp)
         {
-            System.Console.Write(GetHelp(isWindows));
+            System.Console.Write(GetHelp());
             return Task.FromResult(0);
         }
 

@@ -33,7 +33,7 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | 10 | 🟢 DONE | SETLOCAL / ENDLOCAL | [STEP_11_SETLOCAL.md](steps/STEP_11_SETLOCAL.md) |
 | 11 | 🟢 DONE | Command line parameters van Bat | [STEP_12_BAT_CMDLINE.md](steps/STEP_12_BAT_CMDLINE.md) |
 | 12 | 🟢 DONE | UxFileSystem / UxContext | [STEP_13_UX_FILESYSTEM.md](steps/STEP_13_UX_FILESYSTEM.md) |
-| 13 | 🔴 TODO | Platform-specifieke compilatie | [STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md) |
+| 13 | 🟢 DONE | Platform-specifieke compilatie | [STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md) |
 | 14 | 🔴 TODO | Daemon-architectuur (singleton instance) | [STEP_14_DAEMON.md](steps/STEP_14_DAEMON.md) |
 
 ### Commando-implementatiestappen

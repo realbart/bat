@@ -21,7 +21,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
         do
         {
             var parser = new Parser();
-            var prompt = Environment.NewLine + PromptExpander.Expand(context);
+            var prompt = "\r\n" + PromptExpander.Expand(context);
             var line = await ReadLine(prompt, console, context);
             if (line is null) continue;
             parser.Append(line);

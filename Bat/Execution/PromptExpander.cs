@@ -56,7 +56,7 @@ public static class PromptExpander
                 case 'S': sb.Append(' '); break;
                 case 'T': sb.Append(DateTime.Now.ToString("HH:mm:ss.ff")); break;
                 case 'V': sb.Append("Microsoft Windows [Version 10.0.0]"); break;
-                case '_': sb.Append(Environment.NewLine); break;
+                case '_': sb.Append("\r\n"); break;
                 case '$': sb.Append('$'); break;
                 case '+': sb.Append(new string('+', ctx.DirectoryStack.Count)); break;
                 default:

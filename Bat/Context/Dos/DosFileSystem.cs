@@ -3,7 +3,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using Context;
 
-namespace Bat.Context;
+namespace Bat.Context.Dos;
 
 internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
 {

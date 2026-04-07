@@ -1,6 +1,6 @@
 ﻿using Context;
 
-namespace Bat.Context;
+namespace Bat.Context.Ux;
 
 internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string, string>? getOwner = null) : FileSystem
 {
@@ -13,7 +13,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         [".exe"] = "exefile"
     };
 
-    public UxFileSystemAdapter() : this(new Dictionary<char, string> { ['Z'] = "/" }) { }
+    public UxFileSystemAdapter() : this(new Dictionary<char, string> { ['Z'] = "/" }, UnixFileOwner.GetOwner) { }
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
 

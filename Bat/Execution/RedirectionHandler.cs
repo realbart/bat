@@ -63,7 +63,7 @@ internal sealed class RedirectionHandler : IDisposable
 
         var (drive, path) = ResolvePath(ctx, targetText);
         var stream = ctx.FileSystem.OpenWrite(drive, path, append);
-        var writer = new StreamWriter(stream) { AutoFlush = true };
+        var writer = new StreamWriter(stream) { AutoFlush = true, NewLine = "\r\n" };
         handler._streams.Add(writer);
         handler._streams.Add(stream);
         return isError ? console.WithError(writer) : console.WithOutput(writer);

@@ -1,4 +1,4 @@
-namespace Bat.Context;
+namespace Bat.Context.Dos;
 
 internal class DosContext : Context
 {

@@ -4,9 +4,6 @@ namespace Bat.Context;
 
 /// <summary>
 /// Resolves the owning username of a file on Unix via libc stat() + getpwuid().
-/// Intentionally free of runtime OS detection: the uidOffset (position of st_uid
-/// in struct stat) is supplied by the caller (ContextFactory) which is allowed to
-/// inspect the platform.
 ///
 /// Confirmed offsets:
 ///   Linux x86_64 : 28  (dev_t(8) + ino_t(8) + nlink_t(8) + mode_t(4))
@@ -17,13 +14,17 @@ internal static partial class UnixFileOwner
 {
     private const int StatBufferSize = 256;
 
-    public static string GetOwner(string path, int uidOffset)
+    private static readonly int UidOffset = OperatingSystem.IsLinux()
+        ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? 24 : 28)
+        : 16;
+
+    public static string GetOwner(string path)
     {
         try
         {
             var buf = new byte[StatBufferSize];
             if (StatNative(path, buf) != 0) return "";
-            var uid = MemoryMarshal.Read<uint>(buf.AsSpan(uidOffset));
+            var uid = MemoryMarshal.Read<uint>(buf.AsSpan(UidOffset));
             var passwdPtr = GetPwuidNative(uid);
             if (passwdPtr == nint.Zero) return "";
             var namePtr = Marshal.ReadIntPtr(passwdPtr);  // pw_name is first field

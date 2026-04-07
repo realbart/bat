@@ -1,4 +1,4 @@
-﻿namespace Bat.Context;
+﻿namespace Bat.Context.Ux;
 
 internal class UxContextAdapter : Context
 {

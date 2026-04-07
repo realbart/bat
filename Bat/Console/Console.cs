@@ -4,14 +4,19 @@ namespace Bat.Console;
 
 internal class Console : IConsole
 {
+    private readonly ScreenWriter _out;
+    private readonly ScreenWriter _err;
+
     public Console()
     {
         SC.OutputEncoding = System.Text.Encoding.UTF8;
         SC.InputEncoding = System.Text.Encoding.UTF8;
+        _out = new ScreenWriter(SC.Out);
+        _err = new ScreenWriter(SC.Error);
     }
 
-    public TextWriter Out => SC.Out;
-    public TextWriter Error => SC.Error;
+    public TextWriter Out => _out;
+    public TextWriter Error => _err;
     public TextReader In => SC.In;
     public int WindowWidth => SC.WindowWidth;
     public int WindowHeight => SC.WindowHeight;
