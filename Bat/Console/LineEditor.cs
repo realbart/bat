@@ -78,7 +78,10 @@ internal class LineEditor
     public string? ReadLine(string prompt, IConsole console, IContext? context = null)
     {
         console.Out.Write(prompt);
-        var promptLength = prompt.Length;
+        
+        // Only the last line of the prompt matters for cursor positioning
+        var lastLineBreak = prompt.LastIndexOfAny(['\r', '\n']);
+        var promptLength = lastLineBreak >= 0 ? prompt.Length - lastLineBreak - 1 : prompt.Length;
 
         var buffer = new List<char>();
         var cursor = 0;
@@ -557,6 +560,7 @@ internal class LineEditor
             buffer.Insert(cursor, c);
             var tail = new string([.. buffer[cursor..]]);
             console.Out.Write(tail);
+            console.Out.Flush();  // Flush before setting cursor position to avoid console filling with spaces
             cursor++;
             console.CursorLeft = promptLength + cursor;
         }
@@ -564,6 +568,7 @@ internal class LineEditor
         {
             buffer[cursor] = c;
             console.Out.Write(c);
+            console.Out.Flush();  // Flush in overwrite mode too
             cursor++;
         }
     }

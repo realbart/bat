@@ -28,6 +28,15 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     public void SetCurrentDrive(char drive) => CurrentDrive = drive;
     public string[] GetPathForDrive(char drive) => CurrentFolders.TryGetValue(drive, out var p) ? p : [];
 
+    public IReadOnlyDictionary<char, string[]> GetAllDrivePaths() => CurrentFolders;
+
+    public void RestoreAllDrivePaths(Dictionary<char, string[]> paths)
+    {
+        CurrentFolders.Clear();
+        foreach (var kv in paths)
+            CurrentFolders[kv.Key] = kv.Value.ToArray();
+    }
+
     public (bool Found, string NativePath) TryGetCurrentFolder()
     {
         if (!fileSystem.DirectoryExists(CurrentDrive, CurrentPath))

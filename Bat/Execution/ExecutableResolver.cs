@@ -24,6 +24,10 @@ internal static class ExecutableResolver
     {
         if (commandName.StartsWith('\\')) return ResolveAbsolute(commandName[1..], context.CurrentDrive, context);
 
+        // Drive-letter path: e.g. Z:\helper.bat or C:\dir\file.exe
+        if (commandName.Length >= 3 && char.IsLetter(commandName[0]) && commandName[1] == ':' && commandName[2] == '\\')
+            return ResolveAbsolute(commandName[3..], char.ToUpperInvariant(commandName[0]), context);
+
         var hasExplicitExt = commandName.Contains('.');
         return hasExplicitExt
             ? SearchWithExplicitExtension(commandName, context)

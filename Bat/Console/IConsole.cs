@@ -10,4 +10,7 @@ internal interface IConsole
     int CursorLeft { get; set; }
     bool IsInteractive { get; }
     ConsoleKeyInfo ReadKey(bool intercept);
+    IConsole WithOutput(TextWriter newOut);
+    IConsole WithError(TextWriter newError);
+    IConsole WithInput(TextReader newIn);
 }

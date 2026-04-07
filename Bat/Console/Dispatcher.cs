@@ -63,9 +63,8 @@ internal class Dispatcher : IDispatcher
                 return await ExecuteNodeAsync(bc, or.Right);
             }
 
-            case PipeNode:
-                // Pipe execution not yet implemented (Step 6)
-                return 0;
+            case PipeNode pipe:
+                return await ExecutePipeAsync(bc, pipe);
 
             case CommandNode cmd:
                 return await ExecuteCommandNodeAsync(bc, cmd);
@@ -120,9 +119,45 @@ internal class Dispatcher : IDispatcher
             return 1;
         }
 
-        var executor = GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
-        var arguments = string.Join(" ", cmd.Tail.OfType<TextToken>().Select(t => t.Value));
-        return await executor.ExecuteAsync(executablePath, arguments, bc, cmd.Redirections);
+        return await WithRedirections(bc, cmd.Redirections, async () =>
+        {
+            var executor = GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
+            var arguments = string.Join(" ", cmd.Tail.OfType<TextToken>().Select(t => t.Value));
+            return await executor.ExecuteAsync(executablePath, arguments, bc, cmd.Redirections);
+        });
+    }
+
+    private static async Task<int> ExecutePipeAsync(BatchContext bc, PipeNode pipe)
+    {
+        var captured = new StringWriter();
+        var prevConsole = bc.Console;
+
+        bc.Console = prevConsole.WithOutput(captured);
+        await ExecuteNodeAsync(bc, pipe.Left);
+
+        bc.Console = prevConsole.WithInput(new StringReader(captured.ToString()));
+        var result = await ExecuteNodeAsync(bc, pipe.Right);
+
+        bc.Console = prevConsole;
+        return result;
+    }
+
+    private static async Task<int> WithRedirections(BatchContext bc, IReadOnlyList<Redirection> redirections, Func<Task<int>> action)
+    {
+        if (redirections.Count == 0)
+            return await action();
+
+        var prevConsole = bc.Console;
+        using var rh = RedirectionHandler.Apply(redirections, bc.Context, bc.Console);
+        bc.Console = rh.Console;
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            bc.Console = prevConsole;
+        }
     }
 
     private static async Task<int> ExecuteBuiltInAsync(BatchContext bc, IBuiltInCommandToken builtIn, CommandNode cmd)
@@ -134,7 +169,8 @@ internal class Dispatcher : IDispatcher
             await bc.Console.Error.WriteLineAsync(args.ErrorMessage);
             return 1;
         }
-        return await builtIn.CreateCommand().ExecuteAsync(args, bc, cmd.Redirections);
+        return await WithRedirections(bc, cmd.Redirections, () =>
+            builtIn.CreateCommand().ExecuteAsync(args, bc, cmd.Redirections));
     }
 
     private static async Task<int?> TryExecuteSplitCommandAsync(BatchContext bc, string rawName, int splitAt, CommandNode cmd)
@@ -151,7 +187,8 @@ internal class Dispatcher : IDispatcher
             await bc.Console.Error.WriteLineAsync(args.ErrorMessage);
             return 1;
         }
-        return await ((ICommand)Activator.CreateInstance(commandType)!).ExecuteAsync(args, bc, cmd.Redirections);
+        return await WithRedirections(bc, cmd.Redirections, () =>
+            ((ICommand)Activator.CreateInstance(commandType)!).ExecuteAsync(args, bc, cmd.Redirections));
     }
 
     private static IExecutor GetExecutor(IConsole console, string executablePath, global::Context.IFileSystem fileSystem)

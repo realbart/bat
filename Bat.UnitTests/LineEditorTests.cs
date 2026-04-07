@@ -838,4 +838,62 @@ public class LineEditorTests
     {
         Assert.IsNull(new LineEditor().ReadLine("", Build(CtrlC())));
     }
+
+    // ── Multiline prompts ────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ReadLine_PromptWithNewline_CalculatesCorrectPromptLength()
+    {
+        // Prompt: "\nC:\>" (5 chars after \n)
+        // Type "dir", verify cursor positioning works correctly
+        var console = Build(Key('d'), Key('i'), Key('r'), Enter());
+        var result = new LineEditor().ReadLine("\nC:\\>", console);
+        Assert.AreEqual("dir", result);
+        
+        // Verify output doesn't contain excessive spaces (would indicate wrong cursor positioning)
+        var output = console.OutText;
+        Assert.IsFalse(output.Contains("d  i"), "Should not have extra spaces between characters");
+    }
+
+    [TestMethod]
+    public void ReadLine_PromptWithCarriageReturnNewline_CalculatesCorrectPromptLength()
+    {
+        // Prompt: "\r\nC:\>" (Windows line ending)
+        var console = Build(Key('d'), Key('i'), Key('r'), Enter());
+        var result = new LineEditor().ReadLine("\r\nC:\\>", console);
+        Assert.AreEqual("dir", result);
+        
+        var output = console.OutText;
+        Assert.IsFalse(output.Contains("d  i"), "Should not have extra spaces between characters");
+    }
+
+    [TestMethod]
+    public void ReadLine_PromptWithMultipleLines_UsesOnlyLastLine()
+    {
+        // Prompt with multiple newlines: "Line1\nLine2\nC:\>" (4 chars in last line)
+        var console = Build(Key('e'), Key('c'), Key('h'), Key('o'), Enter());
+        var result = new LineEditor().ReadLine("Line1\nLine2\nC:\\>", console);
+        Assert.AreEqual("echo", result);
+        
+        var output = console.OutText;
+        Assert.IsFalse(output.Contains("e  c"), "Should not have extra spaces between characters");
+    }
+
+    [TestMethod]
+    public void ReadLine_PromptWithMixedLineEndings_HandlesCorrectly()
+    {
+        // Mixed line endings (shouldn't happen in practice, but should work)
+        var console = Build(Key('c'), Key('d'), Enter());
+        var result = new LineEditor().ReadLine("A\rB\nC:\\>", console);
+        Assert.AreEqual("cd", result);
+    }
+
+    [TestMethod]
+    public void ReadLine_SingleLinePrompt_StillWorksCorrectly()
+    {
+        // Ensure we didn't break single-line prompts
+        var console = Build(Key('d'), Key('i'), Key('r'), Enter());
+        var result = new LineEditor().ReadLine("C:\\>", console);
+        Assert.AreEqual("dir", result);
+    }
 }

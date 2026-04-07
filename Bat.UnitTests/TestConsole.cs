@@ -21,6 +21,10 @@ internal class TestConsole(string input = "") : IConsole
     public ConsoleKeyInfo ReadKey(bool intercept) =>
         _keys.Count > 0 ? _keys.Dequeue() : new ConsoleKeyInfo('\0', ConsoleKey.NoName, false, false, false);
 
+    public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
+    public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);
+    public IConsole WithInput(TextReader newIn) => new RedirectedConsole(this, null, null, newIn);
+
     public string OutText => _outWriter.ToString();
     public string ErrText => _errWriter.ToString();
     public IReadOnlyList<string> OutLines => OutText.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);

@@ -72,7 +72,9 @@ public class BatchContextTests
         var snapshot = new EnvironmentSnapshot(
             new Dictionary<string, string> { ["TEST"] = "value" },
             new Dictionary<char, string[]> { ['C'] = ["Users", "Test"] },
-            false
+            'C',
+            false,
+            true
         );
 
         // Act
@@ -106,7 +108,7 @@ public class BatchContextTests
         var delayedExpansion = true;
 
         // Act
-        var snapshot = new EnvironmentSnapshot(vars, paths, delayedExpansion);
+        var snapshot = new EnvironmentSnapshot(vars, paths, 'C', delayedExpansion, true);
 
         // Assert
         Assert.AreEqual(vars, snapshot.Variables);

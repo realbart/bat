@@ -8,6 +8,24 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Platform-specific compilation: define WINDOWS / UNIX when publishing with a RuntimeIdentifier -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux')) OR $(RuntimeIdentifier.StartsWith('osx'))">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Exclude platform-specific files from the opposite platform when a RID is specified -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != '' AND !$(RuntimeIdentifier.StartsWith('win'))">
+    <Compile Remove="Context\DosFileSystem.cs" />
+    <Compile Remove="Context\DosContext.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != '' AND $(RuntimeIdentifier.StartsWith('win'))">
+    <Compile Remove="Context\UxFileSystemAdapter.cs" />
+    <Compile Remove="Context\UxContextAdapter.cs" />
+    <Compile Remove="Context\UnixFileOwner.cs" />
+  </ItemGroup>
 
   <PropertyGroup>
     <_VersionDay>$([System.String]::Format("{0:D3}", $([System.DateTime]::UtcNow.DayOfYear)))</_VersionDay>

@@ -232,6 +232,13 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public void SetPath(char drive, string[] path) => _paths[drive] = path;
     public void SetCurrentDrive(char drive) => CurrentDrive = drive;
     public string[] GetPathForDrive(char drive) => _paths.TryGetValue(drive, out var p) ? p : [];
+    public IReadOnlyDictionary<char, string[]> GetAllDrivePaths() => _paths;
+    public void RestoreAllDrivePaths(Dictionary<char, string[]> paths)
+    {
+        _paths.Clear();
+        foreach (var kv in paths)
+            _paths[kv.Key] = kv.Value.ToArray();
+    }
     public (bool Found, string NativePath) TryGetCurrentFolder()
     {
         if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
@@ -372,10 +379,16 @@ internal sealed class TestFileSystem : IFileSystem
     public bool IsExecutable(char drive, string[] path) => false;
     public void DeleteFile(char drive, string[] path) => throw new NotImplementedException();
     public void DeleteDirectory(char drive, string[] path, bool recursive) => throw new NotImplementedException();
-    public Stream OpenRead(char drive, string[] path) => throw new NotImplementedException();
-    public Stream OpenWrite(char drive, string[] path, bool append) => throw new NotImplementedException();
+    public Stream OpenRead(char drive, string[] path) => new MemoryStream(System.Text.Encoding.UTF8.GetBytes(ReadAllText(drive, path)));
+    public Stream OpenWrite(char drive, string[] path, bool append)
+    {
+        var key = Key(drive, path);
+        return new WriteTrackingStream(this, key, append);
+    }
     public string ReadAllText(char drive, string[] path) => _fileContents.TryGetValue(Key(drive, path), out var content) ? content : "";
     public void WriteAllText(char drive, string[] path, string content) => _fileContents[Key(drive, path)] = content;
+    internal string ReadAllTextByKey(string key) => _fileContents.TryGetValue(key, out var content) ? content : "";
+    internal void WriteAllTextByKey(string key, string content) => _fileContents[key] = content;
     public void CopyFile(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, bool overwrite) => throw new NotImplementedException();
     public void MoveFile(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath) => throw new NotImplementedException();
     public void RenameFile(char drive, string[] path, string newName) => throw new NotImplementedException();
@@ -385,6 +398,30 @@ internal sealed class TestFileSystem : IFileSystem
     public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
     public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
+}
+
+/// <summary>
+/// A writable stream that flushes content back to TestFileSystem on dispose.
+/// </summary>
+internal sealed class WriteTrackingStream(TestFileSystem fs, string key, bool append) : MemoryStream
+{
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            var written = System.Text.Encoding.UTF8.GetString(ToArray());
+            if (append)
+            {
+                var existing = fs.ReadAllTextByKey(key);
+                fs.WriteAllTextByKey(key, existing + written);
+            }
+            else
+            {
+                fs.WriteAllTextByKey(key, written);
+            }
+        }
+        base.Dispose(disposing);
+    }
 }
 
 [TestClass]

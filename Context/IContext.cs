@@ -25,4 +25,6 @@ public interface IContext
     void SetCurrentDrive(char drive);
     string[] GetPathForDrive(char drive);
     (bool Found, string NativePath) TryGetCurrentFolder();
+    IReadOnlyDictionary<char, string[]> GetAllDrivePaths();
+    void RestoreAllDrivePaths(Dictionary<char, string[]> paths);
 }

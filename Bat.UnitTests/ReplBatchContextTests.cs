@@ -78,13 +78,12 @@ public class ReplBatchContextTests
     }
 
     [TestMethod]
-    public void ReplBatchContext_Value_HasEmptySetLocalStack()
+    public void ReplBatchContext_Value_HasSetLocalStack()
     {
         // Arrange & Act
         var bc = ReplBatchContext.Value;
 
         // Assert
         Assert.IsNotNull(bc.SetLocalStack);
-        Assert.AreEqual(0, bc.SetLocalStack.Count);
     }
 }

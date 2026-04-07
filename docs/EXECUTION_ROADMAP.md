@@ -26,14 +26,15 @@ Commando-implementatiestappen hebben **geen eigen bestand** — ze volgen de [Ge
 | 3 | 🟢 DONE | DosFileSystem implementeren | [STEP_03_DOS_FILESYSTEM.md](steps/STEP_03_DOS_FILESYSTEM.md) |
 | 4 | 🟢 DONE | Minimale werkende REPL | [STEP_04_MINIMAL_REPL.md](steps/STEP_04_MINIMAL_REPL.md) |
 | 5 | 🟢 DONE | CD en DIR commands | [STEP_05_CD_DIR_COMMANDS.md](steps/STEP_05_CD_DIR_COMMANDS.md) |
-| 6 | 🟢 DONE | Executable resolution & execution | [STEP_06_EXECUTABLE_RESOLUTION.md](steps/STEP_06_EXECUTABLE_RESOLUTION.md) |
-| 7 | 🔴 TODO | Piping + bestandsredirectie | [STEP_07_REDIRECTIONS.md](steps/STEP_07_REDIRECTIONS.md) |
-| 8 | 🔴 TODO | GOTO, CALL, advanced batch features | [STEP_08_ADVANCED_BATCH.md](steps/STEP_08_ADVANCED_BATCH.md) |
-| 9 | 🟡 PARTIAL | SUBST + Drive Switching (D:) | [STEP_09_SUBST_DRIVE_SWITCHING.md](steps/STEP_09_SUBST_DRIVE_SWITCHING.md) |
-| 10 | 🔴 TODO | SETLOCAL / ENDLOCAL | [STEP_10_SETLOCAL.md](steps/STEP_10_SETLOCAL.md) |
-| 11 | 🟢 DONE | Command line parameters van Bat | [STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md) |
-| 12 | 🟢 DONE | UxFileSystem / UxContext | [STEP_12_UX_FILESYSTEM.md](steps/STEP_12_UX_FILESYSTEM.md) |
+| 6 | 🟢 DONE | Executable resolution & execution | [STEP_06_EXECUTE_NATIVE.md](steps/STEP_06_EXECUTE_NATIVE.md) |
+| 7 | 🟢 DONE | Piping + bestandsredirectie | [STEP_09_REDIRECTIONS.md](steps/STEP_09_REDIRECTIONS.md) |
+| 8 | 🟢 DONE | GOTO, CALL, advanced batch features | [STEP_08_BATCH_EXECUTE.md](steps/STEP_08_BATCH_EXECUTE.md) |
+| 9 | 🟢 DONE | SUBST + Drive Switching (D:) | [STEP_10_SUBST_DRIVE_SWITCHING.md](steps/STEP_10_SUBST_DRIVE_SWITCHING.md) |
+| 10 | 🟢 DONE | SETLOCAL / ENDLOCAL | [STEP_11_SETLOCAL.md](steps/STEP_11_SETLOCAL.md) |
+| 11 | 🟢 DONE | Command line parameters van Bat | [STEP_12_BAT_CMDLINE.md](steps/STEP_12_BAT_CMDLINE.md) |
+| 12 | 🟢 DONE | UxFileSystem / UxContext | [STEP_13_UX_FILESYSTEM.md](steps/STEP_13_UX_FILESYSTEM.md) |
 | 13 | 🔴 TODO | Platform-specifieke compilatie | [STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md) |
+| 14 | 🔴 TODO | Daemon-architectuur (singleton instance) | [STEP_14_DAEMON.md](steps/STEP_14_DAEMON.md) |
 
 ### Commando-implementatiestappen
 
@@ -46,46 +47,48 @@ Commando's die al gedekt worden door infrastructuurstappen (niet hieronder):
 - Stap 9: `SUBST`, drive switching (`D:`)
 - Stap 10: `SETLOCAL`, `ENDLOCAL`
 
+**Opmerking:** Stap 14 (Daemon-architectuur) is optioneel — het project kan zonder daemon volledig functioneel zijn. De daemon-stap voegt performance-optimalisatie toe (gedeelde runtime, snellere tweede sessie, systeem-brede SUBST).
+
 | Stap | Status | Commando | Type | Vereist |
 |---|---|---|---|---|
-| 14 | 🔴 TODO | PAUSE | intern | 4 |
-| 15 | 🔴 TODO | TITLE | intern | 4 |
-| 16 | 🔴 TODO | COLOR | intern | 4 |
-| 17 | 🔴 TODO | PROMPT | intern | 4 |
-| 18 | 🔴 TODO | DATE | intern | 4 |
-| 19 | 🔴 TODO | TIME | intern | 4 |
-| 20 | 🔴 TODO | TYPE | intern | 3, 4 |
-| 21 | 🔴 TODO | COPY | intern | 3, 4 |
-| 22 | 🔴 TODO | MOVE | intern | 3, 4 |
-| 23 | 🔴 TODO | DEL / ERASE | intern | 3, 4 |
-| 24 | 🔴 TODO | REN / RENAME | intern | 3, 4 |
-| 25 | 🔴 TODO | MD / MKDIR | intern | 3, 4 |
-| 26 | 🔴 TODO | RD / RMDIR | intern | 3, 4 |
-| 27 | 🔴 TODO | PUSHD / POPD | intern | 4, 10 |
-| 28 | 🔴 TODO | PATH | intern | 4 |
-| 29 | 🔴 TODO | VER | intern | 4 |
-| 30 | 🔴 TODO | VOL | intern | 3, 4 |
-| 31 | 🔴 TODO | LABEL | intern | 3, 4 |
-| 32 | 🔴 TODO | START | intern | 6 |
-| 33 | 🔴 TODO | BREAK | intern | 4 |
-| 34 | 🔴 TODO | VERIFY | intern | 4 |
-| 35 | 🔴 TODO | ASSOC | intern | 4 |
-| 36 | 🔴 TODO | FTYPE | intern | 4 |
-| 37 | 🔴 TODO | IF | intern (complex) | 1, 4 |
-| 38 | 🔴 TODO | FOR | intern (complex) | 1, 4, 8 |
-| 39 | 🔴 TODO | XCOPY | extern .NET | 6 |
-| 40 | 🔴 TODO | DOSKEY | extern .NET | 6 |
-| 41 | 🔴 TODO | CMD | extern .NET | 6 |
-| 42 | 🔴 TODO | FIND | extern .NET | 6, 7 |
-| 43 | 🔴 TODO | FINDSTR | extern .NET | 6, 7 |
-| 44 | 🔴 TODO | SORT | extern .NET | 6, 7 |
-| 45 | 🔴 TODO | MORE | extern .NET | 6, 7 |
-| 46 | 🔴 TODO | FC | extern .NET | 6 |
-| 47 | 🔴 TODO | TREE | extern .NET | 6 |
-| 48 | 🔴 TODO | WHERE | extern .NET | 6 |
-| 49 | 🔴 TODO | TIMEOUT | extern .NET | 6 |
-| 50 | 🔴 TODO | CHOICE | extern .NET | 6 |
-| 51 | 🔴 TODO | ATTRIB | extern .NET (DOS-specifiek) | 6, 3 |
+| 15 | 🔴 TODO | PAUSE | intern | 4 |
+| 16 | 🔴 TODO | TITLE | intern | 4 |
+| 17 | 🔴 TODO | COLOR | intern | 4 |
+| 18 | 🔴 TODO | PROMPT | intern | 4 |
+| 19 | 🔴 TODO | DATE | intern | 4 |
+| 20 | 🔴 TODO | TIME | intern | 4 |
+| 21 | 🔴 TODO | TYPE | intern | 3, 4 |
+| 22 | 🔴 TODO | COPY | intern | 3, 4 |
+| 23 | 🔴 TODO | MOVE | intern | 3, 4 |
+| 24 | 🔴 TODO | DEL / ERASE | intern | 3, 4 |
+| 25 | 🔴 TODO | REN / RENAME | intern | 3, 4 |
+| 26 | 🔴 TODO | MD / MKDIR | intern | 3, 4 |
+| 27 | 🔴 TODO | RD / RMDIR | intern | 3, 4 |
+| 28 | 🔴 TODO | PUSHD / POPD | intern | 4, 10 |
+| 29 | 🔴 TODO | PATH | intern | 4 |
+| 30 | 🔴 TODO | VER | intern | 4 |
+| 31 | 🔴 TODO | VOL | intern | 3, 4 |
+| 32 | 🔴 TODO | LABEL | intern | 3, 4 |
+| 33 | 🔴 TODO | START | intern | 6 |
+| 34 | 🔴 TODO | BREAK | intern | 4 |
+| 35 | 🔴 TODO | VERIFY | intern | 4 |
+| 36 | 🔴 TODO | ASSOC | intern | 4 |
+| 37 | 🔴 TODO | FTYPE | intern | 4 |
+| 38 | 🔴 TODO | IF | intern (complex) | 1, 4 |
+| 39 | 🔴 TODO | FOR | intern (complex) | 1, 4, 8 |
+| 40 | 🔴 TODO | XCOPY | extern .NET | 6 |
+| 41 | 🔴 TODO | DOSKEY | extern .NET | 6 |
+| 42 | 🔴 TODO | CMD | extern .NET | 6 |
+| 43 | 🔴 TODO | FIND | extern .NET | 6, 7 |
+| 44 | 🔴 TODO | FINDSTR | extern .NET | 6, 7 |
+| 45 | 🔴 TODO | SORT | extern .NET | 6, 7 |
+| 46 | 🔴 TODO | MORE | extern .NET | 6, 7 |
+| 47 | 🔴 TODO | FC | extern .NET | 6 |
+| 48 | 🔴 TODO | TREE | extern .NET | 6 |
+| 49 | 🔴 TODO | WHERE | extern .NET | 6 |
+| 50 | 🔴 TODO | TIMEOUT | extern .NET | 6 |
+| 51 | 🔴 TODO | CHOICE | extern .NET | 6 |
+| 52 | 🔴 TODO | ATTRIB | extern .NET (DOS-specifiek) | 6, 3 |
 
 > **Opmerking:** Een doel van Bat is batchbestanden ook op Unix uit te voeren. Windows-executables zoals `find.exe`, `sort.exe`, `more.com` etc. bestaan niet op Unix en moeten daarom als .NET-executables worden geïmplementeerd (net als XCopy en Doskey). `ATTRIB` staat bewust als laatste: het beheert DOS-specifieke bestandsattributen (hidden/system/archive/readonly) die op Unix geen directe equivalent hebben.
 
@@ -131,7 +134,7 @@ Voor elk commando zonder eigen instructiebestand (stap 14 t/m 41):
 **Stap 1 — Verken het echte gedrag**
 ```cmd /C «COMMAND» /? > «COMMAND»-help.txt
 ```
-Kopieer de volledige `/?` output als inline commentaar in de command-klasse (documentatie bij de bron).
+Implementeer /? eerst: Kopieer de volledige `/?` output als uitvoer van de /?, zodat het ook als documentatie gebruikt kan worden.
 
 **Stap 2 — Zoek de referenties op**
 - Microsoft docs: `https://learn.microsoft.com/windows-server/administration/windows-commands/COMMAND`
@@ -471,6 +474,20 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 - Initialiseer `IContext` met de meegegeven startwaarden (drive, pad, env vars)
 - Ondersteuning voor `/C` (uitvoeren en sluiten), `/K` (uitvoeren en open houden)
 
+**Volume labels bij `/m`-mappings:**
+
+Elke virtuele drive heeft een volume label. Standaard wordt het label overgenomen van het host station waar de native map op staat (bijv. `/m:Z C:\Projects` → label van `C:`). Dit kan per drive worden overschreven via een optionele `,label=` suffix op de drive-letter in de `/m`-flag:
+
+| Vorm | Betekenis |
+|---|---|
+| `/m:Z C:\Projects` | Z: → C:\Projects, label geërfd van C: |
+| `/m:Z,label=MyProject C:\Projects` | Z: → C:\Projects, label = `MyProject` (literal) |
+| `/m:Z,label=D:\ C:\Projects` | Z: → C:\Projects, label overgenomen van host drive D: |
+
+De `,label=` waarde wordt als native host-pad beschouwd als hij er als een absoluut pad uitziet (`X:\...` op Windows, `/...` op Unix); anders wordt hij letterlijk als label-string gebruikt.
+
+`DriveMappings` in `BatArguments` wordt uitgebreid tot `(string NativePath, string? LabelOverride)` per drive (of een apart `VolumeLabelOverrides: Dictionary<char, string>?`).
+
 → **[STEP_11_BAT_CMDLINE.md](steps/STEP_11_BAT_CMDLINE.md)**
 
 ## Stap 12: UxFileSystem / UxContext
@@ -519,6 +536,62 @@ Kopieer de volledige `/?` output als inline commentaar in de command-klasse (doc
 
 → **[STEP_13_PLATFORM_COMPILATION.md](steps/STEP_13_PLATFORM_COMPILATION.md)**
 
+## Stap 14: Daemon-architectuur (optioneel)
+
+**Doel:** Eén gedeelde daemon-instance voor alle BAT-sessies voor snellere startup en systeem-brede SUBST-mappings.
+
+**Achtergrond:**
+Momenteel start elke `bat.exe` zijn eigen .NET runtime en `IFileSystem`-instance. Dit betekent:
+- SUBST-mappings zijn per proces (niet zoals DOS, waar SUBST systeem-breed is)
+- Startup tijd includes .NET JIT warmup
+- Meerdere BAT-vensters = meerdere runtimes in geheugen
+
+De daemon-architectuur lost dit op door één persistente host-proces met alle sessies als clients.
+
+**Scope:**
+
+**Discovery & lifecycle:**
+- Lock file mechanisme (`daemon.lock` + `daemon.info`) voor daemon-detectie
+- PID-validatie tegen stale locks
+- Automatische daemon-start bij eerste `bat.exe`
+- Timeout-gebaseerde shutdown (laatste sessie sluit → 30s wachten → daemon exit)
+
+**IPC mechanisme:**
+- Windows: `NamedPipeServerStream`
+- Unix: Unix Domain Socket (`UnixDomainSocketEndPoint`)
+- Protocol: nieuw session request → session ID terug; command execution via session ID
+
+**Architectuur:**
+```
+Daemon (bat.exe --daemon):
+  ├─ IFileSystem (shared, thread-safe)
+  ├─ Session 1: IContext + BatchContext
+  ├─ Session 2: IContext + BatchContext
+  └─ Session N: IContext + BatchContext
+
+Client (bat.exe):
+  ├─ Connect to daemon
+  ├─ NewSession() → SessionID
+  └─ All commands → daemon via IPC
+```
+
+**Gedeeld vs. Per-sessie:**
+- **Gedeeld:** IFileSystem, SUBST-mappings, file associations, .NET runtime
+- **Per-sessie:** EnvironmentVariables, CurrentDrive, CurrentPath, EchoEnabled, BatchContext, SetLocalStack
+
+**Thread-safety vereisten:**
+- `DosFileSystem.AddSubst()` / `RemoveSubst()` → lock-gebaseerd
+- `IFileSystem` operaties → concurrent-safe
+
+**Acceptance criteria:**
+- Tweede `bat.exe` hergebruikt daemon (geen nieuwe runtime)
+- `SUBST Q: C:\Temp` in sessie 1 → zichtbaar in sessie 2
+- Environment variables blijven geïsoleerd tussen sessies
+- Daemon sluit automatisch na timeout (geen zombie processen)
+- Cross-platform: werkt op Windows (named pipes) + Unix (UDS)
+
+→ **[STEP_14_DAEMON.md](steps/STEP_14_DAEMON.md)**
+
 ## Afhankelijkheden
 
 ```
@@ -544,23 +617,26 @@ Stap 10 (SETLOCAL) ← Vereist Stap 9 (drive paden snapshot)
 Stap 11 (Bat cmdline) ← Vereist Stap 1 (IContext startup)
 Stap 12 (UxFileSystem) ← Vereist Stap 3 (referentie-implementatie)
 Stap 13 (Platform compilatie) ← Vereist Stap 12 (beide filesystem-implementaties bestaan)
+Stap 14 (Daemon) ← OPTIONEEL; vereist Stap 13 (thread-safe IFileSystem)
   ↓
-Stap 14–51 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
+Stap 15–52 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
 ```
 
 **Kritiek pad:** 1 → 3 → 4 → 5 → 6 → 7 → 8  
 **Snel iets zien:** 1 → 3 → 4 (dan kun je interactief typen)
-**Cross-platform pijp-utilities:** 42–50 vereisen stap 6 (.NET exec) + stap 7 (pipes); ATTRIB (51) als laatste vanwege DOS-specifieke semantiek
+**Cross-platform pijp-utilities:** 43–51 vereisen stap 6 (.NET exec) + stap 7 (pipes); ATTRIB (52) als laatste vanwege DOS-specifieke semantiek
+**Daemon (optioneel):** 14 kan worden overgeslagen; systeem werkt volledig zonder
 
 ## Uitvoering
 
-Voor infrastructuurstappen (1–13):
+Voor infrastructuurstappen (1–14):
 1. Lees het instructiebestand volledig
 2. Vraag: "Voer STEP_0X uit"
 3. Implementeer volgens TDD
 4. Alle tests slagen → volgende stap
+5. **Opmerking:** Stap 14 (Daemon) is optioneel en kan worden overgeslagen
 
-Voor commando-stappen (14–51):
+Voor commando-stappen (15–52):
 1. Verwijs naar de [Generieke implementatieregels](#generieke-implementatieregels-voor-commandos)
 2. Vraag: "Implementeer stap XX: COMMAND"
 3. Implementeer — geen apart bestand nodig

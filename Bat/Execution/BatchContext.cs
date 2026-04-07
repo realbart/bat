@@ -43,5 +43,7 @@ internal class BatchContext
 public record EnvironmentSnapshot(
     Dictionary<string, string> Variables,
     Dictionary<char, string[]> Paths,
-    bool DelayedExpansion
+    char CurrentDrive,
+    bool DelayedExpansion,
+    bool ExtensionsEnabled
 );
