@@ -111,15 +111,42 @@ public static class Program
         if (!batArgs.SuppressBanner)
             System.Console.Write(BannerText);
 
-        var context = ContextFactory.CreateContext();
-        return Main(context, args);
+        var context = ContextFactory.CreateContext(batArgs);
+        return Main(context, batArgs);
     }
 
-    public static async Task<int> Main(IContext context, params string[] args)
+    public static async Task<int> Main(IContext context, BatArguments batArgs)
     {
+        if (!batArgs.EchoEnabled)
+            context.EchoEnabled = false;
+
+        switch (batArgs.ExitBehavior)
+        {
+            case BatExitBehavior.TerminateAfterCommand when batArgs.Command != null:
+                await Repl.ExecuteCommandAsync(context, batArgs.Command);
+                return context.ErrorCode;
+
+            case BatExitBehavior.KeepAliveAfterCommand when batArgs.Command != null:
+                await Repl.ExecuteCommandAsync(context, batArgs.Command);
+                break;
+
+            case BatExitBehavior.TerminateAfterCommand when batArgs.BatchFile != null:
+            {
+                var translated = PathTranslator.TranslateHostPathToBat(batArgs.BatchFile, context.FileSystem);
+                var virtualPath = translated.Split(';', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+                    ?? batArgs.BatchFile;
+                await Repl.ExecuteBatchAsync(context, virtualPath);
+                return context.ErrorCode;
+            }
+        }
+
         await Repl.StartAsync(context);
         return context.ErrorCode;
     }
+
+    public static Task<int> Main(IContext context, params string[] args)
+    {
+        var parser = new BatArgumentParser(ContextFactory.IsWindows ? '\\' : '/');
+        return Main(context, parser.Parse(args));
+    }
 }
-#pragma warning restore IDE0060
-#pragma warning restore CS0028

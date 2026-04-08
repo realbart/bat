@@ -6,6 +6,9 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
 {
     public int ErrorCode { get; set; } = 0;
     public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> CommandHistory { get; } = [];
+    public int HistorySize { get; set; } = 50;
     protected readonly Dictionary<char, string[]> CurrentFolders = [];
     public char CurrentDrive { get; protected set; } = 'C';
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];

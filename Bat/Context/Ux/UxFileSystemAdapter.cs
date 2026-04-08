@@ -186,7 +186,9 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
         var candidates = Directory.EnumerateFileSystemEntries(nativeDir)
             .Where(e => NeedsShortName(Path.GetFileName(e)))
-            .OrderBy(File.GetCreationTime)
+            .Select(e => (Path: e, Timestamp: GetTimestampSafe(e)))
+            .OrderBy(x => x.Timestamp)
+            .Select(x => x.Path)
             .ToList();
 
         var counters = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -199,6 +201,23 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             counters[base8] = n;
             var ext = ShortNameExt(name);
             _shortNameCache[entry] = ext.Length > 0 ? $"{base8}~{n}.{ext}" : $"{base8}~{n}";
+        }
+    }
+
+    private static DateTime GetTimestampSafe(string path)
+    {
+        try
+        {
+            // On Unix, GetLastWriteTime is more reliable than GetCreationTime
+            return File.GetLastWriteTime(path);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return DateTime.MinValue;
+        }
+        catch (IOException)
+        {
+            return DateTime.MinValue;
         }
     }
 

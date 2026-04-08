@@ -101,7 +101,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
         {
             do
             {
-                if (data.cFileName != "..")
+                if (data.cFileName != "." && data.cFileName != "..")
                 {
                     var isDir = (data.dwFileAttributes & 0x10) != 0;
                     var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;

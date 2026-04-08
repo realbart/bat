@@ -1,0 +1,1 @@
+doskey.exe /history

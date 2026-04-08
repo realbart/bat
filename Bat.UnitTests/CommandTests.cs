@@ -313,6 +313,9 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public string CurrentPathDisplayName =>
         CurrentPath.Length == 0 ? $"{CurrentDrive}:\\" : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
     public Dictionary<string, string> EnvironmentVariables { get; } = [];
+    public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> CommandHistory { get; } = [];
+    public int HistorySize { get; set; } = 50;
     public int ErrorCode { get; set; }
     public IFileSystem FileSystem => fileSystem!;
     public object? CurrentBatch { get; set; }

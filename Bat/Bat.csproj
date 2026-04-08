@@ -45,27 +45,64 @@
     <ProjectReference Include="..\Context\Context.csproj" />
   </ItemGroup>
 
-  <Target Name="PublishAllPlatforms" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
+  <!-- Utilities packaged as prefix.bin + dll → *.exe (or *.com) for each platform -->
+  <!-- To add a new utility: add one line here only. Ext defaults to .exe -->
+  <ItemGroup>
+    <PrefixedLibrary Include="Subst" />
+    <PrefixedLibrary Include="Xcopy" />
+    <PrefixedLibrary Include="Doskey" />
+    <PrefixedLibrary Include="Tree"><Ext>.com</Ext></PrefixedLibrary>
+  </ItemGroup>
+
+  <!-- Debug: build satellite projects and copy their .dll + .pdb next to bat.exe      -->
+  <!-- DotNetLibraryExecutor finds them via PATH and loads via LoadFrom → PDBs work    -->
+  <Target Name="CopySatelliteDllsForDebug"
+          AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Debug' AND '$(RuntimeIdentifier)' == ''">
+    <MSBuild Projects="$(MSBuildProjectDirectory)\..\%(PrefixedLibrary.Identity)\%(PrefixedLibrary.Identity).csproj"
+             Properties="Configuration=Debug"
+             Targets="Build" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\%(PrefixedLibrary.Identity)\bin\Debug\$(TargetFramework)\%(PrefixedLibrary.Identity).dll"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\%(PrefixedLibrary.Identity)\bin\Debug\$(TargetFramework)\%(PrefixedLibrary.Identity).pdb"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Run explicitly: dotnet msbuild /t:PackageRelease /p:Configuration=Release         -->
+  <!-- Auto-runs after every Release build in VS (DisableFastUpToDateCheck forces it)   -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+
+  <Target Name="PackageRelease"
+          AfterTargets="AfterBuild"
+          Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
     <Message Text="Publishing single-file executables for all platforms..." Importance="high" />
 
     <Exec Command="dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\win-x64" WorkingDirectory="$(MSBuildProjectDirectory)" />
-
     <Exec Command="dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\linux-x64" WorkingDirectory="$(MSBuildProjectDirectory)" />
-
     <Exec Command="dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $(MSBuildProjectDirectory)\..\publish\osx-arm64" WorkingDirectory="$(MSBuildProjectDirectory)" />
 
     <Message Text="✅ Published to publish\win-x64\bat.exe, publish\linux-x64\bat, publish\osx-arm64\bat" Importance="high" />
   </Target>
 
-  <Target Name="PackagePrefixedLibraries" AfterTargets="PublishAllPlatforms" Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
-    <MSBuild Projects="$(MSBuildProjectDirectory)\..\Subst\Subst.csproj" Properties="Configuration=Release" Targets="Build" />
-    <MSBuild Projects="$(MSBuildProjectDirectory)\..\Xcopy\Xcopy.csproj" Properties="Configuration=Release" Targets="Build" />
+  <Target Name="BuildPrefixedLibraries" BeforeTargets="PackagePrefixedLibraries" Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
+    <MSBuild Projects="$(MSBuildProjectDirectory)\..\%(PrefixedLibrary.Identity)\%(PrefixedLibrary.Identity).csproj"
+             Properties="Configuration=Release"
+             Targets="Build" />
+  </Target>
 
+  <Target Name="PackagePrefixedLibraries"
+          AfterTargets="PackageRelease"
+          Condition="'$(Configuration)' == 'Release' AND '$(RuntimeIdentifier)' == ''">
     <Message Text="Packaging prefixed executables..." Importance="high" />
 
-    <Exec Command="pwsh -NoProfile -Command &quot;$p=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\prefix.bin'); foreach ($rid in 'win-x64','linux-x64','osx-arm64') { foreach ($lib in 'Subst','Xcopy') { $dll=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\' + $lib + '\bin\Release\net10.0\' + $lib + '.dll'); $out='$(MSBuildProjectDirectory)\..\publish\' + $rid + '\' + $lib.ToLower() + '.exe'; [System.IO.File]::WriteAllBytes($out, [byte[]]($p + $dll)); Write-Host ('Wrote ' + $out) } }&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="pwsh -NoProfile -Command &quot;$p=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\prefix.bin'); foreach ($rid in 'win-x64','linux-x64','osx-arm64') { foreach ($entry in '@(PrefixedLibrary->&apos;%(Identity)|%(Ext)&apos;)'.Split(';')) { $parts=$entry.Split('|'); $lib=$parts[0]; $ext=if($parts[1]) { $parts[1] } else { '.exe' }; $dll=[System.IO.File]::ReadAllBytes('$(MSBuildProjectDirectory)\..\' + $lib + '\bin\Release\net10.0\' + $lib + '.dll'); $out='$(MSBuildProjectDirectory)\..\publish\' + $rid + '\' + $lib.ToLower() + $ext; [System.IO.File]::WriteAllBytes($out, [byte[]]($p + $dll)); Write-Host ('Wrote ' + $out) } }&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
 
-    <Message Text="✅ Packaged subst.exe and xcopy.exe for all platforms" Importance="high" />
+    <Message Text="✅ Packaged @(PrefixedLibrary, ', ')" Importance="high" />
   </Target>
 
 </Project>

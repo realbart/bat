@@ -6,6 +6,9 @@ public interface IContext
     string[] CurrentPath { get; }
     string CurrentPathDisplayName { get; }
     Dictionary<string, string> EnvironmentVariables { get; }
+    Dictionary<string, string> Macros { get; }
+    List<string> CommandHistory { get; }
+    int HistorySize { get; set; }
     int ErrorCode { get; set; }
     IFileSystem FileSystem { get; }
 

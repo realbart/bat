@@ -85,11 +85,11 @@ internal class BatArgumentParser(char directorySeparator)
         {
             case "C":
                 exitBehavior = BatExitBehavior.TerminateAfterCommand;
-                if (i + 1 < args.Length) command = args[++i];
+                if (i + 1 < args.Length) { command = string.Join(" ", args[(i + 1)..]); i = args.Length; }
                 break;
             case "K":
                 exitBehavior = BatExitBehavior.KeepAliveAfterCommand;
-                if (i + 1 < args.Length) command = args[++i];
+                if (i + 1 < args.Length) { command = string.Join(" ", args[(i + 1)..]); i = args.Length; }
                 break;
             case "Q":
                 echoEnabled = false;

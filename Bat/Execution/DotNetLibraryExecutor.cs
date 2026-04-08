@@ -41,7 +41,10 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefi
 
             var tokens = ParseArgumentsAsTokens(arguments);
             var args = Commands.ArgumentSet.Parse(tokens, Commands.ArgumentSpec.Empty);
-            var result = entryPoint.Invoke(null, [batchContext.Context, args]);
+            object? secondArg = entryPoint.Value.UsesArgumentSet
+                ? args
+                : args.Positionals.ToArray();
+            var result = entryPoint.Value.Method.Invoke(null, [batchContext.Context, secondArg]);
 
             if (result is Task<int> taskInt) return await taskInt;
             return result is int exitCode ? exitCode : 0;
@@ -53,15 +56,20 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefi
         }
     }
 
-    private static MethodInfo? FindIContextMain(Assembly assembly) =>
-        assembly.GetTypes()
+    private static (MethodInfo Method, bool UsesArgumentSet)? FindIContextMain(Assembly assembly)
+    {
+        var method = assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
             .Where(m => m.Name == "Main")
             .FirstOrDefault(m =>
             {
                 var p = m.GetParameters();
-                return p.Length == 2 && p[0].ParameterType.Name == "IContext" && p[1].ParameterType.Name == "IArgumentSet";
+                if (p.Length != 2 || p[0].ParameterType.Name != "IContext") return false;
+                return p[1].ParameterType.Name is "IArgumentSet" or "String[]";
             });
+        if (method == null) return null;
+        return (method, method.GetParameters()[1].ParameterType.Name == "IArgumentSet");
+    }
 
     private static List<Tokens.IToken> ParseArgumentsAsTokens(string arguments)
     {

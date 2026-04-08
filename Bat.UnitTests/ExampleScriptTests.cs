@@ -1,10 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
-using Bat.Console;
-using Bat.Context;
-using Bat.Context.Dos;
-using Bat.Execution;
 
 namespace Bat.UnitTests;
 
@@ -21,6 +17,9 @@ public class ExampleScriptTests
     private static readonly string ExamplesDir =
         Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Examples");
 
+    private static readonly string BatExe =
+        Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "bat.exe");
+
     public static IEnumerable<object[]> GetScripts()
     {
         if (!Directory.Exists(ExamplesDir)) yield break;
@@ -32,20 +31,20 @@ public class ExampleScriptTests
     [DynamicData(nameof(GetScripts), DynamicDataSourceType.Method)]
     public async Task Script_BatOutputMatchesCmd(string name, string scriptPath)
     {
-        var (cmdOut, cmdErr) = RunWithCmd(scriptPath);
-        var (batOut, batErr) = await RunWithBatAsync(scriptPath);
+        var (cmdOut, cmdErr) = await RunAsync("cmd.exe", $"/C \"{scriptPath}\"", scriptPath);
+        var (batOut, batErr) = await RunAsync(BatExe, $"/N /C \"{scriptPath}\"", scriptPath);
 
         Assert.AreEqual(cmdOut, batOut, $"stdout mismatch in {name}");
         Assert.AreEqual(cmdErr, batErr, $"stderr mismatch in {name}");
     }
 
-    private static (string Out, string Err) RunWithCmd(string scriptPath)
+    private static async Task<(string Out, string Err)> RunAsync(string exe, string args, string scriptPath)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var oemEncoding = Encoding.GetEncoding(
             System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
 
-        var psi = new ProcessStartInfo("cmd.exe", $"/C \"{scriptPath}\"")
+        var psi = new ProcessStartInfo(exe, args)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -57,30 +56,8 @@ public class ExampleScriptTests
         using var proc = Process.Start(psi)!;
         var outTask = proc.StandardOutput.ReadToEndAsync();
         var errTask = proc.StandardError.ReadToEndAsync();
-        proc.WaitForExit();
+        await proc.WaitForExitAsync();
         return (Normalize(outTask.Result), Normalize(errTask.Result));
-    }
-
-    private static async Task<(string Out, string Err)> RunWithBatAsync(string scriptPath)
-    {
-        // Mirror "bat /m:C=C:\" — map virtual drive C to native C:\
-        var fs = new DosFileSystem(new Dictionary<char, string> { ['C'] = @"C:\" });
-        var ctx = new DosContext(fs);
-        ctx.SetCurrentDrive('C');
-
-        // Set working directory to the script's parent directory
-        var scriptDir = Path.GetDirectoryName(scriptPath)!;
-        var segments = scriptDir.Split('\\', StringSplitOptions.RemoveEmptyEntries)
-            .Skip(1) // drop "C:" drive prefix
-            .ToArray();
-        ctx.SetPath('C', segments);
-
-        var console = new TestConsole();
-        var bc = new BatchContext { Console = console, Context = ctx };
-        var executor = new BatchExecutor(console);
-        await executor.ExecuteAsync(scriptPath, "", bc, []);
-
-        return (Normalize(console.OutText), Normalize(console.ErrText));
     }
 
     private static string Normalize(string s)

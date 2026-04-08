@@ -24,6 +24,9 @@ public class PromptExpanderTests
                 ? $"{CurrentDrive}:\\"
                 : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
         public Dictionary<string, string> EnvironmentVariables { get; } = [];
+        public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<string> CommandHistory { get; } = [];
+        public int HistorySize { get; set; } = 50;
         public int ErrorCode { get; set; }
         public IFileSystem FileSystem => null!;
         public object? CurrentBatch { get; set; }

@@ -18,10 +18,28 @@
     <File Path="IMPLEMENTATION_PLAN.md" />
     <File Path="prefix.bin" />
   </Folder>
+  <Folder Name="/Solution Items/Plans/">
+    <File Path="docs/EXECUTION_ROADMAP.md" />
+    <File Path="docs/steps/STEP_01_REPAIR_DESIGN.md" />
+    <File Path="docs/steps/STEP_02_PROMPT_EXPANSION.md" />
+    <File Path="docs/steps/STEP_03_DOS_FILESYSTEM.md" />
+    <File Path="docs/steps/STEP_04_MINIMAL_REPL.md" />
+    <File Path="docs/steps/STEP_05_CD_DIR_COMMANDS.md" />
+    <File Path="docs/steps/STEP_06_EXECUTE_NATIVE.md" />
+    <File Path="docs/steps/STEP_07_EXECUTE_DOTNET.md" />
+    <File Path="docs/steps/STEP_08_BATCH_EXECUTE.md" />
+    <File Path="docs/steps/STEP_09_REDIRECTIONS.md" />
+    <File Path="docs/steps/STEP_10_SUBST_DRIVE_SWITCHING.md" />
+    <File Path="docs/steps/STEP_11_SETLOCAL.md" />
+    <File Path="docs/steps/STEP_12_BAT_CMDLINE.md" />
+    <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
+    <File Path="IMPLEMENTATION_PLAN.md" />
+  </Folder>
   <Project Path="Bat.UnitTests/Bat.UnitTests.csproj" />
   <Project Path="Bat/Bat.csproj" />
   <Project Path="Context/Context.csproj" />
   <Project Path="Doskey/Doskey.csproj" Id="6aaba0ab-16a9-4a2f-8e26-9abf3472ec2c" />
   <Project Path="Subst/Subst.csproj" Id="3f6d6b27-6aaa-47a3-bb50-606d3a53dcfc" />
+  <Project Path="Tree/Tree.csproj" />
   <Project Path="Xcopy/Xcopy.csproj" />
 </Solution>
