@@ -9,11 +9,12 @@ public static class Program
         """
         Graphically displays the folder structure of a drive or path.
 
-        TREE [drive:][path] [/F] [/A] [/E]
+        TREE [drive:][path] [/A] [/D] [/E] [/F]
 
-           /F   Display the names of the files in each folder.
            /A   Use ASCII instead of extended characters.
+           /D   Display directories first, then the files.
            /E   Use emoji icons (📁 folders, 📄 files, 🖥️ drive root).
+           /F   Display the names of the files in each folder.
         """;
 
     public static async Task<int> Main(IContext context, IArgumentSet args)
@@ -24,9 +25,9 @@ public static class Program
             return 0;
         }
 
-        var useAscii = args.GetFlagValue('A');
-        var useEmoji = args.GetFlagValue('E');
-        var showFiles = args.GetFlagValue('F') || useEmoji;
+        var hasA = args.GetFlagValue('A');
+        var hasE = args.GetFlagValue('E');
+        var hasF = args.GetFlagValue('F');
         var pathArg = args.Positionals.FirstOrDefault();
 
         var drive = context.CurrentDrive;
@@ -40,69 +41,104 @@ public static class Program
                 pathArg = pathArg[2..];
             }
             if (pathArg.Length > 0)
-                path = pathArg.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+            {
+                pathArg = pathArg.Replace('/', '\\');
+                var segments = pathArg.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+                if (pathArg.StartsWith('\\'))
+                {
+                    path = segments;
+                }
+                else
+                {
+                    var resolvedPath = new List<string>(path);
+                    foreach (var segment in segments)
+                    {
+                        if (segment == "..")
+                        {
+                            if (resolvedPath.Count > 0)
+                                resolvedPath.RemoveAt(resolvedPath.Count - 1);
+                        }
+                        else if (segment != ".")
+                        {
+                            resolvedPath.Add(segment);
+                        }
+                    }
+                    path = [.. resolvedPath];
+                }
+            }
         }
 
-        if (useEmoji || !useAscii)
+        if (hasE || !hasA)
         {
             var prevEncoding = System.Console.OutputEncoding;
             if (prevEncoding.CodePage != 65001)
                 System.Console.OutputEncoding = System.Text.Encoding.UTF8;
         }
 
-        var rootDisplay = context.FileSystem.GetFullPathDisplayName(drive, path);
-        var rootLine = useEmoji && path.Length == 0 ? $"🖥️{rootDisplay}" : rootDisplay;
-        await System.Console.Out.WriteLineAsync(rootLine);
-
-        var initialIndent = useEmoji ? " " : "";
-        await PrintTree(context, drive, path, initialIndent, useAscii, useEmoji, showFiles);
-        return 0;
-    }
-
-    private static async Task PrintTree(IContext context, char drive, string[] path,
-        string indent, bool useAscii, bool useEmoji, bool showFiles)
-    {
-        var entries = context.FileSystem
-            .EnumerateEntries(drive, path, "*")
-            .OrderBy(e => !e.IsDirectory)
-            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        for (var i = 0; i < entries.Count; i++)
+        var (branchLast, branchMiddle, childIndentLast, childIndentMiddle, pipeChar, fileIndentLast, fileIndentMiddle, folderPrefix, filePrefix, rootPrefix) = (hasE, hasA) switch
         {
-            var entry = entries[i];
-            var isLast = i == entries.Count - 1;
+            (false, false) => ("└───", "├───", "    ", "│   ", "│", "    ", "│   ", "", "", ""),
+            (false, true) => ("\\---", "+---", "    ", "|   ", "|", "    ", "|   ", "", "", ""),
+            (true, false) => ("└─", "├─", "  ", "│ ", "│", "  ", "│ ", "📁 ", "📄 ", "🖥️ "),
+            (true, true) => ("`-", "+-", "  ", ": ", ":", "  ", ": ", "📁 ", "📄 ", "🖥️ ")
+        };
 
-            if (!entry.IsDirectory && !showFiles) continue;
+        var rootDisplay = context.FileSystem.GetFullPathDisplayName(drive, path);
+        await System.Console.Out.WriteLineAsync($"{rootPrefix}{rootDisplay}");
 
-            string branch, childIndent;
-            if (useEmoji)
+        var initialIndent = hasE ? " " : "";
+        await PrintTree(drive, path, initialIndent);
+        return 0;
+
+        async Task PrintTree(char currentDrive, string[] currentPath, string prefix)
+        {
+            var directories = context.FileSystem
+                .EnumerateEntries(currentDrive, currentPath, "*")
+                .Where(e => e.IsDirectory)
+                .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var files = hasF
+                ? context.FileSystem
+                    .EnumerateEntries(currentDrive, currentPath, "*")
+                    .Where(e => !e.IsDirectory)
+                    .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                : [];
+
+            if (hasF)
             {
-                branch = isLast ? "\u2514" : "\u251C";
-                childIndent = isLast ? "  " : "\u2502 ";
+                var hasDirectories = directories.Count > 0;
+                var isRootLevel = prefix.Length == initialIndent.Length;
+                var isInLastDir = prefix.EndsWith(childIndentLast);
+
+                for (var i = 0; i < files.Count; i++)
+                {
+                    var file = files[i];
+                    var label = $"{filePrefix}{file.Name}";
+                    var fileIndentStr = (isRootLevel || hasDirectories || !isInLastDir)
+                        ? fileIndentMiddle
+                        : fileIndentLast;
+                    await System.Console.Out.WriteLineAsync($"{prefix}{fileIndentStr}{label}");
+                }
+
+                if (files.Count > 0)
+                {
+                    await System.Console.Out.WriteLineAsync($"{prefix}{(hasDirectories ? pipeChar : "")}");
+                }
             }
-            else if (useAscii)
+
+            for (var i = 0; i < directories.Count; i++)
             {
-                branch = "+---";
-                childIndent = isLast ? "    " : "|   ";
+                var dir = directories[i];
+                var isLastDir = i == directories.Count - 1;
+                var branch = isLastDir ? branchLast : branchMiddle;
+                var childIndent = isLastDir ? childIndentLast : childIndentMiddle;
+                var label = $"{folderPrefix}{dir.Name}";
+
+                await System.Console.Out.WriteLineAsync($"{prefix}{branch}{label}");
+                await PrintTree(currentDrive, [.. currentPath, dir.Name], prefix + childIndent);
             }
-            else
-            {
-                branch = isLast ? "\u2514\u2500\u2500\u2500" : "\u251C\u2500\u2500\u2500";
-                childIndent = isLast ? "    " : "\u2502   ";
-            }
-
-            string label;
-            if (useEmoji)
-                label = entry.IsDirectory ? $"📁{entry.Name}" : $"📄{entry.Name}";
-            else
-                label = entry.Name;
-
-            await System.Console.Out.WriteLineAsync($"{indent}{branch}{label}");
-
-            if (entry.IsDirectory)
-                await PrintTree(context, drive, [.. path, entry.Name],
-                    indent + childIndent, useAscii, useEmoji, showFiles);
         }
     }
 }

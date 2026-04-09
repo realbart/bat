@@ -25,21 +25,7 @@ internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefi
             if (isPrefixed)
             {
                 var fileBytes = await File.ReadAllBytesAsync(hostPath);
-                var assemblyBytes = fileBytes[PrefixLength..];
-#if DEBUG
-                var pdbPath = Path.ChangeExtension(hostPath, ".pdb");
-                if (File.Exists(pdbPath))
-                {
-                    var pdbBytes = await File.ReadAllBytesAsync(pdbPath);
-                    assembly = Assembly.Load(assemblyBytes, pdbBytes);
-                }
-                else
-                {
-                    assembly = Assembly.Load(assemblyBytes);
-                }
-#else
-                assembly = Assembly.Load(assemblyBytes);
-#endif
+                assembly = Assembly.Load(fileBytes[PrefixLength..]);
             }
             else
             {
