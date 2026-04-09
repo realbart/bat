@@ -20,21 +20,22 @@
 12. UxFileSystem / UxContext
 13. Platform-specifieke compilatie
 
-**Al geïmplementeerde commands:** ECHO, REM, CLS, EXIT, CALL, SHIFT, SET, GOTO, CD/CHDIR, DIR, SETLOCAL, ENDLOCAL, SUBST (extern), TREE (extern, voorlopig)
+**Al geïmplementeerde commands:** ECHO, REM, CLS, EXIT, CALL, SHIFT, SET, GOTO, CD/CHDIR, DIR, SETLOCAL, ENDLOCAL, PAUSE, TITLE, SUBST (extern), TREE (extern, voorlopig)
 
 ### Infrastructuurstappen in uitvoering
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
-| 14 | 🔴 TODO | Error handling voor satellietapplicaties | [STEP_14_SATELLITE_ERROR_HANDLING.md](steps/STEP_14_SATELLITE_ERROR_HANDLING.md) |
-| 15 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_15_DAEMON.md](steps/STEP_15_DAEMON.md) |
+| 14 | 🔴 TODO | IConsole integratie in IContext | [STEP_14_ICONSOLE_INTEGRATION.md](steps/STEP_14_ICONSOLE_INTEGRATION.md) |
+| 15 | 🔴 TODO | Error handling voor satellietapplicaties | [STEP_15_SATELLITE_ERROR_HANDLING.md](steps/STEP_15_SATELLITE_ERROR_HANDLING.md) |
+| 16 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_16_DAEMON.md](steps/STEP_16_DAEMON.md) |
 
 ### Commando-implementatiestappen (16-53)
 
 | Stap | Status | Commando | Type | Vereist |
 |---|---|---|---|---|
-| 16 | 🔴 TODO | PAUSE | intern | 4 |
-| 17 | 🔴 TODO | TITLE | intern | 4 |
+| 16 | 🟢 DONE | PAUSE | intern | 4 |
+| 17 | 🟢 DONE | TITLE | intern | 4 |
 | 18 | 🔴 TODO | COLOR | intern | 4 |
 | 19 | 🔴 TODO | PROMPT | intern | 4 |
 | 20 | 🔴 TODO | DATE | intern | 4 |
@@ -102,14 +103,16 @@ Vermijd expliciete if-statements waar datastructuren het gedrag kunnen bepalen.
 ```
 Stap 1-13 (DONE)
   ↓
-Stap 14 (Satellite error handling) ← Vereist Stap 6
-Stap 15 (Daemon, optioneel) ← Vereist Stap 13
+Stap 14 (IConsole in IContext) ← Vereist Stap 4 (IConsole exists)
   ↓
-Stap 16–53 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
+Stap 15 (Satellite error handling) ← Vereist Stap 6, 14
+Stap 16 (Daemon, optioneel) ← Vereist Stap 13
+  ↓
+Stap 17–55 (Commando's) ← Vereist stap 4 (dispatcher) + specifieke vereisten per commando
 ```
 
-**Kritiek pad:** 1 → 3 → 4 → 5 → 6 → 7 → 8  
-**Daemon (optioneel):** 15 kan worden overgeslagen; systeem werkt volledig zonder
+**Kritiek pad:** 1 → 3 → 4 → 5 → 6 → 7 → 8 → 14  
+**Daemon (optioneel):** 16 kan worden overgeslagen; systeem werkt volledig zonder
 
 ## Uitvoering
 
@@ -118,6 +121,7 @@ Voor infrastructuurstappen:
 2. Vraag: "Voer STEP_XX uit"
 3. Implementeer volgens TDD
 4. Alle tests slagen → volgende stap
+5. **Opmerking:** Stap 16 (Daemon) is optioneel
 
 Voor commando-stappen:
 1. Verwijs naar de Generieke implementatieregels
