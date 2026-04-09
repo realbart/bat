@@ -25,7 +25,9 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
 
     public async Task ExecuteBatchAsync(IContext context, string batchFilePath)
     {
-        var bc = new ReplBatchContext { Context = context, Console = console };
+        var bc = ReplBatchContext.Value;
+        bc.Context = context;
+        bc.Console = console;
         var executor = new BatchExecutor(console);
         await executor.ExecuteAsync(batchFilePath, "", bc, []);
     }

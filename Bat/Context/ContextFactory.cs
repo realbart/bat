@@ -17,27 +17,4 @@ internal static partial class ContextFactory
             new Dictionary<char, string> { ['Z'] = "/" },
             UnixFileOwner.GetOwner));
 #endif
-
-    public static IContext CreateContext(BatArguments args)
-    {
-        var context = CreateContext(args.DriveMappings);
-        context.DelayedExpansion = args.DelayedExpansion ?? false;
-        context.ExtensionsEnabled = args.ExtensionsEnabled ?? true;
-        context.EchoEnabled = args.EchoEnabled;
-        return context;
-    }
-
-#if WINDOWS || !UNIX
-    private static IContext CreateContext(Dictionary<char, string>? mappings)
-    {
-        var map = mappings ?? new Dictionary<char, string> { ['Z'] = @"C:\" };
-        return new Dos.DosContext(new(map));
-    }
-#else
-    private static IContext CreateContext(Dictionary<char, string>? mappings)
-    {
-        var map = mappings ?? new Dictionary<char, string> { ['Z'] = "/" };
-        return new Ux.UxContextAdapter(new(map, UnixFileOwner.GetOwner));
-    }
-#endif
 }

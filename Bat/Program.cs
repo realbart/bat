@@ -111,7 +111,10 @@ public static class Program
         if (!batArgs.SuppressBanner)
             System.Console.Write(BannerText);
 
-        var context = ContextFactory.CreateContext(batArgs);
+        var context = ContextFactory.CreateContext();
+        context.DelayedExpansion = batArgs.DelayedExpansion;
+        context.ExtensionsEnabled = batArgs.ExtensionsEnabled;
+        context.EchoEnabled = batArgs.EchoEnabled;
         return Main(context, batArgs);
     }
 
@@ -120,24 +123,28 @@ public static class Program
         if (!batArgs.EchoEnabled)
             context.EchoEnabled = false;
 
-        switch (batArgs.ExitBehavior)
+        if (batArgs.Command != null)
         {
-            case BatExitBehavior.TerminateAfterCommand when batArgs.Command != null:
-                await Repl.ExecuteCommandAsync(context, batArgs.Command);
-                return context.ErrorCode;
+            var isBatchFile = batArgs.Command.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) ||
+                              batArgs.Command.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase);
 
-            case BatExitBehavior.KeepAliveAfterCommand when batArgs.Command != null:
-                await Repl.ExecuteCommandAsync(context, batArgs.Command);
-                break;
-
-            case BatExitBehavior.TerminateAfterCommand when batArgs.BatchFile != null:
+            if (isBatchFile)
             {
-                var translated = PathTranslator.TranslateHostPathToBat(batArgs.BatchFile, context.FileSystem);
-                var virtualPath = translated.Split(';', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
-                    ?? batArgs.BatchFile;
-                await Repl.ExecuteBatchAsync(context, virtualPath);
-                return context.ErrorCode;
+                await Repl.ExecuteBatchAsync(context, batArgs.Command);
             }
+            else
+            {
+                await Repl.ExecuteCommandAsync(context, batArgs.Command);
+            }
+
+            if (batArgs.ExitBehavior == BatExitBehavior.TerminateAfterCommand)
+                return context.ErrorCode;
+        }
+
+        if (batArgs.BatchFile != null)
+        {
+            await Repl.ExecuteBatchAsync(context, batArgs.BatchFile);
+            return context.ErrorCode;
         }
 
         await Repl.StartAsync(context);

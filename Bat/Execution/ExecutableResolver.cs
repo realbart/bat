@@ -11,7 +11,7 @@ namespace Bat.Execution;
 /// </summary>
 internal static class ExecutableResolver
 {
-    private static readonly string[] ExecutableExtensions = [".bat", ".cmd", ".com", ".exe", ".dll"];
+    private static readonly string[] ExecutableExtensions = [".bat", ".cmd", ".com", ".exe"];
 
     /// <summary>
     /// Resolves an executable name to a full file path.
