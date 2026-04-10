@@ -1,6 +1,6 @@
-﻿namespace Bat.Console;
+namespace Context;
 
-internal interface IConsole
+public interface IConsole
 {
     TextWriter Error { get; }
     TextReader In { get; }

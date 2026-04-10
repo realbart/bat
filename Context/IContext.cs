@@ -2,6 +2,7 @@
 
 public interface IContext
 {
+    IConsole Console { get; }
     char CurrentDrive { get; }
     string[] CurrentPath { get; }
     string CurrentPathDisplayName { get; }
@@ -12,16 +13,13 @@ public interface IContext
     int ErrorCode { get; set; }
     IFileSystem FileSystem { get; }
 
-    // Batch execution state (null only at startup, set to REPL singleton or batch context)
     object? CurrentBatch { get; set; }
 
-    // CMD state
     bool EchoEnabled { get; set; }
-    bool DelayedExpansion { get; set; }  // CMD /V:ON
+    bool DelayedExpansion { get; set; }
     bool ExtensionsEnabled { get; set; }
-    string PromptFormat { get; set; }  // %PROMPT% env var
+    string PromptFormat { get; set; }
 
-    // Directory stack for PUSHD/POPD
     Stack<(char Drive, string[] Path)> DirectoryStack { get; }
 
     void SetPath(char drive, string[] path);
@@ -30,4 +28,10 @@ public interface IContext
     (bool Found, string NativePath) TryGetCurrentFolder();
     IReadOnlyDictionary<char, string[]> GetAllDrivePaths();
     void RestoreAllDrivePaths(Dictionary<char, string[]> paths);
+
+    /// <summary>
+    /// Creates a new execution context for a command.
+    /// Performs deep copy of state with optional console override.
+    /// </summary>
+    IContext StartNew(IConsole? console = null);
 }

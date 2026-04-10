@@ -17,6 +17,7 @@ public class PromptExpanderTests
     // Minimal IContext implementation used only in these tests
     private class TestContext(char drive, string[] path) : IContext
     {
+        public IConsole Console { get; set; } = new TestConsole();
         public char CurrentDrive { get; } = drive;
         public string[] CurrentPath { get; } = path;
         public string CurrentPathDisplayName =>
@@ -41,6 +42,7 @@ public class PromptExpanderTests
         public IReadOnlyDictionary<char, string[]> GetAllDrivePaths() => new Dictionary<char, string[]>();
         public void RestoreAllDrivePaths(Dictionary<char, string[]> paths) { }
         public (bool Found, string NativePath) TryGetCurrentFolder() => (false, "");
+        public IContext StartNew(IConsole? console = null) => this;
     }
 
     // ── tests ────────────────────────────────────────────────────────────────

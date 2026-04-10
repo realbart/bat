@@ -8,13 +8,15 @@ internal static partial class ContextFactory
     public static bool IsWindows => true;
 
     public static IContext CreateContext() =>
-        new Dos.DosContext(new(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+        new Dos.DosContext(
+            new(new Dictionary<char, string> { ['Z'] = @"C:\" }),
+            new Console.Console());
 #else
     public static bool IsWindows => false;
 
     public static IContext CreateContext() =>
-        new Ux.UxContextAdapter(new(
-            new Dictionary<char, string> { ['Z'] = "/" },
-            UnixFileOwner.GetOwner));
+        new Ux.UxContextAdapter(
+            new(new Dictionary<char, string> { ['Z'] = "/" }, UnixFileOwner.GetOwner),
+            new Console.Console());
 #endif
 }

@@ -308,6 +308,7 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
 {
     private readonly Dictionary<char, string[]> _paths = [];
 
+    public IConsole Console { get; set; } = new TestConsole();
     public char CurrentDrive { get; private set; } = 'Z';
     public string[] CurrentPath => _paths.TryGetValue(CurrentDrive, out var p) ? p : [];
     public string CurrentPathDisplayName =>
@@ -339,6 +340,35 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
             return (false, "");
         return (true, FileSystem.GetNativePath(CurrentDrive, CurrentPath));
+    }
+
+    public IContext StartNew(IConsole? console = null)
+    {
+        var newContext = new TestCommandContext(fileSystem)
+        {
+            Console = console ?? this.Console,
+            CurrentDrive = this.CurrentDrive,
+            ErrorCode = this.ErrorCode,
+            EchoEnabled = this.EchoEnabled,
+            DelayedExpansion = this.DelayedExpansion,
+            ExtensionsEnabled = this.ExtensionsEnabled,
+            PromptFormat = this.PromptFormat,
+            HistorySize = this.HistorySize,
+            CurrentBatch = this.CurrentBatch
+        };
+
+        foreach (var kv in EnvironmentVariables)
+            newContext.EnvironmentVariables[kv.Key] = kv.Value;
+        foreach (var kv in Macros)
+            newContext.Macros[kv.Key] = kv.Value;
+        foreach (var item in CommandHistory)
+            newContext.CommandHistory.Add(item);
+        foreach (var kv in _paths)
+            newContext.SetPath(kv.Key, [.. kv.Value]);
+        foreach (var item in DirectoryStack.Reverse())
+            newContext.DirectoryStack.Push(item);
+
+        return newContext;
     }
 }
 

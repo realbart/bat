@@ -2,8 +2,9 @@
 
 namespace Bat.Context;
 
-internal abstract class Context(IFileSystem fileSystem) : IContext
+internal abstract class Context(IFileSystem fileSystem, IConsole console) : IContext
 {
+    public IConsole Console { get; private set; } = console;
     public int ErrorCode { get; set; } = 0;
     public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -76,4 +77,22 @@ internal abstract class Context(IFileSystem fileSystem) : IContext
     /// Override in platform subclasses.
     /// </summary>
     protected virtual void InitializeCurrentDirectory() { }
+
+    public abstract IContext StartNew(IConsole? console = null);
+
+    protected IContext StartNewCore(IContext newInstance)
+    {
+        foreach (var kv in EnvironmentVariables)
+            newInstance.EnvironmentVariables[kv.Key] = kv.Value;
+        foreach (var kv in Macros)
+            newInstance.Macros[kv.Key] = kv.Value;
+        foreach (var item in CommandHistory)
+            newInstance.CommandHistory.Add(item);
+        foreach (var kv in GetAllDrivePaths())
+            newInstance.SetPath(kv.Key, [.. kv.Value]);
+        foreach (var item in DirectoryStack.Reverse())
+            newInstance.DirectoryStack.Push(item);
+
+        return newInstance;
+    }
 }

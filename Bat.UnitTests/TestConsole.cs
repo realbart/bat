@@ -1,4 +1,5 @@
 using Bat.Console;
+using Context;
 
 namespace Bat.UnitTests;
 

@@ -22,11 +22,16 @@
 
 **Al geïmplementeerde commands:** ECHO, REM, CLS, EXIT, CALL, SHIFT, SET, GOTO, CD/CHDIR, DIR, SETLOCAL, ENDLOCAL, PAUSE, TITLE, SUBST (extern), TREE (extern, voorlopig)
 
+### Bugs & tests
+- 🔴 TODO Variable expansion in intereactieve modus gedraagt zicht verkeerd: ECHO %HOMEPATH% 
+- 🔴 TODO Enumereer de batchbestanden in de map exaples, en voer ze met en zonder Bat uit
+- 🔴 TODO Output rediretion afmaken: echo 1 > file.txt geeft een objectdisposed-exception
+
 ### Infrastructuurstappen in uitvoering
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
-| 14 | 🔴 TODO | IConsole integratie in IContext | [STEP_14_ICONSOLE_INTEGRATION.md](steps/STEP_14_ICONSOLE_INTEGRATION.md) |
+| 14.1 | 🔴 TODO | IConsole integratie in IContext | [STEP_14_ICONSOLE_INTEGRATION.md](steps/STEP_14_ICONSOLE_INTEGRATION.md) |
 | 15 | 🔴 TODO | Error handling voor satellietapplicaties | [STEP_15_SATELLITE_ERROR_HANDLING.md](steps/STEP_15_SATELLITE_ERROR_HANDLING.md) |
 | 16 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_16_DAEMON.md](steps/STEP_16_DAEMON.md) |
 

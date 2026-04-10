@@ -1,3 +1,5 @@
+using Context;
+
 namespace Bat.Console;
 
 /// <summary>

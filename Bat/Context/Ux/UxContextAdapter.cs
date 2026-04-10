@@ -2,11 +2,32 @@
 
 internal class UxContextAdapter : Context
 {
-    public UxContextAdapter() : this(new UxFileSystemAdapter()) { }
+    public UxContextAdapter(global::Context.IConsole console) : this(new UxFileSystemAdapter(), console) { }
 
-    public UxContextAdapter(UxFileSystemAdapter fs) : base(fs)
+    public UxContextAdapter(UxFileSystemAdapter fs, global::Context.IConsole console) : base(fs, console)
     {
         InitializeFromEnvironment();
+    }
+
+    private UxContextAdapter(UxFileSystemAdapter fs, global::Context.IConsole console, bool skipInit) : base(fs, console)
+    {
+    }
+
+    public override global::Context.IContext StartNew(global::Context.IConsole? console = null)
+    {
+        var newContext = new UxContextAdapter((UxFileSystemAdapter)FileSystem, console ?? Console, skipInit: true)
+        {
+            CurrentDrive = this.CurrentDrive,
+            ErrorCode = this.ErrorCode,
+            EchoEnabled = this.EchoEnabled,
+            DelayedExpansion = this.DelayedExpansion,
+            ExtensionsEnabled = this.ExtensionsEnabled,
+            PromptFormat = this.PromptFormat,
+            HistorySize = this.HistorySize,
+            CurrentBatch = this.CurrentBatch
+        };
+
+        return StartNewCore(newContext);
     }
 
     protected override void PostProcessEnvironmentVariables()

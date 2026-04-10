@@ -2,9 +2,30 @@ namespace Bat.Context.Dos;
 
 internal class DosContext : Context
 {
-    public DosContext(DosFileSystem fs) : base(fs)
+    public DosContext(DosFileSystem fs, global::Context.IConsole console) : base(fs, console)
     {
         InitializeFromEnvironment();
+    }
+
+    private DosContext(DosFileSystem fs, global::Context.IConsole console, bool skipInit) : base(fs, console)
+    {
+    }
+
+    public override global::Context.IContext StartNew(global::Context.IConsole? console = null)
+    {
+        var newContext = new DosContext((DosFileSystem)FileSystem, console ?? Console, skipInit: true)
+        {
+            CurrentDrive = this.CurrentDrive,
+            ErrorCode = this.ErrorCode,
+            EchoEnabled = this.EchoEnabled,
+            DelayedExpansion = this.DelayedExpansion,
+            ExtensionsEnabled = this.ExtensionsEnabled,
+            PromptFormat = this.PromptFormat,
+            HistorySize = this.HistorySize,
+            CurrentBatch = this.CurrentBatch
+        };
+
+        return StartNewCore(newContext);
     }
 
     protected override void PostProcessEnvironmentVariables()
