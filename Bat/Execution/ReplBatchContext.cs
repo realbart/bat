@@ -8,7 +8,6 @@ internal static class ReplBatchContext
 {
     private static readonly ThreadLocal<BatchContext> _instance = new(() => new()
     {
-        Console = null!,
         Context = null!,
         BatchFilePath = null,
         FileContent = "",

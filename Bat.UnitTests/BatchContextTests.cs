@@ -9,7 +9,7 @@ public class BatchContextTests
     public void BatchContext_DefaultConstruction_InitializesCorrectly()
     {
         // Arrange & Act
-        var bc = new BatchContext { Console = null!, Context = null! };
+        var bc = new BatchContext { Context = null! };
 
         // Assert
         Assert.IsNull(bc.BatchFilePath);
@@ -29,7 +29,7 @@ public class BatchContextTests
     public void BatchContext_IsReplMode_TrueWhenNoFilePath()
     {
         // Arrange
-        var bc = new BatchContext { BatchFilePath = null, Console = null!, Context = null! };
+        var bc = new BatchContext { BatchFilePath = null, Context = null! };
 
         // Act & Assert
         Assert.IsTrue(bc.IsReplMode);
@@ -40,7 +40,7 @@ public class BatchContextTests
     public void BatchContext_IsBatchFile_TrueWhenFilePathSet()
     {
         // Arrange
-        var bc = new BatchContext { BatchFilePath = "test.bat", Console = null!, Context = null! };
+        var bc = new BatchContext { BatchFilePath = "test.bat", Context = null! };
 
         // Act & Assert
         Assert.IsFalse(bc.IsReplMode);
@@ -51,7 +51,7 @@ public class BatchContextTests
     public void BatchContext_Parameters_CanBeSet()
     {
         // Arrange
-        var bc = new BatchContext { Console = null!, Context = null! };
+        var bc = new BatchContext { Context = null! };
 
         // Act
         bc.Parameters[0] = "test.bat";
@@ -68,7 +68,7 @@ public class BatchContextTests
     public void BatchContext_SetLocalStack_CanPushAndPop()
     {
         // Arrange
-        var bc = new BatchContext { Console = null!, Context = null! };
+        var bc = new BatchContext { Context = null! };
         var snapshot = new EnvironmentSnapshot(
             new Dictionary<string, string> { ["TEST"] = "value" },
             new Dictionary<char, string[]> { ['C'] = ["Users", "Test"] },
@@ -91,8 +91,8 @@ public class BatchContextTests
     public void BatchContext_CallNesting_CanBeLinked()
     {
         // Arrange
-        var parent = new BatchContext { BatchFilePath = "parent.bat", Console = null!, Context = null! };
-        var child = new BatchContext { BatchFilePath = "child.bat", Prev = parent, Console = null!, Context = null! };
+        var parent = new BatchContext { BatchFilePath = "parent.bat", Context = null! };
+        var child = new BatchContext { BatchFilePath = "child.bat", Prev = parent, Context = null! };
 
         // Assert
         Assert.AreEqual(parent, child.Prev);
@@ -116,3 +116,4 @@ public class BatchContextTests
         Assert.AreEqual(delayedExpansion, snapshot.DelayedExpansion);
     }
 }
+

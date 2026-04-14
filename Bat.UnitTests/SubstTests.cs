@@ -368,12 +368,12 @@ public class SubstProgramTests
         fs.AddDir('Q', []);  // TestFileSystem.DirectoryExists checks _dirs; subst-chain not followed in mock
         fs.AddSubst('Q', @"C:\");
 
-        var ctx = new TestCommandContext(fs);
+        var console = new TestConsole();
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive('Q');
         ctx.SetPath('Q', []);
 
-        var console = new TestConsole();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var bc = new BatchContext { Context = ctx };
         var cmd = new DirCommand();
 
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
@@ -382,3 +382,5 @@ public class SubstProgramTests
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory of Q:\\")));
     }
 }
+
+

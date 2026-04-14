@@ -22,6 +22,11 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
 
     public char FirstDrive() => _roots.Keys.First();
 
+    /// <summary>
+    /// Returns drive mappings in insertion order for CWD resolution.
+    /// </summary>
+    public IEnumerable<KeyValuePair<char, string>> GetRoots() => _roots;
+
     public override IReadOnlyDictionary<string, string> GetFileAssociations()
     {
         var assoc = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

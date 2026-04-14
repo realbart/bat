@@ -14,7 +14,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.ContainsKey("COMPUTERNAME"),
             "Non-path variable COMPUTERNAME should be kept");
@@ -26,7 +26,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // APPDATA is always C:\Users\<user>\AppData\Roaming on Windows
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("APPDATA", out var appData),
@@ -42,7 +42,7 @@ public class EnvironmentTranslationTests
 
         // Map Z: to a non-existent root — no C:\ paths will match
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"Q:\nonexistent\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // APPDATA (C:\Users\...) is not under Q:\, so it should be removed
         Assert.IsFalse(ctx.EnvironmentVariables.ContainsKey("APPDATA"),
@@ -55,7 +55,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // PATH is translated by the base class, should exist and use Z:\ prefix
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("PATH", out var path),
@@ -70,7 +70,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // PATHEXT contains .COM;.EXE;... — no absolute paths, should be kept
         if (ctx.EnvironmentVariables.TryGetValue("PATHEXT", out var pathExt))
@@ -86,7 +86,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("PROMPT", out var prompt),
             "PROMPT should exist");
@@ -99,7 +99,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // HOMEDRIVE is "C:" on Windows — should become "Z:"
         if (ctx.EnvironmentVariables.TryGetValue("HOMEDRIVE", out var homeDrive))
@@ -112,7 +112,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Y'] = @"Q:\nonexistent\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // HOMEDRIVE=C: is not under Q:\, so it falls back to Y: (first mapped drive)
         Assert.AreEqual("Y:", ctx.EnvironmentVariables["HOMEDRIVE"]);
@@ -125,7 +125,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         // HOMEPATH is "\Users\kempsb" — root-relative, no drive letter, should be kept
         if (ctx.EnvironmentVariables.TryGetValue("HOMEPATH", out var homePath))
@@ -139,7 +139,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("SystemRoot", out var sysRoot));
         Assert.IsTrue(sysRoot.StartsWith("Z:"), $"SystemRoot should start with Z:, was: {sysRoot}");
@@ -151,7 +151,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Y'] = @"Q:\nonexistent\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.AreEqual(@"Y:\Windows", ctx.EnvironmentVariables["SystemRoot"]);
     }
@@ -162,7 +162,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("SystemDrive", out var sysDrive));
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("SystemRoot", out var sysRoot));
@@ -175,7 +175,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("HOMEDRIVE", out var hd));
         Assert.IsTrue(ctx.EnvironmentVariables.TryGetValue("HOMEPATH", out var hp));
@@ -189,7 +189,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Y'] = @"Q:\nonexistent\" });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.AreEqual("Y:", ctx.EnvironmentVariables["HOMEDRIVE"]);
         Assert.AreEqual(@"\", ctx.EnvironmentVariables["HOMEPATH"]);
@@ -208,7 +208,7 @@ public class EnvironmentTranslationTests
         if (!OperatingSystem.IsWindows()) return;
 
         var fs = new DosFileSystem();
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.IsTrue(ctx.EnvironmentVariables.ContainsKey("SystemRoot"));
         Assert.IsTrue(ctx.EnvironmentVariables.ContainsKey("HOMEDRIVE"));
@@ -236,7 +236,7 @@ public class EnvironmentTranslationTests
             ['Q'] = @"X:\nonexistent\",
             ['A'] = @"Y:\other\"
         });
-        var ctx = new DosContext(fs);
+        var ctx = new DosContext(fs, new TestConsole());
 
         Assert.AreEqual("Q:", ctx.EnvironmentVariables["HOMEDRIVE"], "HOMEDRIVE should use Q (first in insertion order)");
         Assert.AreEqual(@"Q:\Windows", ctx.EnvironmentVariables["SystemRoot"]);
@@ -276,3 +276,4 @@ public class EnvironmentTranslationTests
         Assert.AreEqual("", result);
     }
 }
+

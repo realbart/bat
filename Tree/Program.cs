@@ -21,7 +21,7 @@ public static class Program
     {
         if (args.IsHelpRequest)
         {
-            await System.Console.Out.WriteLineAsync(HelpText);
+            await context.Console.Out.WriteLineAsync(HelpText);
             return 0;
         }
 
@@ -84,7 +84,7 @@ public static class Program
         };
 
         var rootDisplay = context.FileSystem.GetFullPathDisplayName(drive, path);
-        await System.Console.Out.WriteLineAsync($"{rootPrefix}{rootDisplay}");
+        await context.Console.Out.WriteLineAsync($"{rootPrefix}{rootDisplay}");
 
         var initialIndent = hasE ? " " : "";
         await PrintTree(drive, path, initialIndent);
@@ -119,12 +119,12 @@ public static class Program
                     var fileIndentStr = (isRootLevel || hasDirectories || !isInLastDir)
                         ? fileIndentMiddle
                         : fileIndentLast;
-                    await System.Console.Out.WriteLineAsync($"{prefix}{fileIndentStr}{label}");
+                    await context.Console.Out.WriteLineAsync($"{prefix}{fileIndentStr}{label}");
                 }
 
                 if (files.Count > 0)
                 {
-                    await System.Console.Out.WriteLineAsync($"{prefix}{(hasDirectories ? pipeChar : "")}");
+                    await context.Console.Out.WriteLineAsync($"{prefix}{(hasDirectories ? pipeChar : "")}");
                 }
             }
 
@@ -136,7 +136,7 @@ public static class Program
                 var childIndent = isLastDir ? childIndentLast : childIndentMiddle;
                 var label = $"{folderPrefix}{dir.Name}";
 
-                await System.Console.Out.WriteLineAsync($"{prefix}{branch}{label}");
+                await context.Console.Out.WriteLineAsync($"{prefix}{branch}{label}");
                 await PrintTree(currentDrive, [.. currentPath, dir.Name], prefix + childIndent);
             }
         }

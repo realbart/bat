@@ -57,11 +57,9 @@ internal class UxContextAdapter : Context
         var cwd = Environment.CurrentDirectory;
         if (FileSystem is not UxFileSystemAdapter ux) return;
 
-        // Find the mapped drive whose root is a prefix of the current working directory
-        for (var drive = 'A'; drive <= 'Z'; drive++)
+        // Find first mapping (in insertion order) whose root is a prefix of the CWD
+        foreach (var (drive, root) in ux.GetRoots())
         {
-            if (!ux.TryGetNativePath(drive, [], out var root)) continue;
-
             var rootNorm = root.TrimEnd('/');
             if (cwd == rootNorm || cwd.StartsWith(rootNorm + "/", StringComparison.Ordinal))
             {
@@ -74,13 +72,8 @@ internal class UxContextAdapter : Context
             }
         }
 
-        // Fallback: first available drive, full path as segments
-        for (var drive = 'A'; drive <= 'Z'; drive++)
-        {
-            if (!ux.HasDrive(drive)) continue;
-            CurrentDrive = drive;
-            CurrentFolders[drive] = cwd.TrimStart('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-            return;
-        }
+        // No mapping resolves — use first mapped drive at root
+        CurrentDrive = ux.GetRoots().First().Key;
+        CurrentFolders[CurrentDrive] = [];
     }
 }

@@ -20,8 +20,8 @@ public class EchoCommandTests
     {
         var cmd = new EchoCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext { EchoEnabled = echoEnabled };
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { EchoEnabled = echoEnabled, Console = console };
+        var bc = new BatchContext { Context = ctx };
         return (cmd, console, bc, ctx);
     }
 
@@ -93,8 +93,8 @@ public class ExitCommandTests
     {
         var cmd = new ExitCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
         return (cmd, console, bc, ctx);
     }
 
@@ -150,8 +150,8 @@ public class SetCommandTests
     {
         var cmd = new SetCommand();
         var console = new TestConsole(input);
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
         return (cmd, console, bc, ctx);
     }
 
@@ -285,7 +285,7 @@ public class RemCommandTests
     public async Task Rem_AnyArgs_ReturnsZero()
     {
         var cmd = new RemCommand();
-        var bc = new BatchContext { Context = new TestCommandContext(), Console = null! };
+        var bc = new BatchContext { Context = new TestCommandContext() };
         var result = await cmd.ExecuteAsync(TestArgs.For<RemCommand>(Token.Text("this is a comment")), bc, []);
         Assert.AreEqual(0, result);
     }
@@ -296,7 +296,7 @@ public class RemCommandTests
         // From REM /? help: "REM [comment]"
         var cmd = new RemCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
         var result = await cmd.ExecuteAsync(TestArgs.For<RemCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains("REM [comment]"));
@@ -534,7 +534,7 @@ public class ClsCommandTests
         // From CLS /? help: "Clears the screen."
         var cmd = new ClsCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
         await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(), bc, []);
         Assert.IsTrue(console.OutText.Contains("\x1b[2J"));
     }
@@ -545,7 +545,7 @@ public class ClsCommandTests
         // From CLS /? help: "CLS"
         var cmd = new ClsCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext(), Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
         var result = await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains("CLS"));
@@ -559,8 +559,8 @@ public class ShiftCommandTests
     {
         var cmd = new ShiftCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx, Parameters = parameters, ShiftOffset = shiftOffset };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx, Parameters = parameters, ShiftOffset = shiftOffset };
         return (cmd, console, bc);
     }
 
@@ -606,7 +606,7 @@ public class GotoCommandTests
         // From GOTO /? help: mentions ":EOF" and returning control after CALL
         var cmd = new GotoCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Console = console, Context = new TestCommandContext() };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console } };
         var result = await cmd.ExecuteAsync(TestArgs.For<GotoCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains(":EOF"));
@@ -623,7 +623,7 @@ public class CallCommandTests
         // From CALL /? help: "CALL [drive:][path]filename [batch-parameters]" and "CALL :label arguments"
         var cmd = new CallCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Console = console, Context = new TestCommandContext() };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console } };
         var result = await cmd.ExecuteAsync(TestArgs.For<CallCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains("CALL :label"));
@@ -663,10 +663,10 @@ public class CdCommandTests
     {
         var cmd = new CdCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         if (path != null) ctx.SetPath(drive, path);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx }, ctx);
+        return (cmd, console, new BatchContext { Context = ctx }, ctx);
     }
 
     [TestMethod]
@@ -855,10 +855,10 @@ public class DirCommandTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         if (path != null) ctx.SetPath(drive, path);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     [TestMethod]
@@ -1108,10 +1108,10 @@ public class DirAttributeFilterTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     // /AH — only hidden files (/A:H or /AH)
@@ -1248,7 +1248,7 @@ public class DispatcherIntegrationTests
         TestFileSystem fs, char drive = 'C', string[]? path = null)
     {
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         if (path != null) ctx.SetPath(drive, path);
         return (new Dispatcher(), console, ctx);
@@ -1486,10 +1486,10 @@ public class DirLowercaseTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     // /L lowercases file names in the normal listing
@@ -1600,10 +1600,10 @@ public class DirNewLongFormatTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     // /N shows all files in the listing
@@ -1712,10 +1712,10 @@ public class DirSortOrderTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     // /O:N — sort by name ascending (alphabetical)
@@ -2006,10 +2006,10 @@ public class DirRecursiveTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     [TestMethod]
@@ -2065,10 +2065,10 @@ public class DirDircmdEnvironmentTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx }, ctx);
+        return (cmd, console, new BatchContext { Context = ctx }, ctx);
     }
 
     [TestMethod]
@@ -2285,10 +2285,10 @@ public class DirQFlagTests
     {
         var cmd = new DirCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive('C');
         ctx.SetPath('C', []);
-        return (cmd, console, new BatchContext { Console = console, Context = ctx });
+        return (cmd, console, new BatchContext { Context = ctx });
     }
 
     [TestMethod]
@@ -2426,4 +2426,8 @@ public class ExecutableTypeDetectorTests : IDisposable
         Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
     }
 }
+
+
+
+
 

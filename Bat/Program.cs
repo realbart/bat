@@ -111,7 +111,9 @@ public static class Program
         if (!batArgs.SuppressBanner)
             System.Console.Write(BannerText);
 
-        var context = ContextFactory.CreateContext();
+        var context = batArgs.DriveMappings is { Count: > 0 }
+            ? ContextFactory.CreateContext(batArgs.DriveMappings)
+            : ContextFactory.CreateContext();
         context.DelayedExpansion = batArgs.DelayedExpansion;
         context.ExtensionsEnabled = batArgs.ExtensionsEnabled;
         context.EchoEnabled = batArgs.EchoEnabled;

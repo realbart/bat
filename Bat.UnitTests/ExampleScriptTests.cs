@@ -31,18 +31,26 @@ public class ExampleScriptTests
     [DynamicData(nameof(GetScripts), DynamicDataSourceType.Method)]
     public async Task Script_BatOutputMatchesCmd(string name, string scriptPath)
     {
-        // begin in %HOMEDRIVE%%HOMEPATH%
-        // zorg dat de bat output dir is geprefixt aan %PATH% voor bat, zodat die 
-        // de bat-versies van doscommando's gebruikt
+        var scriptDir = Path.GetDirectoryName(scriptPath)!;
+        var batDir = Path.GetDirectoryName(BatExe)!;
 
-        var (cmdOut, cmdErr) = await RunAsync("cmd.exe", $"/C \"{scriptPath}\"", scriptPath);
-        var (batOut, batErr) = await RunAsync(BatExe, $"/N /C \"{scriptPath}\"", scriptPath);
+        // Map the script's drive letter so bat can find the script.
+        // Prefix bat's output dir to PATH so satellite commands (tree, subst) are found.
+        var scriptDrive = char.ToUpperInvariant(scriptDir[0]);
+        var driveRoot = $"{scriptDrive}:\\";
 
+        var (cmdOut, cmdErr) = await RunAsync("cmd.exe", $"/C \"{scriptPath}\"", scriptDir);
+        var (batOut, batErr) = await RunAsync(BatExe,
+            $"/N /M {scriptDrive} {driveRoot} /C \"{scriptPath}\"",
+            scriptDir, extraPath: batDir);
+
+        var nativeDrive = char.ToLowerInvariant(scriptDrive);
         Assert.AreEqual(cmdOut, batOut, $"stdout mismatch in {name}");
         Assert.AreEqual(cmdErr, batErr, $"stderr mismatch in {name}");
     }
 
-    private static async Task<(string Out, string Err)> RunAsync(string exe, string args, string scriptPath)
+    private static async Task<(string Out, string Err)> RunAsync(
+        string exe, string args, string workingDir, string? extraPath = null)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var oemEncoding = Encoding.GetEncoding(
@@ -55,8 +63,12 @@ public class ExampleScriptTests
             UseShellExecute = false,
             StandardOutputEncoding = oemEncoding,
             StandardErrorEncoding = oemEncoding,
-            WorkingDirectory = Path.GetDirectoryName(scriptPath)!
+            WorkingDirectory = workingDir
         };
+
+        if (extraPath != null)
+            psi.Environment["PATH"] = extraPath + ";" + Environment.GetEnvironmentVariable("PATH");
+
         using var proc = Process.Start(psi)!;
         var outTask = proc.StandardOutput.ReadToEndAsync();
         var errTask = proc.StandardError.ReadToEndAsync();

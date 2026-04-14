@@ -11,9 +11,9 @@ public class BatchExecutorTests
         TestFileSystem fs, char drive = 'Z')
     {
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var bc = new BatchContext { Context = ctx };
         return (new BatchExecutor(console), console, ctx, bc);
     }
 
@@ -280,3 +280,5 @@ public class BatchExecutorTests
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("Hello") && l.Contains("World")));
     }
 }
+
+

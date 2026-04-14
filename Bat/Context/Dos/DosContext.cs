@@ -84,12 +84,29 @@ internal class DosContext : Context
 
     protected override void InitializeCurrentDirectory()
     {
-        var dir = Environment.CurrentDirectory;
-        if (dir.Length < 2 || dir[1] != ':') return;
+        var cwd = Environment.CurrentDirectory;
+        if (cwd.Length < 2 || cwd[1] != ':') return;
 
-        var nativeDrive = char.ToUpperInvariant(dir[0]);
-        CurrentDrive = nativeDrive == 'C' ? 'Z' : nativeDrive;
-        var segments = dir.Length > 3 ? dir[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries) : [];
-        CurrentFolders[CurrentDrive] = segments;
+        var fs = (DosFileSystem)FileSystem;
+
+        // Find first mapping whose native root is a prefix of the CWD
+        foreach (var (drive, root) in fs.GetRoots())
+        {
+            var rootNorm = root.TrimEnd('\\');
+            if (cwd.StartsWith(rootNorm + "\\", StringComparison.OrdinalIgnoreCase)
+                || cwd.Equals(rootNorm, StringComparison.OrdinalIgnoreCase))
+            {
+                CurrentDrive = drive;
+                var remainder = cwd.Length > rootNorm.Length + 1 ? cwd[(rootNorm.Length + 1)..] : "";
+                CurrentFolders[drive] = remainder.Length > 0
+                    ? remainder.Split('\\', StringSplitOptions.RemoveEmptyEntries)
+                    : [];
+                return;
+            }
+        }
+
+        // No mapping resolves — use first mapped drive at root
+        CurrentDrive = fs.FirstDrive();
+        CurrentFolders[CurrentDrive] = [];
     }
 }

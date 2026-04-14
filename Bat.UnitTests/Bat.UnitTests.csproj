@@ -26,4 +26,12 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="Examples\cd.bat" />
+    <None Remove="Examples\doskey.bat" />
+    <None Remove="Examples\echo.bat" />
+    <None Remove="Examples\goto.bat" />
+    <None Remove="Examples\tree.bat" />
+  </ItemGroup>
+
 </Project>

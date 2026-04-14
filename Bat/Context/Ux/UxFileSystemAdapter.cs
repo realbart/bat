@@ -17,6 +17,11 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
 
+    /// <summary>
+    /// Returns drive mappings in insertion order for CWD resolution.
+    /// </summary>
+    public IEnumerable<KeyValuePair<char, string>> GetRoots() => mappings;
+
     public override IReadOnlyDictionary<string, string> GetFileAssociations() => UnixAssociations;
 
     public override char NativeDirectorySeparator => '/';

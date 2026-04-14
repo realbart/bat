@@ -14,7 +14,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NoParameters_ReturnsOriginal()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null! };
+            var bc = new BatchContext { Context = null! };
             var line = "echo hello world";
 
             // Act
@@ -28,7 +28,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_SingleParameter_Expands()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", "arg2", null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", "arg1", "arg2", null, null, null, null, null, null, null] };
             var line = "echo %1 and %2";
 
             // Act
@@ -42,7 +42,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NullParameter_RemainsLiteral()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
             var line = "echo %1 and %2";
 
             // Act
@@ -56,7 +56,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_MixedParameters_ExpandsOnlySet()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", null, "arg3", null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", "arg1", null, "arg3", null, null, null, null, null, null] };
             var line = "echo %1 %2 %3";
 
             // Act
@@ -70,7 +70,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_Parameter0_ExpandsToFileName()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", "arg1", null, null, null, null, null, null, null, null] };
             var line = "echo Running %0 with %1";
 
             // Act
@@ -84,7 +84,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_AllParameters_Expands()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null] };
             var line = "echo %*";
 
             // Act
@@ -98,7 +98,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_AllParametersEmpty_ExpandsToEmpty()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
+            var bc = new BatchContext { Context = null!, Parameters = ["test.bat", null, null, null, null, null, null, null, null, null] };
             var line = "echo %*";
 
             // Act
@@ -132,7 +132,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_EmptyString_ReturnsEmpty()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null! };
+            var bc = new BatchContext { Context = null! };
             var line = "";
 
             // Act
@@ -146,7 +146,7 @@ public class ExpanderTests
         public void ExpandBatchParameters_NullString_ReturnsNull()
         {
             // Arrange
-            var bc = new BatchContext { Console = null!, Context = null! };
+            var bc = new BatchContext { Context = null! };
             string? line = null;
 
             // Act
@@ -164,7 +164,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NoVariables_ReturnsOriginal()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             var line = "echo hello world";
 
             // Act
@@ -178,7 +178,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SingleVariable_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST%";
 
@@ -193,7 +193,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UndefinedVariable_RemainsLiteral()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             var line = "echo %NOTFOUND%";
 
             // Act
@@ -207,7 +207,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MultipleVariables_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["VAR1"] = "value1";
             ctx.EnvironmentVariables["VAR2"] = "value2";
             var line = "echo %VAR1% and %VAR2%";
@@ -223,7 +223,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MixedDefinedAndUndefined_ExpandsOnlyDefined()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["DEFINED"] = "exists";
             var line = "echo %DEFINED% and %UNDEFINED%";
 
@@ -238,7 +238,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_IgnoresBatchParameters()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["1"] = "should_not_expand";
             var line = "echo %1";
 
@@ -253,7 +253,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyVariable_Expands()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["EMPTY"] = "";
             var line = "echo %EMPTY%";
 
@@ -268,7 +268,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyString_ReturnsEmpty()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             var line = "";
 
             // Act
@@ -282,7 +282,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NullString_ReturnsNull()
         {
             // Arrange
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             string? line = null;
 
             // Act
@@ -296,7 +296,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UnclosedPercent_StripsLonePercent()
         {
             // CMD strips a lone % when there is no closing % — batch mode behavior
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST";
 
@@ -310,7 +310,7 @@ public class ExpanderTests
         {
             // From SET /? help: "%PATH:str1=str2% would expand the PATH variable,
             // substituting each occurrence of str1 with str2."
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["MYVAR"] = "hello world hello";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:hello=hi%", ctx);
@@ -322,7 +322,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_StringSubstitution_EmptyStr2_DeletesOccurrences()
         {
             // From SET /? help: "str2 can be the empty string to effectively delete all occurrences of str1"
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["MYVAR"] = "abcXdefXghi";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:X=%", ctx);
@@ -334,7 +334,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_OffsetAndLength()
         {
             // From SET /? help: "%PATH:~10,5% would use 5 characters starting at offset 10"
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~10,5%", ctx);
@@ -346,7 +346,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_NegativeOffset_FromEnd()
         {
             // From SET /? help: "%PATH:~-10% would extract the last 10 characters"
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE"; // 15 chars
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~-10%", ctx);
@@ -358,7 +358,7 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_NegativeLength_ExcludesFromEnd()
         {
             // From SET /? help: "%PATH:~0,-2% would extract all but the last 2 characters"
-            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }));
+            var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
             ctx.EnvironmentVariables["MYVAR"] = "Hello";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~0,-2%", ctx);
@@ -367,3 +367,5 @@ public class ExpanderTests
         }
     }
 }
+
+

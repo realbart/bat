@@ -132,10 +132,10 @@ public class SetLocalEndLocalTests
         fs.AddBatchFile('Z', [], "test.bat", "setlocal\r\nset X=inside\r\nexit /b");
 
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive('Z');
         ctx.EnvironmentVariables["X"] = "before";
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var bc = new BatchContext { Context = ctx };
 
         var executor = new BatchExecutor(console);
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
@@ -194,9 +194,9 @@ public class SetLocalEndLocalTests
             "setlocal\r\nD:\r\nendlocal\r\nexit /b");
 
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive('Z');
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var bc = new BatchContext { Context = ctx };
 
         var executor = new BatchExecutor(console);
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
@@ -213,9 +213,9 @@ public class SetLocalEndLocalTests
             "setlocal DisableExtensions\r\nsetlocal EnableExtensions\r\nexit /b");
 
         var console = new TestConsole();
-        var ctx = new TestCommandContext(fs);
+        var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive('Z');
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var bc = new BatchContext { Context = ctx };
 
         var executor = new BatchExecutor(console);
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
@@ -224,3 +224,5 @@ public class SetLocalEndLocalTests
         Assert.IsTrue(ctx.ExtensionsEnabled);
     }
 }
+
+

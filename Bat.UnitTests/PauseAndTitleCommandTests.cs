@@ -13,8 +13,8 @@ public class PauseCommandTests
     {
         var cmd = new PauseCommand();
         var console = new TestConsole("x\n");
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
 
         var exitCode = await cmd.ExecuteAsync(TestArgs.For<PauseCommand>(), bc, []);
 
@@ -27,8 +27,8 @@ public class PauseCommandTests
     {
         var cmd = new PauseCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
 
         var exitCode = await cmd.ExecuteAsync(TestArgs.For<PauseCommand>(Token.Text("/?")), bc, []);
 
@@ -45,8 +45,8 @@ public class TitleCommandTests
     {
         var cmd = new TitleCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
 
         var args = ArgumentSet.ParseString("My Window Title", ArgumentSpec.Empty);
         var exitCode = await cmd.ExecuteAsync(args, bc, []);
@@ -60,8 +60,8 @@ public class TitleCommandTests
     {
         var cmd = new TitleCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
 
         var originalTitle = System.Console.Title;
         var exitCode = await cmd.ExecuteAsync(TestArgs.For<TitleCommand>(), bc, []);
@@ -75,8 +75,8 @@ public class TitleCommandTests
     {
         var cmd = new TitleCommand();
         var console = new TestConsole();
-        var ctx = new TestCommandContext();
-        var bc = new BatchContext { Console = console, Context = ctx };
+        var ctx = new TestCommandContext { Console = console };
+        var bc = new BatchContext { Context = ctx };
 
         var exitCode = await cmd.ExecuteAsync(TestArgs.For<TitleCommand>(Token.Text("/?")), bc, []);
 
@@ -84,3 +84,5 @@ public class TitleCommandTests
         Assert.IsTrue(console.OutLines[0].Contains("Sets the window title"));
     }
 }
+
+
