@@ -12,8 +12,8 @@ public static class Program
 
     private static readonly string BannerText =
         $"""
-        🦇Bat [Version {typeof(Program).Assembly.GetName().Version}]
-        (c) Bart Kemps. Released under GPLv3+.
+        Bat🦇 [Version {typeof(Program).Assembly.GetName().Version}]
+        © Bart Kemps. Released under GPLv3+.
 
         """;
 
@@ -37,7 +37,7 @@ public static class Program
             the variable var at execution time.
             """),
         ("/V:OFF", "-v:off", "Disable delayed environment expansion (default)."),
-        ("/M:X path", "-m X path", "{MAP_DESC}"),
+        ("/M:c=path[,d=path...]", "-m:c=path[,d=path...]", "{MAP_DESC}"),
         ("/T:fg", "-t:fg", "Sets the foreground/background colors (see COLOR /?)."),
         ("/A", "-a", """
             Causes the output of internal commands to a pipe or file to
@@ -57,8 +57,8 @@ public static class Program
         var defaultMapping = isWindows ? @"Z: -> C:\" : "Z: -> /";
 
         var syntax = isWindows
-            ? "BAT [/? | /N] [/A | /U] [/Q] [/D] [/E:ON | /E:OFF] [/F:ON | /F:OFF]\n    [/M:X path ...] [/V:ON | /V:OFF] [/T:fg]\n    [[/C | /K] string | filename]"
-            : "bat [-h | --help | -n | --nologo] [-a | -u] [-q] [-d] [-e:on | -e:off]\n    [-f:on | -f:off] [-m X path ...] [-v:on | -v:off] [-t:fg]\n    [[-c | -k] string | filename]";
+            ? "BAT [/? | /N] [/A | /U] [/Q] [/D] [/E:ON | /E:OFF] [/F:ON | /F:OFF]\n    [/M:c=path[,d=path...] ...] [/V:ON | /V:OFF] [/T:fg]\n    [[/C | /K] string | filename]"
+            : "bat [-h | --help | -n | --nologo] [-a | -u] [-q] [-d] [-e:on | -e:off]\n    [-f:on | -f:off] [-m:c=path[,d=path...] ...] [-v:on | -v:off] [-t:fg]\n    [[-c | -k] string | filename]";
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Starts {exe} command interpreter with virtual drive mappings.\n");
@@ -69,7 +69,7 @@ public static class Program
         foreach (var (win, unix, desc) in HelpFlags)
         {
             var descText = desc.Replace("{MAP_DESC}",
-                $"Map virtual drive X: to native path. First {mFlag} replaces default.\n            Without {mFlag}, default mapping is {defaultMapping}.");
+                $"Map virtual drives: comma-separated drive=path pairs.\n            Multiple {mFlag} flags are also allowed.\n            Without {mFlag}, default is {defaultMapping}.");
 
             var syntaxPart = (isWindows ? win : unix).PadRight(maxSyntaxLen + 2);
             var lines = descText.Split('\n');
@@ -86,7 +86,8 @@ public static class Program
         sb.AppendLine("surrounded by quotes.\n");
         sb.AppendLine("Examples:");
         var p = isWindows ? (Func<string, string>)(s => $"/{s.ToUpperInvariant()}") : (s => s.Contains("nologo") ? "--nologo" : $"-{s}");
-        sb.AppendLine($"  {exe} {p("m")} C {(isWindows ? @"C:\Projects" : "/")} {p("m")} D {(isWindows ? @"D:\Data" : "/home/user")}");
+        sb.AppendLine($"  {exe} {p("m")}:C={( isWindows ? @"C:\Projects" : "/" )},D={( isWindows ? @"D:\Data" : "/home" )}");
+        sb.AppendLine($"  {exe} {p("m")}:C={( isWindows ? @"C:\Projects" : "/" )} {p("m")}:D={( isWindows ? @"D:\Data" : "/home" )}");
         sb.AppendLine($"  {exe} {p("c")} \"echo hello && echo world\"");
         sb.AppendLine($"  {exe} {p("k")}q");
         sb.AppendLine($"  {exe} {(isWindows ? @"Z:\AUTOEXEC.BAT" : "script.sh")}");

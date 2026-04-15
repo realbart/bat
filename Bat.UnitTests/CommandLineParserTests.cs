@@ -87,8 +87,8 @@ public class CommandLineParserTests
     [TestMethod]
     public void Parse_MultipleM_CreatesMappings()
     {
-        var args = ParseUnix("-m", "C", "/home/user", "-m", "P", "/mnt/projects");
-        Assert.AreEqual(2, args.DriveMappings.Count);
+        var args = ParseUnix("-m:c=/home/user,p=/mnt/projects");
+        Assert.AreEqual(2, args.DriveMappings!.Count);
         Assert.AreEqual("/home/user", args.DriveMappings['C']);
         Assert.AreEqual("/mnt/projects", args.DriveMappings['P']);
     }
@@ -96,9 +96,10 @@ public class CommandLineParserTests
     [TestMethod]
     public void Parse_M_ColonSyntax_CreatesMappings()
     {
-        var args = ParseWindows("/M:C", "C:\\Temp", "/M:D", "C:\\Users");
-        Assert.AreEqual(2, args.DriveMappings.Count);
+        var args = ParseWindows("/M:c=C:\\Temp,d=C:\\Users");
+        Assert.AreEqual(2, args.DriveMappings!.Count);
         Assert.AreEqual("C:\\Temp", args.DriveMappings['C']);
+        Assert.AreEqual("C:\\Users", args.DriveMappings['D']);
     }
 
     [TestMethod]

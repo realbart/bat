@@ -41,7 +41,7 @@ public class ExampleScriptTests
 
         var (cmdOut, cmdErr) = await RunAsync("cmd.exe", $"/C \"{scriptPath}\"", scriptDir);
         var (batOut, batErr) = await RunAsync(BatExe,
-            $"/N /M {scriptDrive} {driveRoot} /C \"{scriptPath}\"",
+            $"/N /M:{scriptDrive}={driveRoot} /C \"{scriptPath}\"",
             scriptDir, extraPath: batDir);
 
         var nativeDrive = char.ToLowerInvariant(scriptDrive);
@@ -60,6 +60,7 @@ public class ExampleScriptTests
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
             StandardOutputEncoding = oemEncoding,
             StandardErrorEncoding = oemEncoding,
@@ -70,6 +71,7 @@ public class ExampleScriptTests
             psi.Environment["PATH"] = extraPath + ";" + Environment.GetEnvironmentVariable("PATH");
 
         using var proc = Process.Start(psi)!;
+        proc.StandardInput.Close();
         var outTask = proc.StandardOutput.ReadToEndAsync();
         var errTask = proc.StandardError.ReadToEndAsync();
         await proc.WaitForExitAsync();

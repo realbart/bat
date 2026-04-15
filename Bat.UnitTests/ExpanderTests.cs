@@ -48,8 +48,8 @@ public class ExpanderTests
             // Act
             var result = Expander.ExpandBatchParameters(line, bc);
 
-            // Assert
-            Assert.AreEqual("echo %1 and %2", result);
+            // Assert: null parameters expand to empty string (CMD behaviour)
+            Assert.AreEqual("echo  and ", result);
         }
 
         [TestMethod]
@@ -62,8 +62,8 @@ public class ExpanderTests
             // Act
             var result = Expander.ExpandBatchParameters(line, bc);
 
-            // Assert
-            Assert.AreEqual("echo arg1 %2 arg3", result);
+            // Assert: null parameters expand to empty string (CMD behaviour)
+            Assert.AreEqual("echo arg1  arg3", result);
         }
 
         [TestMethod]
@@ -199,8 +199,8 @@ public class ExpanderTests
             // Act
             var result = Expander.ExpandEnvironmentVariables(line, ctx);
 
-            // Assert
-            Assert.AreEqual("echo %NOTFOUND%", result);
+            // Assert: undefined variables expand to empty string (CMD behaviour)
+            Assert.AreEqual("echo ", result);
         }
 
         [TestMethod]
@@ -230,8 +230,8 @@ public class ExpanderTests
             // Act
             var result = Expander.ExpandEnvironmentVariables(line, ctx);
 
-            // Assert
-            Assert.AreEqual("echo exists and %UNDEFINED%", result);
+            // Assert: undefined variables expand to empty string (CMD behaviour)
+            Assert.AreEqual("echo exists and ", result);
         }
 
         [TestMethod]

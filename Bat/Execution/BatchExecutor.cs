@@ -58,6 +58,9 @@ internal class BatchExecutor(IConsole console) : IExecutor
 
             var expanded = Expander.ExpandBatchParameters(line, bc);
             expanded = Expander.ExpandEnvironmentVariables(expanded, context);
+            if (context.DelayedExpansion)
+                expanded = Expander.ExpandDelayedVariables(expanded, context);
+            expanded = expanded.Replace(Expander.EscapedPercent, '%');
 
             var trimmedExpanded = expanded.TrimStart();
             var isQuiet = trimmedExpanded.StartsWith('@');
@@ -75,6 +78,7 @@ internal class BatchExecutor(IConsole console) : IExecutor
             }
 
             var exitCode = await Dispatcher.ExecuteNodeAsync(bc, result.Root);
+            context.EnvironmentVariables["ERRORLEVEL"] = context.ErrorCode.ToString();
             if (exitCode == ExitCommand.ExitSentinel)
             {
                 EndLocalCommand.UnwindSetLocalStack(bc);

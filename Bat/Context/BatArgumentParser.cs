@@ -38,7 +38,7 @@ internal class BatArgumentParser(char directorySeparator)
             }
 
             var flagPart = arg[1..];
-            if (_mode == BatMode.Unix && flagPart.Length > 1 && !flagPart.StartsWith('-'))
+            if (_mode == BatMode.Unix && flagPart.Length > 1 && !flagPart.StartsWith('-') && !flagPart.Contains(':'))
             {
                 var parts = SplitCombinedFlags(flagPart);
                 foreach (var part in parts)
@@ -123,11 +123,9 @@ internal class BatArgumentParser(char directorySeparator)
                 suppressBanner = true;
                 break;
             case "M":
-                driveMappings ??= [];
-                var drive = value?[0] ?? (i + 1 < args.Length ? args[++i][0] : '\0');
-                var path = i + 1 < args.Length ? args[++i] : "";
-                if (drive != '\0' && char.IsLetter(drive))
-                    driveMappings[char.ToUpperInvariant(drive)] = path;
+                if (value is not null)
+                    foreach (var (drive, path) in ParseMappings(value))
+                        (driveMappings ??= [])[drive] = path;
                 break;
             case "T":
                 colorSpec = value ?? (i + 1 < args.Length ? args[++i] : null);
@@ -159,5 +157,66 @@ internal class BatArgumentParser(char directorySeparator)
             result.Add(combined[start..i]);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Parses drive mappings in the format: c=/foo,d=/bar
+    /// Paths may be quoted with " (both modes) or ' (Unix only).
+    /// Commas and equals signs inside quotes are treated as literal.
+    /// </summary>
+    private IEnumerable<(char Drive, string Path)> ParseMappings(string value)
+    {
+        var i = 0;
+        while (i < value.Length)
+        {
+            // skip commas and whitespace between pairs
+            while (i < value.Length && (value[i] == ',' || value[i] == ' ')) i++;
+            if (i >= value.Length) break;
+
+            // drive letter
+            if (!char.IsLetter(value[i])) break;
+            var drive = char.ToUpperInvariant(value[i++]);
+
+            // require =
+            if (i >= value.Length || value[i] != '=') break;
+            i++;
+
+            // path, possibly quoted
+            var path = ReadPath(value, ref i);
+            yield return (drive, path);
+        }
+    }
+
+    private string ReadPath(string value, ref int i)
+    {
+        if (i >= value.Length) return "";
+
+        // quoted path: " or (Unix) '
+        if (value[i] == '"' || (_mode == BatMode.Unix && value[i] == '\''))
+        {
+            var quote = value[i++];
+            var sb = new System.Text.StringBuilder();
+            while (i < value.Length && value[i] != quote)
+            {
+                // Only Unix double-quotes support backslash-escape sequences
+                if (_mode == BatMode.Unix && quote == '"' &&
+                    value[i] == '\\' && i + 1 < value.Length)
+                {
+                    sb.Append(value[++i]);
+                }
+                else
+                {
+                    sb.Append(value[i]);
+                }
+                i++;
+            }
+            if (i < value.Length) i++; // closing quote
+            return sb.ToString();
+        }
+
+        // unquoted path: ends at comma or end of string
+        var start = i;
+        while (i < value.Length && value[i] != ',') i++;
+        return value[start..i];
     }
 }

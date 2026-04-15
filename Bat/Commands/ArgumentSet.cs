@@ -77,7 +77,7 @@ internal sealed class ArgumentSet : IArgumentSet
             }
             else
             {
-                buf.Append(token is QuotedTextToken q ? q.Value : token.Raw);
+                buf.Append(token is QuotedTextToken q ? q.Value : UnescapeUtility.Unescape(token.Raw));
             }
         }
         if (buf.Length > 0) words.Add(buf.ToString());

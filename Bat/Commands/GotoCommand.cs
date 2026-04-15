@@ -42,15 +42,16 @@ internal class GotoCommand : ICommand
         // In REPL mode (no label positions), GOTO is a no-op
         if (batchContext.LabelPositions == null) return 0;
 
-        var label = arguments.FullArgument.TrimStart(':').Trim();
+        var rawLabel = arguments.FullArgument.Trim();
+        var label = rawLabel.TrimStart(':');
         if (label.Length == 0)
         {
             await batchContext.Console.Error.WriteLineAsync("The syntax of the command is incorrect.");
             return 1;
         }
 
-        // :eof always works — jumps to end of file
-        if (label.Equals("eof", StringComparison.OrdinalIgnoreCase))
+        // :eof only works when the colon is explicitly given (goto :eof), not goto eof
+        if (rawLabel.StartsWith(':') && label.Equals("eof", StringComparison.OrdinalIgnoreCase))
         {
             batchContext.FilePosition = batchContext.FileContent?.Length ?? 0;
             return GotoSentinel;
@@ -59,7 +60,8 @@ internal class GotoCommand : ICommand
         if (!batchContext.LabelPositions.TryGetValue(label, out var position))
         {
             await batchContext.Console.Error.WriteLineAsync($"The system cannot find the batch label specified - {label}");
-            return 1;
+            batchContext.Context.ErrorCode = 1;
+            return ExitCommand.ExitBatchSentinel;
         }
 
         batchContext.FilePosition = position;

@@ -272,8 +272,9 @@ public class SetCommandTests
     public async Task Set_Arithmetic_BitwiseXor()
     {
         // From SET /? help: "^  - bitwise exclusive or"
+        // In a batch file ^X escapes X, so ^^ is needed to produce a literal ^ (XOR operator)
         var (cmd, _, bc, ctx) = Setup();
-        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=5^3")), bc, []);
+        await cmd.ExecuteAsync(TestArgs.For<SetCommand>(Token.Text("/A"), Token.Whitespace(" "), Token.Text("X=5^^3")), bc, []);
         Assert.AreEqual("6", ctx.EnvironmentVariables["X"]);
     }
 }

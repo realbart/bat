@@ -11,6 +11,7 @@ goto foo
 
 :baz
 echo 4
+goto eof
 goto :eof
 
 :buz

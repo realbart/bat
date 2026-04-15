@@ -9,6 +9,9 @@ namespace Bat.Execution;
 /// </summary>
 internal static class Expander
 {
+    /// <summary>Sentinel for a literal % produced by %% in the batch-parameter pass.
+    /// Must survive the env-var pass unchanged (is not %) and is restored afterwards.</summary>
+    internal const char EscapedPercent = '\x01';
     /// <summary>
     /// Expand batch parameters in a line (%0..%9, %*, %~dp1, etc.)
     /// Preserves literal %N if parameter is null/missing.
@@ -34,16 +37,30 @@ internal static class Expander
     {
         if (i + 1 >= line.Length) return false;
 
-        if (char.IsDigit(line[i + 1]))
+        // %%N or %%* → literal %N / %* (escape: prevents batch-parameter expansion of the next token)
+        if (line[i + 1] == '%')
         {
-            var adjustedIndex = (line[i + 1] - '0') + bc.ShiftOffset;
-            if (adjustedIndex >= 0 && adjustedIndex < bc.Parameters.Length && bc.Parameters[adjustedIndex] != null)
+            if (i + 2 < line.Length && (char.IsDigit(line[i + 2]) || line[i + 2] == '*'))
             {
-                result.Append(bc.Parameters[adjustedIndex]);
+                result.Append(EscapedPercent); // sentinel: restored to % after env-var pass
                 i += 2;
                 return true;
             }
             return false;
+        }
+
+        if (char.IsDigit(line[i + 1]))
+        {
+            var adjustedIndex = (line[i + 1] - '0') + bc.ShiftOffset;
+            if (adjustedIndex >= 0 && adjustedIndex < bc.Parameters.Length)
+            {
+                // null parameter expands to empty string (CMD behaviour)
+                result.Append(bc.Parameters[adjustedIndex] ?? "");
+                i += 2;
+                return true;
+            }
+            i += 2;
+            return true;
         }
 
         if (line[i + 1] == '*')
@@ -122,9 +139,7 @@ internal static class Expander
 
         if (!ctx.EnvironmentVariables.TryGetValue(varName, out var value))
         {
-            // Variable not found — keep %TOKEN% literally and advance past closing %
-            // This prevents the closing % from being treated as a lone % later
-            result.Append(line, i, closeIndex - i + 1);
+            // Undefined variable → expands to empty string (CMD behaviour)
             i = closeIndex + 1;
             return true;
         }
@@ -179,5 +194,49 @@ internal static class Expander
             : maxLength;
 
         return actualLength <= 0 ? "" : value.Substring(offset, actualLength);
+    }
+
+    /// <summary>
+    /// Expand !VAR! delayed variables.
+    /// !! produces a literal !. Unknown variables keep their !VAR! form.
+    /// </summary>
+    public static string ExpandDelayedVariables(string line, IContext ctx)
+    {
+        if (string.IsNullOrEmpty(line) || !line.Contains('!')) return line;
+
+        var result = new StringBuilder(line.Length);
+        var i = 0;
+        while (i < line.Length)
+        {
+            if (line[i] != '!')
+            {
+                result.Append(line[i++]);
+                continue;
+            }
+
+            // !! → literal !
+            if (i + 1 < line.Length && line[i + 1] == '!')
+            {
+                result.Append('!');
+                i += 2;
+                continue;
+            }
+
+            var close = line.IndexOf('!', i + 1);
+            if (close < 0)
+            {
+                // Unclosed ! → keep as literal
+                result.Append(line[i++]);
+                continue;
+            }
+
+            var varName = line.Substring(i + 1, close - i - 1);
+            if (ctx.EnvironmentVariables.TryGetValue(varName, out var value))
+                result.Append(value);
+            else
+                result.Append(line, i, close - i + 1); // keep !VAR! literal
+            i = close + 1;
+        }
+        return result.ToString();
     }
 }
