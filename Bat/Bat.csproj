@@ -7,6 +7,30 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>bat</AssemblyName>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <_RidLower>$([System.String]::Copy('$(RuntimeIdentifier)').ToLowerInvariant())</_RidLower>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and $([System.String]::Copy('$(_RidLower)').StartsWith('win'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and ($([System.String]::Copy('$(_RidLower)').StartsWith('linux')) or $([System.String]::Copy('$(_RidLower)').StartsWith('osx')))">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' != 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -520,6 +521,8 @@ internal sealed class TestFileSystem : IFileSystem
     public void RenameFile(char drive, string[] path, string newName) => throw new NotImplementedException();
     public void SetAttributes(char drive, string[] path, FileAttributes attributes) => throw new NotImplementedException();
     public uint GetVolumeSerialNumber(char drive) => 0;
+    public string GetVolumeLabel(char drive) => "";
+    public long GetFreeBytes(char drive) => 1024 * 1024 * 1024;
     public IReadOnlyDictionary<string, string> GetFileAssociations() => new Dictionary<string, string>();
     public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
     public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
@@ -2427,8 +2430,4 @@ public class ExecutableTypeDetectorTests : IDisposable
         Assert.AreEqual(ExecutableType.Document, ExecutableTypeDetector.GetExecutableType(path));
     }
 }
-
-
-
-
-
+#endif

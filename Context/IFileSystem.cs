@@ -30,6 +30,8 @@ public interface IFileSystem
     DateTime GetLastWriteTime(char drive, string[] path);
 
     uint GetVolumeSerialNumber(char drive);
+    string GetVolumeLabel(char drive);
+    long GetFreeBytes(char drive);
 
     IReadOnlyDictionary<string, string> GetFileAssociations();
 

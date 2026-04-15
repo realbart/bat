@@ -1,3 +1,4 @@
+#if WINDOWS
 using Bat.Context;
 using Bat.Context.Dos;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -62,3 +63,4 @@ public class PathTranslatorTests
         Assert.AreEqual(@"C:\", result);
     }
 }
+#endif

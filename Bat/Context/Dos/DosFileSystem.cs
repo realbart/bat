@@ -67,6 +67,26 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
             : hash;
     }
 
+    protected override string GetVolumeLabel(string nativeRoot)
+    {
+        var buffer = new char[261];
+        return GetVolumeInformationW(nativeRoot, buffer, buffer.Length, out _, out _, out _, null, 0)
+            ? new string(buffer).TrimEnd('\0') : "";
+    }
+
+    protected override long GetFreeBytes(string nativeRoot)
+    {
+        try
+        {
+            var drive = new DriveInfo(nativeRoot);
+            return drive.AvailableFreeSpace;
+        }
+        catch
+        {
+            return 1024 * 1024 * 1024; // 1 GB fallback
+        }
+    }
+
     [LibraryImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", StringMarshalling = StringMarshalling.Utf16)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]

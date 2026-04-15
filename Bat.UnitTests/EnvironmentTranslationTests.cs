@@ -1,3 +1,4 @@
+#if WINDOWS
 using Bat.Context;
 using Bat.Context.Dos;
 
@@ -276,4 +277,4 @@ public class EnvironmentTranslationTests
         Assert.AreEqual("", result);
     }
 }
-
+#endif

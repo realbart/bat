@@ -24,6 +24,7 @@ internal abstract class Context(IFileSystem fileSystem, IConsole console) : ICon
     public bool DelayedExpansion { get; set; } = false;
     public bool ExtensionsEnabled { get; set; } = true;
     public string PromptFormat { get; set; } = "$P$G";  // Default: C:\path>
+    public System.Globalization.CultureInfo FileCulture { get; } = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture);
 
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();

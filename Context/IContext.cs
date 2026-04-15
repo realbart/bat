@@ -19,6 +19,7 @@ public interface IContext
     bool DelayedExpansion { get; set; }
     bool ExtensionsEnabled { get; set; }
     string PromptFormat { get; set; }
+    System.Globalization.CultureInfo FileCulture { get; }
 
     Stack<(char Drive, string[] Path)> DirectoryStack { get; }
 

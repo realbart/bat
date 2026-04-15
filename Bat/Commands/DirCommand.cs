@@ -110,9 +110,9 @@ internal class DirCommand : ICommand
 
         if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
 
-        var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, entries, opts);
+        var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, context, entries, opts);
 
-        if (!opts.BareNames) await WriteDirectorySummary(console, fileCount, dirCount, totalSize, opts);
+        if (!opts.BareNames) await WriteDirectorySummary(console, context, drive, fileCount, dirCount, totalSize, opts);
 
         if (!recurse) return;
         foreach (var entry in context.FileSystem.EnumerateEntries(drive, path, "*").Where(e => e.IsDirectory))
@@ -126,18 +126,25 @@ internal class DirCommand : ICommand
         var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
         var serial = context.FileSystem.GetVolumeSerialNumber(drive);
         var serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
-        await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
+        var label = context.FileSystem.GetVolumeLabel(drive);
+        if (string.IsNullOrEmpty(label))
+            await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
+        else
+            await console.Out.WriteLineAsync($" Volume in drive {drive} is {label}");
         await console.Out.WriteLineAsync($" Volume Serial Number is {serialStr}");
         await console.Out.WriteLineAsync();
         await console.Out.WriteLineAsync($" Directory of {displayPath}");
         await console.Out.WriteLineAsync();
     }
 
-    private static async Task WriteDirectorySummary(IConsole console, int fileCount, int dirCount, long totalSize, DirOptions opts)
+    private static async Task WriteDirectorySummary(IConsole console, IContext context, char drive, int fileCount, int dirCount, long totalSize, DirOptions opts)
     {
         var totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
         await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
-        await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)");
+
+        var freeBytes = context.FileSystem.GetFreeBytes(drive);
+        var freeStr = opts.ThousandSeparator ? $"{freeBytes,15:N0}" : $"{freeBytes,15}";
+        await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)  {freeStr} bytes free");
         await console.Out.WriteLineAsync();
     }
 
@@ -179,7 +186,7 @@ internal class DirCommand : ICommand
     }
 
     private static async Task<(int FileCount, int DirCount, long TotalSize)> WriteEntriesAsync(
-        IConsole console, List<DosFileEntry> list, DirOptions opts)
+        IConsole console, IContext context, List<DosFileEntry> list, DirOptions opts)
     {
         if (opts.WideFormat)
         {
@@ -213,14 +220,14 @@ internal class DirCommand : ICommand
             if (entry.IsDirectory)
             {
                 dirCount++;
-                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}    <DIR>          {ownerField}{shortField}{displayName}");
+                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime, context.FileCulture)}    <DIR>          {ownerField}{shortField}{displayName}");
             }
             else
             {
                 totalSize += entry.Size;
                 fileCount++;
                 var sizeStr = opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}";
-                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime)}   {sizeStr} {ownerField}{shortField}{displayName}");
+                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime, context.FileCulture)}   {sizeStr} {ownerField}{shortField}{displayName}");
             }
         }
 
@@ -279,14 +286,15 @@ internal class DirCommand : ICommand
         return true;
     }
 
-    private static string FormatDate(DateTime dt)
+    private static string FormatDate(DateTime dt, System.Globalization.CultureInfo culture)
     {
         if (dt == DateTime.MinValue) return "                  ";
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        
+        // De culture (NormalizedFileCulture) regelt nu zowel de datum als de tijd opmaak
+        // met voorloopnullen en consistente lengte.
         var dateStr = dt.ToString("d", culture);
         var timeStr = dt.ToString("t", culture);
-        if (timeStr.Length < 8 && !timeStr.Contains(':')) timeStr = dt.ToString("HH:mm", culture);
-        else if (timeStr.Split(':')[0].Length == 1) timeStr = "0" + timeStr;
+        
         return $"{dateStr}  {timeStr}".PadRight(18);
     }
 

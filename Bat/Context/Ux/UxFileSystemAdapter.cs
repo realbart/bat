@@ -29,10 +29,12 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
     public override bool IsExecutable(char drive, string[] path)
     {
+#pragma warning disable CA1416 // File.GetUnixFileMode is supported on Unix
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
         if (!File.Exists(native)) return false;
         var mode = File.GetUnixFileMode(native);
         return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+#pragma warning restore CA1416
     }
 
     protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
@@ -169,8 +171,153 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
     public override DateTime GetLastWriteTime(char drive, string[] path) =>
         File.GetLastWriteTime(ResolveCaseInsensitive(GetNativePath(drive, path)));
 
-    protected override uint GetVolumeSerialNumber(string nativeRoot) =>
-        (uint)nativeRoot.GetHashCode(StringComparison.Ordinal);
+    protected override uint GetVolumeSerialNumber(string nativeRoot)
+    {
+        var info = GetVolumeInfo(nativeRoot);
+        return info.SerialNumber;
+    }
+
+    protected override string GetVolumeLabel(string nativeRoot)
+    {
+        var info = GetVolumeInfo(nativeRoot);
+        return info.Label;
+    }
+
+    private struct VolumeInfo
+    {
+        public string Label;
+        public uint SerialNumber;
+    }
+
+    private readonly Dictionary<string, VolumeInfo> _volumeCache = new(StringComparer.Ordinal);
+
+    private VolumeInfo GetVolumeInfo(string nativeRoot)
+    {
+        // We zoeken de langste match in /proc/mounts die een prefix is van nativeRoot
+        var fullPath = Path.GetFullPath(nativeRoot);
+        
+        if (_volumeCache.TryGetValue(fullPath, out var cached)) return cached;
+
+        string? bestMountPoint = null;
+        string? device = null;
+
+        try
+        {
+            if (File.Exists("/proc/mounts"))
+            {
+                var lines = File.ReadAllLines("/proc/mounts");
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 2) continue;
+                    var mountPoint = parts[1];
+                    // Normaliseer mountPoint om trailing slash problemen te voorkomen, behalve voor root
+                    var normalizedMount = mountPoint == "/" ? "/" : mountPoint.TrimEnd('/');
+                    var normalizedPath = fullPath == "/" ? "/" : fullPath.TrimEnd('/');
+
+                    if (normalizedPath == normalizedMount || normalizedPath.StartsWith(normalizedMount + "/", StringComparison.Ordinal))
+                    {
+                        if (bestMountPoint == null || mountPoint.Length > bestMountPoint.Length)
+                        {
+                            bestMountPoint = mountPoint;
+                            device = parts[0];
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fallback naar hash van het pad
+        }
+
+        VolumeInfo info;
+        if (device != null)
+        {
+            var uuid = GetUuidForDevice(device);
+            var stableId = uuid ?? device;
+            info = new VolumeInfo
+            {
+                Label = uuid != null ? $"UUID_{uuid[..8].ToUpperInvariant()}" : "UNIX_DISK",
+                SerialNumber = GetStableHashCode(stableId)
+            };
+        }
+        else
+        {
+            info = new VolumeInfo
+            {
+                Label = "",
+                SerialNumber = GetStableHashCode(fullPath)
+            };
+        }
+
+        _volumeCache[fullPath] = info;
+        return info;
+    }
+
+    private static uint GetStableHashCode(string str)
+    {
+        unchecked
+        {
+            uint hash = 2166136261;
+            foreach (char c in str)
+            {
+                hash = (hash ^ c) * 16777619;
+            }
+            return hash;
+        }
+    }
+
+    private static string? GetUuidForDevice(string device)
+    {
+        try
+        {
+            const string byUuidDir = "/dev/disk/by-uuid";
+            if (!Directory.Exists(byUuidDir)) return null;
+
+            var deviceName = Path.GetFileName(device);
+            foreach (var link in Directory.EnumerateFileSystemEntries(byUuidDir))
+            {
+                var target = ReadSymbolicLink(link);
+                if (target != null && Path.GetFileName(target) == deviceName)
+                {
+                    return Path.GetFileName(link);
+                }
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+        return null;
+    }
+
+    private static string? ReadSymbolicLink(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                return info.LinkTarget;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    protected override long GetFreeBytes(string nativeRoot)
+    {
+        try
+        {
+            var drive = new DriveInfo(nativeRoot);
+            return drive.AvailableFreeSpace;
+        }
+        catch
+        {
+            return 1024 * 1024 * 1024; // 1 GB fallback
+        }
+    }
 
     // ── Owner ────────────────────────────────────────────────────────────────
 

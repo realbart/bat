@@ -53,6 +53,7 @@ internal class CdCommand : ICommand
         // Only /D is a recognized switch — detect it manually from the raw argument.
         var raw = arguments.FullArgument.Trim();
 
+
         // CMD strips surrounding quotes from the path
         if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
             raw = raw[1..^1];

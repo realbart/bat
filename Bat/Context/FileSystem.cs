@@ -101,6 +101,14 @@ internal abstract class FileSystem : IFileSystem
         => GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), []));
     protected abstract uint GetVolumeSerialNumber(string nativeRoot);
 
+    public string GetVolumeLabel(char drive)
+        => GetVolumeLabel(GetNativePath(char.ToUpperInvariant(drive), []));
+    protected abstract string GetVolumeLabel(string nativeRoot);
+
+    public long GetFreeBytes(char drive)
+        => GetFreeBytes(GetNativePath(char.ToUpperInvariant(drive), []));
+    protected abstract long GetFreeBytes(string nativeRoot);
+
     public abstract IReadOnlyDictionary<string, string> GetFileAssociations();
 
     public IReadOnlyDictionary<char, string> GetSubsts() => Substs;

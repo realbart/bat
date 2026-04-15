@@ -7,6 +7,26 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <_RidLower>$([System.String]::Copy('$(RuntimeIdentifier)').ToLowerInvariant())</_RidLower>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and $([System.String]::Copy('$(_RidLower)').StartsWith('win'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and ($([System.String]::Copy('$(_RidLower)').StartsWith('linux')) or $([System.String]::Copy('$(_RidLower)').StartsWith('osx')))">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' != 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="MSTest" Version="4.0.1" />
   </ItemGroup>

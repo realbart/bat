@@ -18,8 +18,11 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
 
     public async Task ExecuteCommandAsync(IContext context, string command)
     {
+        var expanded = Expander.ExpandEnvironmentVariables(command, context);
+        if (context.DelayedExpansion)
+            expanded = Expander.ExpandDelayedVariables(expanded, context);
         var parser = new Parser();
-        parser.Append(command);
+        parser.Append(expanded);
         await dispatcher.ExecuteCommandAsync(context, console, parser.ParseCommand());
     }
 
@@ -50,12 +53,18 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
             }
 
             line = ExpandMacro(line, context);
-            parser.Append(line);
+            var expanded = Expander.ExpandEnvironmentVariables(line, context);
+            if (context.DelayedExpansion)
+                expanded = Expander.ExpandDelayedVariables(expanded, context);
+            parser.Append(expanded);
             while (parser.ErrorMessage is null && parser.IsIncomplete)
             {
                 var more = await ReadLine("More? ", console, context);
                 if (more is null) break;
-                parser.Append(more);
+                var expandedMore = Expander.ExpandEnvironmentVariables(more, context);
+                if (context.DelayedExpansion)
+                    expandedMore = Expander.ExpandDelayedVariables(expandedMore, context);
+                parser.Append(expandedMore);
             }
             if (parser.IsIncomplete) continue;
             if (parser.ErrorMessage is null) return parser.ParseCommand();
