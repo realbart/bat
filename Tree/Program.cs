@@ -137,6 +137,16 @@ public static class Program
                 var label = $"{folderPrefix}{dir.Name}";
 
                 await context.Console.Out.WriteLineAsync($"{prefix}{branch}{label}");
+
+                // Do not recurse into symlink directories or junctions (mount points)
+                // Use a direct bitmask check to be consistent with DirCommand and avoid any Enum issues.
+                var isReparse = ((int)dir.Attributes & 0x400) != 0; // 0x400 = ReparsePoint
+                if (isReparse)
+                {
+                    // Debug-only logic can be added here if needed to trace symlink following.
+                    continue;
+                }
+
                 await PrintTree(currentDrive, [.. currentPath, dir.Name], prefix + childIndent);
             }
         }

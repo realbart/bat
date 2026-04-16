@@ -34,6 +34,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Bat\Bat.csproj" />
     <ProjectReference Include="..\Subst\Subst.csproj" />
+    <ProjectReference Include="..\Tree\Tree.csproj" />
   </ItemGroup>
 
   <ItemGroup>

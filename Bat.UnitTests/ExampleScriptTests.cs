@@ -75,7 +75,15 @@ public class ExampleScriptTests
         proc.StandardInput.Close();
         var outTask = proc.StandardOutput.ReadToEndAsync();
         var errTask = proc.StandardError.ReadToEndAsync();
-        await proc.WaitForExitAsync();
+        
+        // Add a 10s timeout to avoid hangs in script tests
+        var exitTask = proc.WaitForExitAsync();
+        if (await Task.WhenAny(exitTask, Task.Delay(10000)) != exitTask)
+        {
+            try { proc.Kill(true); } catch { }
+            throw new TimeoutException($"Process {exe} {args} timed out after 10s in {workingDir}");
+        }
+        
         return (Normalize(outTask.Result), Normalize(errTask.Result));
     }
 

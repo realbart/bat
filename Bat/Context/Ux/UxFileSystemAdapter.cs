@@ -116,10 +116,54 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         {
             var name = Path.GetFileName(entry);
             var linfo = new FileInfo(entry);
-            var isDir = (linfo.Attributes & FileAttributes.Directory) != 0;
-            var isLink = (linfo.Attributes & FileAttributes.ReparsePoint) != 0;
-            
             var attributes = linfo.Attributes;
+
+            // On Linux, FileInfo.Attributes might not always have ReparsePoint set for symlinks 
+            // depending on the runtime version or filesystem.
+            // Check explicitly using LinkTarget or UnixFileMode to see if it's a symlink.
+            if (linfo.LinkTarget != null)
+            {
+                attributes |= FileAttributes.ReparsePoint;
+            }
+            else
+            {
+                try
+                {
+                    // Use File.GetAttributes which is more likely to use the lstat system call correctly.
+                    var linkAttributes = File.GetAttributes(entry);
+                    if (linkAttributes.HasFlag(FileAttributes.ReparsePoint))
+                    {
+                        attributes |= FileAttributes.ReparsePoint;
+                    }
+                }
+                catch { }
+            }
+
+            var isDir = (attributes & FileAttributes.Directory) != 0;
+            var isLink = (attributes & FileAttributes.ReparsePoint) != 0;
+
+            // Fallback: check if it's a symbolic link using lstat if possible or check if it's not a regular file/directory.
+            if (!isLink)
+            {
+                // In some cases on Linux, directory symlinks might not have ReparsePoint.
+                // We've already tried LinkTarget and File.GetAttributes.
+                // If we still don't have it, but it's a directory, let's see if it's actually a symlink.
+                if (isDir)
+                {
+                    // For directories, we can check if it's a symbolic link by using ResolveLinkTarget.
+                    // This is more robust than just checking LinkTarget property on some systems.
+                    try
+                    {
+                        var target = linfo.ResolveLinkTarget(false);
+                        if (target != null)
+                        {
+                            attributes |= FileAttributes.ReparsePoint;
+                            isLink = true;
+                        }
+                    }
+                    catch { }
+                }
+            }
             
             // Check if it's a mount point (Junction)
             if (isDir && !isLink && IsMountPoint(entry))
@@ -196,8 +240,24 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         File.Move(src, dst);
     }
 
-    public override FileAttributes GetAttributes(char drive, string[] path) =>
-        File.GetAttributes(ResolveCaseInsensitive(GetNativePath(drive, path)));
+    public override FileAttributes GetAttributes(char drive, string[] path)
+    {
+        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var linfo = new FileInfo(native);
+        var attributes = linfo.Attributes;
+        
+        if (linfo.LinkTarget != null)
+        {
+            attributes |= FileAttributes.ReparsePoint;
+        }
+
+        if ((attributes & FileAttributes.Directory) != 0 && (attributes & FileAttributes.ReparsePoint) == 0 && IsMountPoint(native))
+        {
+            attributes |= FileAttributes.ReparsePoint;
+            attributes |= FileAttributes.Offline;
+        }
+        return attributes;
+    }
 
     public override void SetAttributes(char drive, string[] path, FileAttributes attributes) =>
         File.SetAttributes(ResolveCaseInsensitive(GetNativePath(drive, path)), attributes);

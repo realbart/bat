@@ -117,6 +117,9 @@ internal class DirCommand : ICommand
         if (!recurse) return;
         foreach (var entry in context.FileSystem.EnumerateEntries(drive, path, "*").Where(e => e.IsDirectory))
         {
+            if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                continue;
+
             await ListDirectoryAsync(console, context, drive, [.. path, entry.Name], opts, pattern, recurse: true);
         }
     }

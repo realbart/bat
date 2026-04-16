@@ -28,9 +28,16 @@ internal class TestHarness
         ReplBatchContext.Value.SetLocalStack.Clear();
     }
 
-    public async Task<bool> Execute(string command)
+    public async Task<bool> Execute(string command, int timeoutMs = 5000)
     {
         var cmd = Parser.Parse(command);
-        return await Dispatcher.ExecuteCommandAsync(Context, Console, cmd);
+        var task = Dispatcher.ExecuteCommandAsync(Context, Console, cmd);
+        
+        if (await Task.WhenAny(task, Task.Delay(timeoutMs)) == task)
+        {
+            return await task;
+        }
+
+        throw new TimeoutException($"Command execution timed out after {timeoutMs}ms: {command}");
     }
 }
