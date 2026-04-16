@@ -211,12 +211,26 @@ internal class BatArgumentParser(char directorySeparator)
                 i++;
             }
             if (i < value.Length) i++; // closing quote
-            return sb.ToString();
+            var result = sb.ToString();
+            if (_mode == BatMode.Unix && result.StartsWith('~'))
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (string.IsNullOrEmpty(home)) home = Environment.GetEnvironmentVariable("HOME") ?? "/";
+                result = Path.Combine(home, result[1..].TrimStart('/', '\\'));
+            }
+            return result;
         }
 
         // unquoted path: ends at comma or end of string
         var start = i;
         while (i < value.Length && value[i] != ',') i++;
-        return value[start..i];
+        var resultPath = value[start..i];
+        if (_mode == BatMode.Unix && resultPath.StartsWith('~'))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home)) home = Environment.GetEnvironmentVariable("HOME") ?? "/";
+            resultPath = Path.Combine(home, resultPath[1..].TrimStart('/', '\\'));
+        }
+        return resultPath;
     }
 }

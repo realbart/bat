@@ -115,18 +115,55 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
         {
             var name = Path.GetFileName(entry);
-            var isDir = Directory.Exists(entry);
-            var info = new FileInfo(entry);
+            var linfo = new FileInfo(entry);
+            var isDir = (linfo.Attributes & FileAttributes.Directory) != 0;
+            var isLink = (linfo.Attributes & FileAttributes.ReparsePoint) != 0;
+            
+            var attributes = linfo.Attributes;
+            
+            // Check if it's a mount point (Junction)
+            if (isDir && !isLink && IsMountPoint(entry))
+            {
+                attributes |= FileAttributes.ReparsePoint;
+                attributes |= FileAttributes.Offline; // We use Offline as a marker for Junction/Mount
+            }
+
             _shortNameCache.TryGetValue(entry, out var shortName);
             yield return new DosFileEntry(
                 name,
                 isDir,
                 shortName ?? "",
-                isDir ? 0 : info.Length,
-                File.GetLastWriteTime(entry),
-                File.GetAttributes(entry),
+                isDir ? 0 : linfo.Length,
+                linfo.LastWriteTime,
+                attributes,
                 GetFileOwner(entry));
         }
+    }
+
+    private static bool IsMountPoint(string path)
+    {
+        var fullPath = Path.GetFullPath(path).TrimEnd('/');
+        if (fullPath == "") fullPath = "/";
+        
+        try
+        {
+            if (File.Exists("/proc/mounts"))
+            {
+                var lines = File.ReadAllLines("/proc/mounts");
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
+                    {
+                        var mountPoint = parts[1].TrimEnd('/');
+                        if (mountPoint == "") mountPoint = "/";
+                        if (fullPath == mountPoint) return true;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
     }
 
     public override Stream OpenRead(char drive, string[] path) =>

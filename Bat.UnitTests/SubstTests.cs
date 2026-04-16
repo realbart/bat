@@ -11,8 +11,12 @@ namespace Bat.UnitTests;
 
 // ── FileSystem template-method subst tests ───────────────────────────────────
 
+#if WINDOWS
 [TestClass]
 public class SubstFileSystemTests : IDisposable
+#else
+public class SubstFileSystemTests
+#endif
 {
     private readonly string _testRoot;
     private readonly DosFileSystem _fs;

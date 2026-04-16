@@ -185,6 +185,61 @@ internal class DirCommand : ICommand
         return entries;
     }
 
+    private static string GetReparseLabel(DosFileEntry entry)
+    {
+        // For now, on Linux we will show <SYMLINKD> for directories that are symlinks.
+        // If we want <JUNCTION>, we need a way to distinguish them.
+        // In the Bat filesystem abstraction, we can use the Attributes or a custom flag.
+        // Windows uses specific reparse tags.
+        
+        // Let's use a convention: if it has ReparsePoint AND it's a directory,
+        // we'll check if it's a "junction" (mount point on Linux).
+        
+        if (entry.Attributes.HasFlag((FileAttributes)0x400)) // ReparsePoint
+        {
+            // We use a custom bit in Attributes to distinguish Junction from Symlink if possible,
+            // or we just check if it's a symlink.
+            // On Windows:
+            // <SYMLINKD> - symlink to directory
+            // <JUNCTION> - junction point
+            
+            // For Linux, we'll implement the logic in the FileSystem to set these.
+            // Since FileAttributes is an enum, we might be limited.
+            // But we can check for other bits.
+            
+            // If the FileSystem sets the "Archive" bit for symlinks but not for junctions? No.
+            
+            // Let's look at how we can distinguish them in DosFileEntry.
+            // Wait, DosFileEntry is a record struct.
+            
+            // Let's assume for now that if it has ReparsePoint, we want to know if it's a symlink or junction.
+            // We'll use a heuristic for now or better, update DosFileEntry if we can.
+            // But I should try to avoid changing DosFileEntry if possible.
+            
+            // What if we use the 'Owner' field or 'ShortName' to pass extra info? No, that's dirty.
+            
+            // Actually, Windows DIR output for junctions and symlinks also shows the target:
+            // [target]
+            // But the requirement only asks for the <TAG>.
+            
+            // Let's assume we use Attribute 0x1000 (Compressed) or something for Junctions?
+            // No, let's just use what we have.
+            
+            if (entry.Attributes.HasFlag(FileAttributes.Directory))
+            {
+                // If it's a mount point (junction in our mapping), we want <JUNCTION>
+                // If it's a symlink to a directory, we want <SYMLINKD>
+                
+                // Let's use a bit that is unlikely to be set on Linux: FileAttributes.Offline (0x1000) for Junctions?
+                if (entry.Attributes.HasFlag(FileAttributes.Offline))
+                    return "<JUNCTION>";
+                
+                return "<SYMLINKD>";
+            }
+        }
+        return "<DIR>";
+    }
+
     private static async Task<(int FileCount, int DirCount, long TotalSize)> WriteEntriesAsync(
         IConsole console, IContext context, List<DosFileEntry> list, DirOptions opts)
     {
@@ -220,13 +275,23 @@ internal class DirCommand : ICommand
             if (entry.IsDirectory)
             {
                 dirCount++;
-                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime, context.FileCulture)}    <DIR>          {ownerField}{shortField}{displayName}");
+                var label = "<DIR>";
+                if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    // Detect if it is a junction or a symlink. 
+                    // This information must be provided by the FileSystem.
+                    // For now, assume if it has ReparsePoint it might be a junction or symlink.
+                    // On Windows, DIR shows <JUNCTION> or <SYMLINKD>.
+                    label = GetReparseLabel(entry);
+                }
+                await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime, context.FileCulture)}    {label,-14} {ownerField}{shortField}{displayName}");
             }
             else
             {
                 totalSize += entry.Size;
                 fileCount++;
-                var sizeStr = opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}";
+                var label = entry.Attributes.HasFlag(FileAttributes.ReparsePoint) ? "<SYMLINK>     " : "";
+                var sizeStr = label != "" ? label : (opts.ThousandSeparator ? $"{entry.Size,15:N0}" : $"{entry.Size,15}");
                 await console.Out.WriteLineAsync($"{FormatDate(entry.LastWriteTime, context.FileCulture)}   {sizeStr} {ownerField}{shortField}{displayName}");
             }
         }

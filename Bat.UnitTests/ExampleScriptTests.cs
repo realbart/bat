@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Bat.UnitTests;
 
+#if WINDOWS
 /// <summary>
 /// Integration tests that run every .bat file in the Examples folder through both
 /// cmd.exe and Bat, then assert their stdout and stderr match.
@@ -84,3 +85,4 @@ public class ExampleScriptTests
         return string.Join("\n", lines.Select(l => l.TrimEnd())).ToLowerInvariant();
     }
 }
+#endif
