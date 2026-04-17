@@ -3,6 +3,31 @@ using Context;
 
 namespace Bat.UnitTests;
 
+internal static class LineEditorExtensions
+{
+    public static string? ReadLine(this LineEditor editor, string prompt, TestConsole console) =>
+        editor.ReadLineAsync(prompt, new TestContext(console)).GetAwaiter().GetResult();
+
+    public static string? ReadLine(this LineEditor editor, string prompt, TestConsole console, IContext context) =>
+        editor.ReadLineAsync(prompt, context).GetAwaiter().GetResult();
+}
+
+internal class TestContext : Context.Context
+{
+    public TestContext(IConsole console) : base(new TestFileSystem(), console)
+    {
+    }
+
+    public TestContext(IFileSystem fs, IConsole console) : base(fs, console)
+    {
+    }
+
+    public override IContext StartNew(IConsole? console = null)
+    {
+        return new TestContext(FileSystem, console ?? Console);
+    }
+}
+
 [TestClass]
 public class LineEditorTests
 {
@@ -52,6 +77,7 @@ public class LineEditorTests
     // ── basic input ───────────────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_SimpleTyping_ReturnsTypedText()
     {
         var result = new LineEditor().ReadLine("", Build(Key('h'), Key('i'), Enter()));
@@ -59,6 +85,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Backspace_DeletesCharBeforeCursor()
     {
         var result = new LineEditor().ReadLine("", Build(Key('h'), Key('i'), Key('j'), Backspace(), Enter()));
@@ -66,6 +93,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_BackspaceAtStart_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(Backspace(), Key('x'), Enter()));
@@ -73,6 +101,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Delete_DeletesCharAtCursor()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -81,6 +110,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_RightArrow_WithinBuffer_MovesCursor()
     {
         // Type "ac", move left, type "b", move right past "c", Enter — cursor movement within buffer
@@ -90,10 +120,11 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_RightArrow_AtEndOfBuffer_CopiesFromTemplate()
     {
         var editor = new LineEditor();
-        editor.AddToHistory("hello");  // template = "hello"
+        editor.AddToHistory("hello"); // template = "hello"
         // Type "he" (2 chars), then Right Arrow 3 times to copy "llo" from template
         var result = editor.ReadLine("", Build(
             Key('h'), Key('e'), RightArrow(), RightArrow(), RightArrow(), Enter()));
@@ -101,6 +132,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_RightArrow_AtEndWithNoTemplate_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(Key('x'), RightArrow(), Enter()));
@@ -108,6 +140,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_InsertInMiddle_InsertsChar()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -116,6 +149,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Escape_ClearsBuffer()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -124,6 +158,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlC_ReturnsNull()
     {
         Assert.IsNull(new LineEditor().ReadLine("", Build(Key('h'), Key('i'), CtrlC())));
@@ -132,6 +167,7 @@ public class LineEditorTests
     // ── history ───────────────────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_NonEmptyLine_AddedToHistory()
     {
         var editor = new LineEditor();
@@ -141,6 +177,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_EmptyLine_NotAddedToHistory()
     {
         var editor = new LineEditor();
@@ -149,6 +186,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_ConsecutiveDuplicates_NotAddedTwice()
     {
         var editor = new LineEditor();
@@ -158,6 +196,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_UpArrow_RecallsPreviousCommand()
     {
         var editor = new LineEditor();
@@ -166,6 +205,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_UpArrowTwice_RecallsOlderCommand()
     {
         var editor = new LineEditor();
@@ -175,6 +215,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_DownArrow_ClearsLineAfterLastHistory()
     {
         var editor = new LineEditor();
@@ -183,6 +224,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PageUp_RecallsOldestCommand()
     {
         var editor = new LineEditor();
@@ -193,6 +235,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PageDown_RecallsNewestCommand()
     {
         var editor = new LineEditor();
@@ -203,12 +246,14 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PageDownWithNoHistory_DoesNothing()
     {
         Assert.AreEqual("x", new LineEditor().ReadLine("", Build(PageDown(), Key('x'), Enter())));
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F7_DisplaysHistoryList()
     {
         var editor = new LineEditor();
@@ -228,6 +273,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F7_EnterSelectsCommand()
     {
         var editor = new LineEditor();
@@ -241,6 +287,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F7_EscapeDismisses_BufferPreserved()
     {
         var editor = new LineEditor();
@@ -252,6 +299,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_AltF7_ClearsHistory()
     {
         var editor = new LineEditor();
@@ -272,6 +320,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_SingleMatch_AbsolutePath_Completes()
     {
         var fs = new TestFileSystem();
@@ -285,6 +334,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_SingleMatch_RelativePath_Completes()
     {
         var fs = new TestFileSystem();
@@ -297,6 +347,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_File_NoTrailingBackslash()
     {
         var fs = new TestFileSystem();
@@ -309,6 +360,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_NoMatch_DoesNothing()
     {
         var fs = new TestFileSystem();
@@ -320,6 +372,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_NullContext_DoesNotComplete()
     {
         var result = new LineEditor().ReadLine("", Build(Key('\\'), Key('U'), Tab(), Enter()));
@@ -327,12 +380,13 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_Cycles_ForwardThroughMatches()
     {
         var fs = new TestFileSystem();
         fs.AddDir('C', []);
-        fs.AddEntry('C', [], "Uploads", true);   // alphabetically first
-        fs.AddEntry('C', [], "Users", true);     // alphabetically second
+        fs.AddEntry('C', [], "Uploads", true); // alphabetically first
+        fs.AddEntry('C', [], "Users", true); // alphabetically second
         var ctx = MakeCtx(fs);
 
         // \U<Tab> -> \Uploads, <Tab> -> \Users, <Enter>
@@ -342,6 +396,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_Cycles_BackwardWithShiftTab()
     {
         var fs = new TestFileSystem();
@@ -357,12 +412,13 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_CycleToShorterName_ErasesLeftoverChars()
     {
         var fs = new TestFileSystem();
         fs.AddDir('C', []);
-        fs.AddEntry('C', [], "A", true);              // short  — alphabetically first
-        fs.AddEntry('C', [], "LongDirectory", true);  // long   — alphabetically second
+        fs.AddEntry('C', [], "A", true); // short  — alphabetically first
+        fs.AddEntry('C', [], "LongDirectory", true); // long   — alphabetically second
         var ctx = MakeCtx(fs);
 
         // \<Tab> -> \A, <Tab> -> \LongDirectory, <Tab> -> wraps to \A — must erase 12 extra chars
@@ -377,6 +433,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_CycleToShorterName_ReturnValueCorrect()
     {
         var fs = new TestFileSystem();
@@ -391,6 +448,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_TypingAfterCompletion_ResetsCandidates()
     {
         var fs = new TestFileSystem();
@@ -402,10 +460,11 @@ public class LineEditorTests
         // \U<Tab> -> \Ufo (first match alphabetically), 'x' resets candidates
         var result = new LineEditor().ReadLine("", Build(
             Key('\\'), Key('U'), Tab(), Key('x'), Enter()), ctx);
-        Assert.IsTrue(result == @"\Ufox" || result == @"\Usersx");
+        Assert.AreEqual(@"\Ufox", result);
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_WithDriveLetter_CompletesOnSpecifiedDrive()
     {
         var fs = new TestFileSystem();
@@ -420,6 +479,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Tab_SubDirectory_CompletesInSubdir()
     {
         var fs = new TestFileSystem();
@@ -437,6 +497,7 @@ public class LineEditorTests
     // ── Ctrl+Home / Ctrl+End ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlHome_DeletesFromCursorToStart()
     {
         // Type "abcde", move left 2, Ctrl+Home → "de"
@@ -447,6 +508,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlHome_AtStart_DoesNothing()
     {
         // Move to start first, then Ctrl+Home — nothing to delete
@@ -458,6 +520,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlEnd_DeletesFromCursorToEnd()
     {
         // Type "abcde", move left 2, Ctrl+End → "abc"
@@ -468,6 +531,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlEnd_AtEnd_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -478,6 +542,7 @@ public class LineEditorTests
     // ── F5 (move to template, clear line) ────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F5_MovesBufferToTemplate_ClearsLine()
     {
         var editor = new LineEditor();
@@ -488,6 +553,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F5_ThenF1_CopiesFromNewTemplate()
     {
         var editor = new LineEditor();
@@ -500,6 +566,7 @@ public class LineEditorTests
     // ── F2 + char (copy from template up to char) ────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F2_CopiesFromTemplateUpToChar()
     {
         var editor = new LineEditor();
@@ -510,6 +577,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F2_CharNotFound_CopiesNothing()
     {
         var editor = new LineEditor();
@@ -520,6 +588,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F2_FromMiddle_CopiesFromCursor()
     {
         var editor = new LineEditor();
@@ -533,6 +602,7 @@ public class LineEditorTests
     // ── F4 + char (delete from current position up to char in template) ──────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F4_SkipsTemplateUpToChar()
     {
         var editor = new LineEditor();
@@ -543,6 +613,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F4_CharNotFound_DoesNothing()
     {
         var editor = new LineEditor();
@@ -555,6 +626,7 @@ public class LineEditorTests
     // ── F8 (search history by prefix) ────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F8_SearchesByPrefix()
     {
         var editor = new LineEditor();
@@ -568,6 +640,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F8_CyclesMatches()
     {
         var editor = new LineEditor();
@@ -581,6 +654,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F8_NoMatch_DoesNothing()
     {
         var editor = new LineEditor();
@@ -592,6 +666,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F8_EmptyPrefix_RecallsMostRecent()
     {
         var editor = new LineEditor();
@@ -605,6 +680,7 @@ public class LineEditorTests
     // ── F9 (select command by history number) ────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F9_SelectsByNumber()
     {
         var editor = new LineEditor();
@@ -617,6 +693,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F9_InvalidNumber_DoesNothing()
     {
         var editor = new LineEditor();
@@ -629,6 +706,7 @@ public class LineEditorTests
     // ── Ctrl+Z (EOF marker) ──────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlZ_InsertsEofChar()
     {
         var result = new LineEditor().ReadLine("", Build(Key('a'), CtrlZ(), Enter()));
@@ -636,6 +714,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlZ_AtEmptyLine_InsertsEofChar()
     {
         var result = new LineEditor().ReadLine("", Build(CtrlZ(), Enter()));
@@ -645,6 +724,7 @@ public class LineEditorTests
     // ── Home / End ───────────────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Home_MovesCursorToStart()
     {
         // Type "abc", Home, type "x" → "xabc"
@@ -654,6 +734,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Home_AtStart_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -662,6 +743,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_End_MovesCursorToEnd()
     {
         // Type "abc", Home, End, type "x" → "abcx"
@@ -671,6 +753,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_End_AtEnd_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -681,6 +764,7 @@ public class LineEditorTests
     // ── Ctrl+← / Ctrl+→ (word navigation) ───────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlLeft_MovesToPreviousWordBoundary()
     {
         // "hello world", Ctrl+Left → cursor before 'w', type 'X' → "hello Xworld"
@@ -692,6 +776,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlLeft_AtStart_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -700,6 +785,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlRight_MovesToNextWordBoundary()
     {
         // "hello world", Home, Ctrl+Right → cursor after 'o' and space, type 'X' → "hello Xworld"
@@ -711,6 +797,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlRight_AtEnd_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -721,6 +808,7 @@ public class LineEditorTests
     // ── Delete (second test) ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Delete_AtEnd_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(
@@ -731,6 +819,7 @@ public class LineEditorTests
     // ── Insert toggle (overwrite mode) ───────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Insert_TogglesOverwriteMode()
     {
         // Type "abc", Home, Insert (switch to overwrite), type "XY" → "XYc"
@@ -741,6 +830,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Insert_ToggleBackToInsertMode()
     {
         // Type "abc", Home, Insert (overwrite), Insert (back to insert), type "X" → "Xabc"
@@ -753,6 +843,7 @@ public class LineEditorTests
     // ── Escape (second test) ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_Escape_EmptyBuffer_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(Escape(), Key('a'), Enter()));
@@ -762,6 +853,7 @@ public class LineEditorTests
     // ── DownArrow (second test) ──────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_DownArrow_NavigatesForwardThroughHistory()
     {
         var editor = new LineEditor();
@@ -776,6 +868,7 @@ public class LineEditorTests
     // ── PageUp (second test) ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PageUp_WithNoHistory_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(PageUp(), Key('x'), Enter()));
@@ -785,6 +878,7 @@ public class LineEditorTests
     // ── Alt+F7 (second test) ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_AltF7_EmptyHistory_DoesNothing()
     {
         var editor = new LineEditor();
@@ -795,6 +889,7 @@ public class LineEditorTests
     // ── F1 (dedicated tests) ────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F1_CopiesOneCharFromTemplate()
     {
         var editor = new LineEditor();
@@ -805,6 +900,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F1_NoTemplate_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(F1(), Key('x'), Enter()));
@@ -814,6 +910,7 @@ public class LineEditorTests
     // ── F3 (dedicated tests) ────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F3_CopiesRemainderFromTemplate()
     {
         var editor = new LineEditor();
@@ -825,6 +922,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_F3_NoTemplate_DoesNothing()
     {
         var result = new LineEditor().ReadLine("", Build(F3(), Key('x'), Enter()));
@@ -834,6 +932,7 @@ public class LineEditorTests
     // ── Ctrl+C (second test) ─────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_CtrlC_WithEmptyBuffer_ReturnsNull()
     {
         Assert.IsNull(new LineEditor().ReadLine("", Build(CtrlC())));
@@ -842,6 +941,7 @@ public class LineEditorTests
     // ── Multiline prompts ────────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PromptWithNewline_CalculatesCorrectPromptLength()
     {
         // Prompt: "\nC:\>" (5 chars after \n)
@@ -849,37 +949,40 @@ public class LineEditorTests
         var console = Build(Key('d'), Key('i'), Key('r'), Enter());
         var result = new LineEditor().ReadLine("\nC:\\>", console);
         Assert.AreEqual("dir", result);
-        
+
         // Verify output doesn't contain excessive spaces (would indicate wrong cursor positioning)
         var output = console.OutText;
         Assert.IsFalse(output.Contains("d  i"), "Should not have extra spaces between characters");
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PromptWithCarriageReturnNewline_CalculatesCorrectPromptLength()
     {
         // Prompt: "\r\nC:\>" (Windows line ending)
         var console = Build(Key('d'), Key('i'), Key('r'), Enter());
         var result = new LineEditor().ReadLine("\r\nC:\\>", console);
         Assert.AreEqual("dir", result);
-        
+
         var output = console.OutText;
         Assert.IsFalse(output.Contains("d  i"), "Should not have extra spaces between characters");
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PromptWithMultipleLines_UsesOnlyLastLine()
     {
         // Prompt with multiple newlines: "Line1\nLine2\nC:\>" (4 chars in last line)
         var console = Build(Key('e'), Key('c'), Key('h'), Key('o'), Enter());
         var result = new LineEditor().ReadLine("Line1\nLine2\nC:\\>", console);
         Assert.AreEqual("echo", result);
-        
+
         var output = console.OutText;
         Assert.IsFalse(output.Contains("e  c"), "Should not have extra spaces between characters");
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_PromptWithMixedLineEndings_HandlesCorrectly()
     {
         // Mixed line endings (shouldn't happen in practice, but should work)
@@ -889,6 +992,7 @@ public class LineEditorTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void ReadLine_SingleLinePrompt_StillWorksCorrectly()
     {
         // Ensure we didn't break single-line prompts

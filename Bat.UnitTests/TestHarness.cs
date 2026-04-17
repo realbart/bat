@@ -19,7 +19,10 @@ internal class TestHarness
     public TestHarness(string input = "", char drive = 'C', string[]? path = null)
     {
         Console = new TestConsole(input);
-        Context = new TestCommandContext(FileSystem);
+        Context = new TestCommandContext(FileSystem)
+        {
+            Console = Console
+        };
         Context.SetCurrentDrive(drive);
         FileSystem.AddDir(drive, []);
         if (path != null) Context.SetPath(drive, path);
@@ -31,7 +34,7 @@ internal class TestHarness
     public async Task<bool> Execute(string command, int timeoutMs = 5000)
     {
         var cmd = Parser.Parse(command);
-        var task = Dispatcher.ExecuteCommandAsync(Context, Console, cmd);
+        var task = Dispatcher.ExecuteCommandAsync(Context, cmd);
         
         if (await Task.WhenAny(task, Task.Delay(timeoutMs)) == task)
         {

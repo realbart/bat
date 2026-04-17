@@ -5,14 +5,14 @@ using System.Text;
 
 namespace Bat.Console;
 
-internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
+internal class Repl(IDispatcher dispatcher) : IRepl
 {
     private readonly LineEditor _lineEditor = new();
 
     public async Task StartAsync(IContext context)
     {
 #pragma warning disable S1116 // the code is not in the body
-        while (await dispatcher.ExecuteCommandAsync(context, console, await GetCommandAsync(context))) ;
+        while (await dispatcher.ExecuteCommandAsync(context, await GetCommandAsync(context))) ;
 #pragma warning restore S1116
     }
 
@@ -23,15 +23,14 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
             expanded = Expander.ExpandDelayedVariables(expanded, context);
         var parser = new Parser();
         parser.Append(expanded);
-        await dispatcher.ExecuteCommandAsync(context, console, parser.ParseCommand());
+        await dispatcher.ExecuteCommandAsync(context, parser.ParseCommand());
     }
 
     public async Task ExecuteBatchAsync(IContext context, string batchFilePath)
     {
         var bc = ReplBatchContext.Value;
         bc.Context = context;
-        bc.Console = console;
-        var executor = new BatchExecutor(console);
+        var executor = new BatchExecutor();
         await executor.ExecuteAsync(batchFilePath, "", bc, []);
     }
 
@@ -42,7 +41,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
         {
             var parser = new Parser();
             var prompt = "\r\n" + PromptExpander.Expand(context);
-            var line = await ReadLine(prompt, console, context);
+            var line = await ReadLine(prompt, context);
             if (line is null) continue;
 
             if (!string.IsNullOrWhiteSpace(line))
@@ -59,7 +58,7 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
             parser.Append(expanded);
             while (parser.ErrorMessage is null && parser.IsIncomplete)
             {
-                var more = await ReadLine("More? ", console, context);
+                var more = await ReadLine("More? ", context);
                 if (more is null) break;
                 var expandedMore = Expander.ExpandEnvironmentVariables(more, context);
                 if (context.DelayedExpansion)
@@ -68,19 +67,19 @@ internal class Repl(IConsole console, IDispatcher dispatcher) : IRepl
             }
             if (parser.IsIncomplete) continue;
             if (parser.ErrorMessage is null) return parser.ParseCommand();
-            await console.Error.WriteLineAsync(parser.ErrorMessage);
+            await context.Console.Error.WriteLineAsync(parser.ErrorMessage);
         } while (true);
     }
 
-    public async Task<string?> ReadLine(string prompt, IConsole console, IContext context)
+    public async Task<string?> ReadLine(string prompt, IContext context)
     {
-        if (!console.IsInteractive)
+        if (!context.Console.IsInteractive)
         {
-            await console.Out.WriteAsync(prompt);
-            return await console.In.ReadLineAsync();
+            await context.Console.Out.WriteAsync(prompt);
+            return await context.Console.In.ReadLineAsync();
         }
         _lineEditor.HistorySize = context.HistorySize;
-        return _lineEditor.ReadLine(prompt, console, context);
+        return await _lineEditor.ReadLineAsync(prompt, context);
     }
 
     private static string ExpandMacro(string line, IContext context)

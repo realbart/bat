@@ -162,7 +162,7 @@ internal class CallCommand : ICommand
         }
 
         var fileArgs = string.Join(" ", arguments.Positionals.Skip(1));
-        var executor = new BatchExecutor(bc.Console);
+        var executor = new BatchExecutor();
         return await executor.ExecuteAsync(resolvedPath, fileArgs, bc, []);
     }
 }

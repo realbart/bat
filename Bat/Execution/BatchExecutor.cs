@@ -10,7 +10,7 @@ namespace Bat.Execution;
 /// Executes batch files (.bat, .cmd) using position-based reading with
 /// GOTO/CALL support, label scanning, and SHIFT.
 /// </summary>
-internal class BatchExecutor(IConsole console) : IExecutor
+internal class BatchExecutor : IExecutor
 {
     internal const int MaxNesting = 16;
 
@@ -23,7 +23,6 @@ internal class BatchExecutor(IConsole console) : IExecutor
         var childContext = new BatchContext
         {
             Context = context,
-            Console = console,
             Parameters = CreateParameters(executablePath, ParseArguments(arguments)),
             BatchFilePath = executablePath,
             FileContent = content,
@@ -34,11 +33,20 @@ internal class BatchExecutor(IConsole console) : IExecutor
 
         if (NestingDepth(childContext) > MaxNesting)
         {
-            await console.Error.WriteLineAsync("Maximum batch nesting depth exceeded.");
+            await context.Console.Error.WriteLineAsync("Maximum batch nesting depth exceeded.");
             return 1;
         }
 
         return await ExecuteBatchLoopAsync(childContext);
+    }
+
+    public static string Expand(string line, BatchContext bc)
+    {
+        var expanded = Expander.ExpandBatchParameters(line, bc);
+        expanded = Expander.ExpandEnvironmentVariables(expanded, bc.Context);
+        // Restore EscapedPercent sentinels to literal %
+        expanded = expanded.Replace(Expander.EscapedPercent, '%');
+        return expanded;
     }
 
     internal static async Task<int> ExecuteBatchLoopAsync(BatchContext bc)

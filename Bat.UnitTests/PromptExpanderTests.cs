@@ -63,7 +63,7 @@ public class PromptExpanderTests
         var ctx = CreateContext('C', ["Users"]);
         ctx.EnvironmentVariables["PROMPT"] = "$P$_$G";
 
-        Assert.AreEqual($"C:\\Users{Environment.NewLine}>", PromptExpander.Expand(ctx));
+        Assert.AreEqual($"C:\\Users\r\n>", PromptExpander.Expand(ctx));
     }
 
     [TestMethod]

@@ -356,8 +356,8 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
     {
         unchecked
         {
-            uint hash = 2166136261;
-            foreach (char c in str)
+            var hash = 2166136261;
+            foreach (var c in str)
             {
                 hash = (hash ^ c) * 16777619;
             }

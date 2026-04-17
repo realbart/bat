@@ -8,7 +8,7 @@ namespace Bat.Tokens;
 
 public static class Program
 {
-    internal static IRepl Repl { get; } = new Repl(new Console.Console(), new Dispatcher());
+    internal static IRepl Repl { get; } = new Repl(new Dispatcher());
 
     private static readonly string BannerText =
         $"""

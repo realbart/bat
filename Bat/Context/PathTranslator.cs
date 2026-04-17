@@ -49,7 +49,7 @@ internal static class PathTranslator
         var sep = fileSystem.NativeDirectorySeparator;
         var entryNorm = hostEntry.TrimEnd(sep);
 
-        for (char drive = 'A'; drive <= 'Z'; drive++)
+        for (var drive = 'A'; drive <= 'Z'; drive++)
         {
             if (!TryGetRootForDrive(fileSystem, drive, out var nativeRoot))
                 continue;

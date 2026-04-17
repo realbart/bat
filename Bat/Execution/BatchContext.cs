@@ -10,17 +10,11 @@ internal class BatchContext
 {
     internal required IContext Context { get; set; }
 
-    private IConsole? _consoleOverride;
-
     /// <summary>
     /// Console for this execution. Defaults to Context.Console.
     /// Set to override for redirections.
     /// </summary>
-    internal IConsole Console
-    {
-        get => _consoleOverride ?? Context.Console;
-        set => _consoleOverride = value;
-    }
+    internal IConsole Console => Context.Console;
 
     public string? BatchFilePath { get; set; }
     public string? FileContent { get; set; }

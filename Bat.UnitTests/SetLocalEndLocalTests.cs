@@ -137,7 +137,7 @@ public class SetLocalEndLocalTests
         ctx.EnvironmentVariables["X"] = "before";
         var bc = new BatchContext { Context = ctx };
 
-        var executor = new BatchExecutor(console);
+        var executor = new BatchExecutor();
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
 
         Assert.AreEqual("before", ctx.EnvironmentVariables["X"]);
@@ -198,7 +198,7 @@ public class SetLocalEndLocalTests
         ctx.SetCurrentDrive('Z');
         var bc = new BatchContext { Context = ctx };
 
-        var executor = new BatchExecutor(console);
+        var executor = new BatchExecutor();
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
 
         Assert.AreEqual('Z', ctx.CurrentDrive);
@@ -217,7 +217,7 @@ public class SetLocalEndLocalTests
         ctx.SetCurrentDrive('Z');
         var bc = new BatchContext { Context = ctx };
 
-        var executor = new BatchExecutor(console);
+        var executor = new BatchExecutor();
         await executor.ExecuteAsync("Z:\\test.bat", "", bc, []);
 
         // SETLOCAL EnableExtensions works even after DisableExtensions

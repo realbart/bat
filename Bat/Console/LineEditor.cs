@@ -75,8 +75,9 @@ internal class LineEditor
     public void ClearHistory() => _history.Clear();
 
 
-    public string? ReadLine(string prompt, IConsole console, IContext? context = null)
+    public async Task<string?> ReadLineAsync(string prompt, IContext context)
     {
+        var console = context.Console;
         console.Out.Write(prompt);
         
         // Only the last line of the prompt matters for cursor positioning
@@ -89,7 +90,7 @@ internal class LineEditor
         var insertMode = true;
         SetCursorShape(console, insertMode);
         _completionCandidates = null;
-        string? template = _history.Count > 0 ? _history[^1] : null;
+        var template = _history.Count > 0 ? _history[^1] : null;
 
         while (true)
         {
@@ -106,291 +107,263 @@ internal class LineEditor
                 return line;
             }
 
-            if (key.Key == ConsoleKey.Escape)
+            if (key.Key == ConsoleKey.Tab)
             {
-                ClearLine(console, buffer, promptLength);
-                buffer.Clear();
-                cursor = 0;
+                TryComplete(console, buffer, ref cursor, promptLength, context, !key.Modifiers.HasFlag(ConsoleModifiers.Shift));
                 continue;
             }
 
-            // Ctrl+C — return null to signal cancellation
-            if (key.Key == ConsoleKey.C && key.Modifiers.HasFlag(ConsoleModifiers.Control))
+            switch (key.Key)
             {
-                console.Out.WriteLine("^C");
-                return null;
-            }
-
-            // Ctrl+Z — insert EOF marker (ascii 26)
-            if (key.Key == ConsoleKey.Z && key.Modifiers.HasFlag(ConsoleModifiers.Control))
-            {
-                InsertChar(console, buffer, ref cursor, '\x1a', insertMode, promptLength);
-                continue;
-            }
-
-            // ── History ──────────────────────────────────────────────────
-
-            if (key.Key == ConsoleKey.UpArrow)
-            {
-                if (historyIndex > 0)
-                    ReplaceBuffer(console, buffer, ref cursor, _history[--historyIndex], promptLength);
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.DownArrow)
-            {
-                if (historyIndex < _history.Count - 1)
-                    ReplaceBuffer(console, buffer, ref cursor, _history[++historyIndex], promptLength);
-                else if (historyIndex < _history.Count)
+                case ConsoleKey.Escape:
+                    ClearLine(console, buffer, promptLength);
+                    buffer.Clear();
+                    cursor = 0;
+                    continue;
+                // Ctrl+C — return null to signal cancellation
+                case ConsoleKey.C when key.Modifiers.HasFlag(ConsoleModifiers.Control):
+                    console.Out.WriteLine("^C");
+                    return null;
+                // Ctrl+Z — insert EOF marker (ascii 26)
+                case ConsoleKey.Z when key.Modifiers.HasFlag(ConsoleModifiers.Control):
+                    InsertChar(console, buffer, ref cursor, '\x1a', insertMode, promptLength);
+                    continue;
+                // ── History ──────────────────────────────────────────────────
+                case ConsoleKey.UpArrow:
                 {
-                    historyIndex = _history.Count;
-                    ReplaceBuffer(console, buffer, ref cursor, "", promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.PageUp)
-            {
-                if (_history.Count > 0)
-                {
-                    historyIndex = 0;
-                    ReplaceBuffer(console, buffer, ref cursor, _history[0], promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.PageDown)
-            {
-                if (_history.Count > 0)
-                {
-                    historyIndex = _history.Count - 1;
-                    ReplaceBuffer(console, buffer, ref cursor, _history[^1], promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F7)
-            {
-                if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
-                {
-                    ClearHistory();
-                }
-                else
-                {
-                    var selected = ShowHistoryList(console, prompt, promptLength, buffer, ref cursor);
-                    if (selected != null) return selected;
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F3)
-            {
-                if (template != null && cursor < template.Length)
-                {
-                    var tail = template[cursor..];
-                    foreach (var c in tail) buffer.Add(c);
-                    console.Out.Write(tail);
-                    cursor = buffer.Count;
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F5)
-            {
-                template = new string([.. buffer]);
-                ClearLine(console, buffer, promptLength);
-                buffer.Clear();
-                cursor = 0;
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F1)
-            {
-                if (template != null && cursor < template.Length)
-                {
-                    var c = template[cursor];
-                    InsertChar(console, buffer, ref cursor, c, insertMode, promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F2)
-            {
-                var next = console.ReadKey(intercept: true);
-                if (template != null && cursor < template.Length)
-                {
-                    var idx = template.IndexOf(next.KeyChar, cursor);
-                    if (idx > cursor)
-                    {
-                        var span = template[cursor..idx];
-                        foreach (var c in span)
-                            InsertChar(console, buffer, ref cursor, c, insertMode, promptLength);
-                    }
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F4)
-            {
-                var next = console.ReadKey(intercept: true);
-                if (template != null && cursor < template.Length)
-                {
-                    var idx = template.IndexOf(next.KeyChar, cursor);
-                    if (idx >= 0)
-                        template = template[..cursor] + template[idx..];
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F8)
-            {
-                var prefix = new string([.. buffer[..cursor]]);
-                var searchFrom = historyIndex < _history.Count ? historyIndex - 1 : _history.Count - 1;
-                for (var i = searchFrom; i >= 0; i--)
-                {
-                    if (_history[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        historyIndex = i;
-                        ReplaceBuffer(console, buffer, ref cursor, _history[i], promptLength);
-                        cursor = prefix.Length;
-                        console.CursorLeft = promptLength + cursor;
-                        break;
-                    }
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.F9)
-            {
-                var numKey = console.ReadKey(intercept: true);
-                if (numKey.Key == ConsoleKey.Enter
-                    && int.TryParse(numKey.KeyChar.ToString(), out _)) { }
-                else if (char.IsDigit(numKey.KeyChar))
-                {
-                    var sb = new List<char> { numKey.KeyChar };
-                    while (true)
-                    {
-                        var nk = console.ReadKey(intercept: true);
-                        if (nk.Key == ConsoleKey.Enter) break;
-                        if (char.IsDigit(nk.KeyChar)) sb.Add(nk.KeyChar);
-                    }
-                    if (int.TryParse(new string([.. sb]), out var idx)
-                        && idx >= 0 && idx < _history.Count)
-                    {
-                        historyIndex = idx;
-                        ReplaceBuffer(console, buffer, ref cursor, _history[idx], promptLength);
-                    }
-                }
-                continue;
-            }
-
-            // ── Navigation ───────────────────────────────────────────────
-
-            if (key.Key == ConsoleKey.LeftArrow)
-            {
-                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
-                    MoveCursorWordLeft(buffer, ref cursor);
-                else if (cursor > 0)
-                    cursor--;
-                console.CursorLeft = promptLength + cursor;
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.RightArrow)
-            {
-                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
-                    MoveCursorWordRight(buffer, ref cursor);
-                else if (cursor < buffer.Count)
-                    cursor++;
-                else if (template != null && cursor < template.Length)
-                {
-                    InsertChar(console, buffer, ref cursor, template[cursor], insertMode, promptLength);
+                    if (historyIndex > 0)
+                        ReplaceBuffer(console, buffer, ref cursor, _history[--historyIndex], promptLength);
                     continue;
                 }
-                console.CursorLeft = promptLength + cursor;
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.Home)
-            {
-                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                case ConsoleKey.DownArrow:
+                {
+                    if (historyIndex < _history.Count - 1)
+                        ReplaceBuffer(console, buffer, ref cursor, _history[++historyIndex], promptLength);
+                    else if (historyIndex < _history.Count)
+                    {
+                        historyIndex = _history.Count;
+                        ReplaceBuffer(console, buffer, ref cursor, "", promptLength);
+                    }
+                    continue;
+                }
+                case ConsoleKey.PageUp:
+                {
+                    if (_history.Count > 0)
+                    {
+                        historyIndex = 0;
+                        ReplaceBuffer(console, buffer, ref cursor, _history[0], promptLength);
+                    }
+                    continue;
+                }
+                case ConsoleKey.PageDown:
+                {
+                    if (_history.Count > 0)
+                    {
+                        historyIndex = _history.Count - 1;
+                        ReplaceBuffer(console, buffer, ref cursor, _history[^1], promptLength);
+                    }
+                    continue;
+                }
+                case ConsoleKey.F7:
+                {
+                    if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+                    {
+                        ClearHistory();
+                    }
+                    else
+                    {
+                        var selected = ShowHistoryList(console, prompt, promptLength, buffer, ref cursor);
+                        if (selected != null) return selected;
+                    }
+                    continue;
+                }
+                case ConsoleKey.F3:
+                {
+                    if (template != null && cursor < template.Length)
+                    {
+                        var tail = template[cursor..];
+                        foreach (var c in tail) buffer.Add(c);
+                        console.Out.Write(tail);
+                        cursor = buffer.Count;
+                    }
+                    continue;
+                }
+                case ConsoleKey.F5:
+                    template = new string([.. buffer]);
+                    ClearLine(console, buffer, promptLength);
+                    buffer.Clear();
+                    cursor = 0;
+                    continue;
+                case ConsoleKey.F1:
+                {
+                    if (template != null && cursor < template.Length)
+                    {
+                        InsertChar(console, buffer, ref cursor, template[cursor], insertMode, promptLength);
+                    }
+                    continue;
+                }
+                case ConsoleKey.F2:
+                {
+                    var next = console.ReadKey(intercept: true);
+                    if (template != null && cursor < template.Length)
+                    {
+                        var idx = template.IndexOf(next.KeyChar, cursor);
+                        if (idx > cursor)
+                        {
+                            var span = template[cursor..idx];
+                            foreach (var c in span)
+                                InsertChar(console, buffer, ref cursor, c, insertMode, promptLength);
+                        }
+                    }
+                    continue;
+                }
+                case ConsoleKey.F4:
+                {
+                    var next = console.ReadKey(intercept: true);
+                    if (template != null && cursor < template.Length)
+                    {
+                        var idx = template.IndexOf(next.KeyChar, cursor);
+                        if (idx >= 0)
+                            template = template[..cursor] + template[idx..];
+                    }
+                    continue;
+                }
+                case ConsoleKey.F8:
+                {
+                    var prefix = new string([.. buffer[..cursor]]);
+                    var searchFrom = historyIndex < _history.Count ? historyIndex - 1 : _history.Count - 1;
+                    for (var i = searchFrom; i >= 0; i--)
+                    {
+                        if (_history[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            historyIndex = i;
+                            ReplaceBuffer(console, buffer, ref cursor, _history[i], promptLength);
+                            cursor = prefix.Length;
+                            console.CursorLeft = promptLength + cursor;
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                case ConsoleKey.F9:
+                {
+                    var numKey = console.ReadKey(intercept: true);
+                    if (numKey.Key == ConsoleKey.Enter
+                        && int.TryParse(numKey.KeyChar.ToString(), out _)) { }
+                    else if (char.IsDigit(numKey.KeyChar))
+                    {
+                        var sb = new List<char> { numKey.KeyChar };
+                        while (true)
+                        {
+                            var nk = console.ReadKey(intercept: true);
+                            if (nk.Key == ConsoleKey.Enter) break;
+                            if (char.IsDigit(nk.KeyChar)) sb.Add(nk.KeyChar);
+                        }
+                        if (int.TryParse(new string([.. sb]), out var idx)
+                            && idx >= 0 && idx < _history.Count)
+                        {
+                            historyIndex = idx;
+                            ReplaceBuffer(console, buffer, ref cursor, _history[idx], promptLength);
+                        }
+                    }
+                    continue;
+                }
+                // ── Navigation ───────────────────────────────────────────────
+                case ConsoleKey.LeftArrow:
+                {
+                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                        MoveCursorWordLeft(buffer, ref cursor);
+                    else if (cursor > 0)
+                        cursor--;
+                    console.CursorLeft = promptLength + cursor;
+                    continue;
+                }
+                case ConsoleKey.RightArrow:
+                {
+                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                        MoveCursorWordRight(buffer, ref cursor);
+                    else if (cursor < buffer.Count)
+                        cursor++;
+                    else if (template != null && cursor < template.Length)
+                    {
+                        InsertChar(console, buffer, ref cursor, template[cursor], insertMode, promptLength);
+                        continue;
+                    }
+                    console.CursorLeft = promptLength + cursor;
+                    continue;
+                }
+                case ConsoleKey.Home:
+                {
+                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                    {
+                        if (cursor > 0)
+                        {
+                            buffer.RemoveRange(0, cursor);
+                            cursor = 0;
+                            console.CursorLeft = promptLength;
+                            console.Out.Write(new string([.. buffer]) + " ");
+                            console.CursorLeft = promptLength;
+                        }
+                    }
+                    else
+                    {
+                        cursor = 0;
+                    }
+                    console.CursorLeft = promptLength + cursor;
+                    continue;
+                }
+                case ConsoleKey.End:
+                {
+                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                    {
+                        if (cursor < buffer.Count)
+                        {
+                            var eraseCount = buffer.Count - cursor;
+                            buffer.RemoveRange(cursor, eraseCount);
+                            console.CursorLeft = promptLength + cursor;
+                            console.Out.Write(new string(' ', eraseCount));
+                            console.CursorLeft = promptLength + cursor;
+                        }
+                    }
+                    else
+                    {
+                        cursor = buffer.Count;
+                        console.CursorLeft = promptLength + cursor;
+                    }
+                    continue;
+                }
+                // ── Editing ──────────────────────────────────────────────────
+                case ConsoleKey.Backspace:
                 {
                     if (cursor > 0)
                     {
-                        buffer.RemoveRange(0, cursor);
-                        cursor = 0;
-                        console.CursorLeft = promptLength;
-                        console.Out.Write(new string([.. buffer]) + " ");
-                        console.CursorLeft = promptLength;
+                        cursor--;
+                        buffer.RemoveAt(cursor);
+                        RedrawFromCursor(console, buffer, cursor, promptLength);
                     }
+                    continue;
                 }
-                else
-                {
-                    cursor = 0;
-                }
-                console.CursorLeft = promptLength + cursor;
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.End)
-            {
-                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                case ConsoleKey.Delete:
                 {
                     if (cursor < buffer.Count)
                     {
-                        var eraseCount = buffer.Count - cursor;
-                        buffer.RemoveRange(cursor, eraseCount);
-                        console.CursorLeft = promptLength + cursor;
-                        console.Out.Write(new string(' ', eraseCount));
-                        console.CursorLeft = promptLength + cursor;
+                        buffer.RemoveAt(cursor);
+                        RedrawFromCursor(console, buffer, cursor, promptLength);
                     }
+                    continue;
                 }
-                else
+                case ConsoleKey.Insert:
+                    insertMode = !insertMode;
+                    SetCursorShape(console, insertMode);
+                    continue;
+                // ── Tab completion ───────────────────────────────────────────
+                case ConsoleKey.Tab:
                 {
-                    cursor = buffer.Count;
-                    console.CursorLeft = promptLength + cursor;
+                    if (context != null)
+                        TryComplete(console, buffer, ref cursor, promptLength, context,
+                            forward: !key.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                    continue;
                 }
-                continue;
-            }
-
-            // ── Editing ──────────────────────────────────────────────────
-
-            if (key.Key == ConsoleKey.Backspace)
-            {
-                if (cursor > 0)
-                {
-                    cursor--;
-                    buffer.RemoveAt(cursor);
-                    RedrawFromCursor(console, buffer, cursor, promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.Delete)
-            {
-                if (cursor < buffer.Count)
-                {
-                    buffer.RemoveAt(cursor);
-                    RedrawFromCursor(console, buffer, cursor, promptLength);
-                }
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.Insert)
-            {
-                insertMode = !insertMode;
-                SetCursorShape(console, insertMode);
-                continue;
-            }
-
-            // ── Tab completion ───────────────────────────────────────────
-
-            if (key.Key == ConsoleKey.Tab)
-            {
-                if (context != null)
-                    TryComplete(console, buffer, ref cursor, promptLength, context,
-                        forward: !key.Modifiers.HasFlag(ConsoleModifiers.Shift));
-                continue;
             }
 
             // ── Printable character ──────────────────────────────────────
@@ -492,11 +465,19 @@ internal class LineEditor
         if (partial.Length == 0) return;
 
         var (drive, dir, prefix) = ParseCompletionArg(partial, context);
-        var candidates = context.FileSystem
+        var entries = context.FileSystem
             .EnumerateEntries(drive, dir, prefix + "*")
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(e => partial[..^prefix.Length] + e.Name)
             .ToList();
+
+        var candidates = new List<string>();
+        foreach (var entry in entries)
+        {
+            // CMD completion:
+            // if partial was "C:\Win\Sy", prefix was "Sy", we want "C:\Win\System32"
+            // partial[..^prefix.Length] is "C:\Win\"
+            candidates.Add(partial[..^prefix.Length] + entry.Name);
+        }
 
         if (candidates.Count == 0) return;
 
@@ -510,13 +491,24 @@ internal class LineEditor
     {
         var completion = _completionCandidates![_completionIndex];
         var oldWordLength = cursor - _completionWordStart;
+        var diff = oldWordLength - completion.Length;
+
         buffer.RemoveRange(_completionWordStart, oldWordLength);
         buffer.InsertRange(_completionWordStart, completion);
         cursor = _completionWordStart + completion.Length;
+
         console.CursorLeft = promptLength + _completionWordStart;
         var tail = new string([.. buffer[_completionWordStart..]]);
-        console.Out.Write(tail + new string(' ', Math.Max(0, oldWordLength - completion.Length)));
-        console.CursorLeft = promptLength + cursor;
+        if (diff > 0)
+        {
+            console.Out.Write(tail + new string(' ', diff));
+            console.CursorLeft = promptLength + cursor;
+        }
+        else
+        {
+            console.Out.Write(tail);
+            console.CursorLeft = promptLength + cursor;
+        }
     }
 
     /// <summary>
@@ -540,7 +532,9 @@ internal class LineEditor
 
         var lastSep = rest.LastIndexOf('\\');
         if (lastSep < 0)
+        {
             return (drive, context.GetPathForDrive(drive), rest);
+        }
 
         var dirStr = rest[..lastSep];
         var prefix = rest[(lastSep + 1)..];

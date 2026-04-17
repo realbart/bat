@@ -20,7 +20,7 @@ internal class TestConsole(string input = "") : IConsole
 
     public void EnqueueKey(ConsoleKeyInfo key) => _keys.Enqueue(key);
     public ConsoleKeyInfo ReadKey(bool intercept) =>
-        _keys.Count > 0 ? _keys.Dequeue() : new ConsoleKeyInfo('\0', ConsoleKey.NoName, false, false, false);
+        _keys.TryDequeue(out var key) ? key : new ConsoleKeyInfo('\0', ConsoleKey.NoName, false, false, false);
 
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);

@@ -11,7 +11,7 @@ public static class NormalizedFileCulture
         var dateTimeFormat = culture.DateTimeFormat;
 
         // 1. Normaliseer datum: d -> dd, M -> MM voor voorloopnullen
-        string datePattern = dateTimeFormat.ShortDatePattern;
+        var datePattern = dateTimeFormat.ShortDatePattern;
         if (datePattern.Contains('d') && !datePattern.Contains("dd"))
             datePattern = datePattern.Replace("d", "dd");
         if (datePattern.Contains('M') && !datePattern.Contains("MM"))
