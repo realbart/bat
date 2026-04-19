@@ -24,6 +24,6 @@ internal static class UnescapeUtility
             buffer[writePos++] = ch;
         }
 
-        return new string(buffer[..writePos]);
+        return new(buffer[..writePos]);
     }
 }

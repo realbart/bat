@@ -6,8 +6,8 @@ public interface IContext
     char CurrentDrive { get; }
     string[] CurrentPath { get; }
     string CurrentPathDisplayName { get; }
-    Dictionary<string, string> EnvironmentVariables { get; }
-    Dictionary<string, string> Macros { get; }
+    IDictionary<string, string> EnvironmentVariables { get; }
+    IDictionary<string, string> Macros { get; }
     List<string> CommandHistory { get; }
     int HistorySize { get; set; }
     int ErrorCode { get; set; }
@@ -29,6 +29,7 @@ public interface IContext
     (bool Found, string NativePath) TryGetCurrentFolder();
     IReadOnlyDictionary<char, string[]> GetAllDrivePaths();
     void RestoreAllDrivePaths(Dictionary<char, string[]> paths);
+    void ApplySnapshot(IContext other);
 
     /// <summary>
     /// Creates a new execution context for a command.

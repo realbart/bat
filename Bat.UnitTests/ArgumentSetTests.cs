@@ -8,7 +8,7 @@ namespace Bat.UnitTests;
 public class ArgumentSetTests
 {
     private static ArgumentSpec Spec(string flags = "", string options = "") =>
-        ArgumentSpec.From([new BuiltInCommandAttribute("test") { Flags = flags, Options = options }]);
+        ArgumentSpec.From([new("test") { Flags = flags, Options = options }]);
 
     private static IToken T(string s) =>
         s.StartsWith('"') && s.EndsWith('"') ? Token.QuotedText(s) : Token.Text(s);

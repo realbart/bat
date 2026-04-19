@@ -43,9 +43,9 @@ internal class Parser()
     /// </summary>
     internal ParsedCommand ParseCommand()
     {
-        if (ErrorMessage != null) return new ParsedCommand(new SimpleCommandNode(_tokenSet), ErrorMessage, _tokenSet);
+        if (ErrorMessage != null) return new(new SimpleCommandNode(_tokenSet), ErrorMessage, _tokenSet);
 
-        if (IsIncomplete) return new ParsedCommand(new IncompleteNode(_tokenSet), null, _tokenSet);
+        if (IsIncomplete) return new(new IncompleteNode(_tokenSet), null, _tokenSet);
 
         var reader = new ParseReader(_tokenSet);
         reader.SkipInert();
@@ -58,8 +58,8 @@ internal class Parser()
             reader.ParseError ??= $"Unexpected token: {reader.Current!.Raw}";
 
         if (reader.ParseError != null)
-            return new ParsedCommand(new SimpleCommandNode(_tokenSet), reader.ParseError, _tokenSet);
+            return new(new SimpleCommandNode(_tokenSet), reader.ParseError, _tokenSet);
 
-        return new ParsedCommand(node ?? EmptyCommandNode.Instance, null, _tokenSet);
+        return new(node ?? EmptyCommandNode.Instance, null, _tokenSet);
     }
 }

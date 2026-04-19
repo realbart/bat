@@ -8,7 +8,7 @@ internal static partial class ContextFactory
     public static bool IsWindows => false;
 
     public static IContext CreateContext() =>
-        CreateContext(new Dictionary<char, string> { ['Z'] = "/" });
+        CreateContext(new() { ['Z'] = "/" });
 
     public static IContext CreateContext(Dictionary<char, string> driveMappings)
     {

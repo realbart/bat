@@ -84,7 +84,7 @@ internal sealed class ArgumentSet : IArgumentSet
 
         // /? anywhere → help request
         if (words.Any(w => w == "/?" || w == "-?"))
-            return new ArgumentSet(fullArgument, [], true,
+            return new(fullArgument, [], true,
                 FrozenSet<string>.Empty, FrozenSet<string>.Empty, FrozenDictionary<string, string[]>.Empty);
 
         var flags = new HashSet<string>();
@@ -174,7 +174,7 @@ internal sealed class ArgumentSet : IArgumentSet
                         if (spec.Flags.Count == 0 && spec.Options.Count == 0)
                             flags.Add(switchName);
                         else
-                            return new ArgumentSet(
+                            return new(
                                 fullArgument,
                                 [],
                                 isHelpRequest: false,
@@ -197,7 +197,7 @@ internal sealed class ArgumentSet : IArgumentSet
             }
         }
 
-        return new ArgumentSet(
+        return new(
             fullArgument,
             positionals.ToArray(),
             isHelpRequest: false,

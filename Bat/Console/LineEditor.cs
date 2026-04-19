@@ -189,7 +189,7 @@ internal class LineEditor
                     continue;
                 }
                 case ConsoleKey.F5:
-                    template = new string([.. buffer]);
+                    template = new([.. buffer]);
                     ClearLine(console, buffer, promptLength);
                     buffer.Clear();
                     cursor = 0;

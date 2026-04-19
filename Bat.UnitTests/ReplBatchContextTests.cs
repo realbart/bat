@@ -70,7 +70,7 @@ public class ReplBatchContextTests
         var testLine = "echo test";
 
         // Act
-        ReplBatchContext.UpdateLine(testLine);
+        ReplBatchContext.Value.FileContent = testLine;
         var bc = ReplBatchContext.Value;
 
         // Assert

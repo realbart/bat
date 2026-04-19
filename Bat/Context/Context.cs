@@ -2,16 +2,48 @@
 
 namespace Bat.Context;
 
-internal abstract class Context(IFileSystem fileSystem, IConsole console) : IContext
+internal abstract class Context : IContext
 {
-    public IConsole Console { get; private set; } = console;
+    public Context(IFileSystem fileSystem, IConsole console)
+    {
+        _environmentVariables = new(StringComparer.OrdinalIgnoreCase);
+        _macros = new(StringComparer.OrdinalIgnoreCase);
+        CommandHistory = [];
+        HistorySize = 50;
+        CurrentFolders = [];
+        CurrentDrive = 'C'; // todo
+        this.fileSystem = fileSystem;
+        this.Console = console;
+    }
+
+    public Context(IFileSystem fileSystem, IConsole console, Context inner)
+    {
+        _environmentVariables = inner._environmentVariables.Clone();
+        _macros = inner._macros.Clone();
+        CommandHistory = inner.CommandHistory.ToList();
+        HistorySize = inner.HistorySize;
+        CurrentFolders = inner.CurrentFolders.Clone();
+        CurrentDrive = inner.CurrentDrive;
+        this.fileSystem = fileSystem;
+        this.Console = console;
+        ErrorCode = inner.ErrorCode;
+    }
+
+
+    private IFileSystem fileSystem;
+    public IConsole Console { get; }
     public int ErrorCode { get; set; } = 0;
-    public Dictionary<string, string> EnvironmentVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public List<string> CommandHistory { get; } = [];
-    public int HistorySize { get; set; } = 50;
-    protected readonly Dictionary<char, string[]> CurrentFolders = [];
-    public char CurrentDrive { get; protected set; } = 'C';
+
+    private readonly ClonableDictionary<string, string> _environmentVariables;
+    public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
+    private readonly ClonableDictionary<string, string> _macros;
+    public IDictionary<string, string> Macros => _macros;
+    public List<string> CommandHistory { get; }
+    public int HistorySize { get; set; }
+
+    protected readonly ClonableDictionary<char, string[]> CurrentFolders;
+    public char CurrentDrive { get; protected set; }
+
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
     public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
     public IFileSystem FileSystem => fileSystem;
@@ -23,8 +55,10 @@ internal abstract class Context(IFileSystem fileSystem, IConsole console) : ICon
     public bool EchoEnabled { get; set; } = true;
     public bool DelayedExpansion { get; set; } = false;
     public bool ExtensionsEnabled { get; set; } = true;
-    public string PromptFormat { get; set; } = "$P$G";  // Default: C:\path>
-    public System.Globalization.CultureInfo FileCulture { get; } = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture);
+    public string PromptFormat { get; set; } = "$P$G"; // Default: C:\path>
+
+    public System.Globalization.CultureInfo FileCulture { get; } =
+        NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture);
 
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
@@ -40,6 +74,22 @@ internal abstract class Context(IFileSystem fileSystem, IConsole console) : ICon
         CurrentFolders.Clear();
         foreach (var kv in paths)
             CurrentFolders[kv.Key] = kv.Value.ToArray();
+    }
+
+    public void ApplySnapshot(IContext other)
+    {
+        if (other is Context otherCtx)
+        {
+            _environmentVariables.ApplySnapshot(otherCtx._environmentVariables);
+            _macros.ApplySnapshot(otherCtx._macros);
+            CurrentFolders.ApplySnapshot(otherCtx.CurrentFolders);
+            CurrentDrive = otherCtx.CurrentDrive;
+            ErrorCode = otherCtx.ErrorCode;
+            EchoEnabled = otherCtx.EchoEnabled;
+            DelayedExpansion = otherCtx.DelayedExpansion;
+            ExtensionsEnabled = otherCtx.ExtensionsEnabled;
+            PromptFormat = otherCtx.PromptFormat;
+        }
     }
 
     public (bool Found, string NativePath) TryGetCurrentFolder()
@@ -71,13 +121,17 @@ internal abstract class Context(IFileSystem fileSystem, IConsole console) : ICon
     /// Override in platform subclasses to translate OS-native paths in environment variables
     /// to BAT virtual drive paths after the base environment has been loaded.
     /// </summary>
-    protected virtual void PostProcessEnvironmentVariables() { }
+    protected virtual void PostProcessEnvironmentVariables()
+    {
+    }
 
     /// <summary>
     /// Platform-specific: map the process working directory into drive + path.
     /// Override in platform subclasses.
     /// </summary>
-    protected virtual void InitializeCurrentDirectory() { }
+    protected virtual void InitializeCurrentDirectory()
+    {
+    }
 
     public abstract IContext StartNew(IConsole? console = null);
 

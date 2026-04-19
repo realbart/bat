@@ -16,7 +16,7 @@ internal class BatchExecutor : IExecutor
 
     public async Task<int> ExecuteAsync(string executablePath, string arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        var context = batchContext.Context;
+        var context = batchContext.Context.StartNew();
         var (drive, path) = ParseNativePath(executablePath);
         var content = context.FileSystem.ReadAllText(drive, path);
 
@@ -37,7 +37,18 @@ internal class BatchExecutor : IExecutor
             return 1;
         }
 
-        return await ExecuteBatchLoopAsync(childContext);
+        var result = await ExecuteBatchLoopAsync(childContext);
+        
+        // Propagate changes back to the parent context
+        batchContext.Context.ApplySnapshot(context);
+        
+        // After batch file exit, if it was called from REPL, ensure its SetLocal stack is cleared
+        if (batchContext.IsReplMode)
+        {
+            EndLocalCommand.UnwindSetLocalStack(childContext);
+        }
+        
+        return result;
     }
 
     public static string Expand(string line, BatchContext bc)
@@ -78,6 +89,7 @@ internal class BatchExecutor : IExecutor
             var parser = new Parser();
             parser.Append(expanded);
             var result = parser.ParseCommand();
+            if (result.Root is EmptyCommandNode) continue;
 
             if (result.HasError)
             {
@@ -148,13 +160,13 @@ internal class BatchExecutor : IExecutor
         return line;
     }
 
-    private static int NestingDepth(BatchContext bc)
+    internal static int NestingDepth(BatchContext bc)
     {
         var depth = 0;
         var current = bc;
         while (current != null)
         {
-            depth++;
+            if (current.BatchFilePath != null) depth++;
             current = current.Prev;
         }
         return depth;

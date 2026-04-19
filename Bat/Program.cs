@@ -75,7 +75,7 @@ public static class Program
             var lines = descText.Split('\n');
             sb.AppendLine($"  {syntaxPart}{lines[0]}");
             for (var i = 1; i < lines.Length; i++)
-                sb.AppendLine($"  {new string(' ', maxSyntaxLen + 2)}{lines[i]}");
+                sb.AppendLine($"  {new(' ', maxSyntaxLen + 2)}{lines[i]}");
         }
 
         sb.AppendLine();

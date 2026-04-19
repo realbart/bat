@@ -9,7 +9,7 @@ internal static class LineEditorExtensions
         editor.ReadLineAsync(prompt, new TestContext(console)).GetAwaiter().GetResult();
 
     public static string? ReadLine(this LineEditor editor, string prompt, TestConsole console, IContext context) =>
-        editor.ReadLineAsync(prompt, context).GetAwaiter().GetResult();
+        editor.ReadLineAsync(prompt, context.StartNew(console)).GetAwaiter().GetResult();
 }
 
 internal class TestContext : Context.Context

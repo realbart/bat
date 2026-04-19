@@ -14,7 +14,7 @@ public class BatchExecutorTests
         var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         var bc = new BatchContext { Context = ctx };
-        return (new BatchExecutor(), console, ctx, bc);
+        return (new(), console, ctx, bc);
     }
 
     [TestMethod]

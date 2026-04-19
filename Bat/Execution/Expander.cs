@@ -51,7 +51,9 @@ internal static class Expander
 
         if (char.IsDigit(line[i + 1]))
         {
-            var adjustedIndex = (line[i + 1] - '0') + bc.ShiftOffset;
+            var parameterIndex = (line[i + 1] - '0');
+            var adjustedIndex = parameterIndex == 0 ? 0 : parameterIndex + bc.ShiftOffset;
+            
             if (adjustedIndex >= 0 && adjustedIndex < bc.Parameters.Length)
             {
                 // null parameter expands to empty string (CMD behaviour)

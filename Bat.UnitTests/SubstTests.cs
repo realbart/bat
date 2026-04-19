@@ -26,7 +26,7 @@ public class SubstFileSystemTests
     {
         _testRoot = Path.Combine(Path.GetTempPath(), $"BatSubstFsTest_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
-        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot, ['C'] = @"C:\" });
+        _fs = new(new() { ['Z'] = _testRoot, ['C'] = @"C:\" });
     }
 
     protected virtual void Dispose(bool disposing)
@@ -159,7 +159,7 @@ public class SubstFileSystemTests
     public void GetVolumeSerialNumber_SubstToRoot_SameAsUnderlyingDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new Dictionary<char, string>());
+        var fs = new DosFileSystem(new());
         fs.AddSubst('Q', @"C:\");
         Assert.AreEqual(fs.GetVolumeSerialNumber('C'), fs.GetVolumeSerialNumber('Q'));
     }
@@ -168,7 +168,7 @@ public class SubstFileSystemTests
     public void GetVolumeSerialNumber_SubstToSubdir_DifferentFromDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new Dictionary<char, string>());
+        var fs = new DosFileSystem(new());
         fs.AddSubst('Q', Path.GetTempPath().TrimEnd('\\'));
         Assert.AreNotEqual(fs.GetVolumeSerialNumber('C'), fs.GetVolumeSerialNumber('Q'));
     }
@@ -211,7 +211,7 @@ public class SubstProgramTests
         var ctx = new TestCommandContext(fs);
         ctx.SetCurrentDrive(drive);
         ctx.SetPath(drive, []);
-        return (ctx, fs, new StringWriter());
+        return (ctx, fs, new());
     }
 
     // ── List ─────────────────────────────────────────────────────────────────

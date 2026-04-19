@@ -16,8 +16,8 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public string[] CurrentPath => _paths.TryGetValue(CurrentDrive, out var p) ? p : [];
     public string CurrentPathDisplayName =>
         CurrentPath.Length == 0 ? $"{CurrentDrive}:\\" : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
-    public Dictionary<string, string> EnvironmentVariables { get; } = [];
-    public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>();
+    public IDictionary<string, string> Macros { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public List<string> CommandHistory { get; } = [];
     public int HistorySize { get; set; } = 50;
     public int ErrorCode { get; set; }
@@ -39,6 +39,25 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         _paths.Clear();
         foreach (var kv in paths)
             _paths[kv.Key] = kv.Value.ToArray();
+    }
+
+    public void ApplySnapshot(IContext other)
+    {
+        if (other is TestCommandContext otherCtx)
+        {
+            EnvironmentVariables.Clear();
+            foreach (var kv in otherCtx.EnvironmentVariables) EnvironmentVariables[kv.Key] = kv.Value;
+            Macros.Clear();
+            foreach (var kv in otherCtx.Macros) Macros[kv.Key] = kv.Value;
+            _paths.Clear();
+            foreach (var kv in otherCtx._paths) _paths[kv.Key] = kv.Value.ToArray();
+            CurrentDrive = otherCtx.CurrentDrive;
+            ErrorCode = otherCtx.ErrorCode;
+            EchoEnabled = otherCtx.EchoEnabled;
+            DelayedExpansion = otherCtx.DelayedExpansion;
+            ExtensionsEnabled = otherCtx.ExtensionsEnabled;
+            PromptFormat = otherCtx.PromptFormat;
+        }
     }
 
     public (bool Found, string NativePath) TryGetCurrentFolder()
@@ -104,7 +123,7 @@ public class TestFileSystem : IFileSystem
         var key = Key(drive, dir);
         if (!_contents.TryGetValue(key, out var list))
             _contents[key] = list = [];
-        list.Add((name, isDir, size, date == default ? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Local) : date, attrs, owner));
+        list.Add((name, isDir, size, date == default ? new(2026, 1, 1, 0, 0, 0, DateTimeKind.Local) : date, attrs, owner));
     }
 
     public void SetShortName(char drive, string[] path, string shortName)
@@ -141,7 +160,7 @@ public class TestFileSystem : IFileSystem
             {
                 if (!GlobMatch(e.Name, pattern)) continue;
                 var shortName = _shortNames.TryGetValue(Key(drive, [.. path, e.Name]), out var sn) ? sn : "";
-                yield return new DosFileEntry(e.Name, e.IsDir, shortName, e.Size, e.Date, e.Attrs, e.Owner ?? "");
+                yield return new(e.Name, e.IsDir, shortName, e.Size, e.Date, e.Attrs, e.Owner ?? "");
                 yieldedNames.Add(e.Name);
             }
         }
@@ -154,7 +173,7 @@ public class TestFileSystem : IFileSystem
             var remainder = dirKey[prefix.Length..];
             if (remainder.Length == 0 || remainder.Contains('\\')) continue;
             if (!yieldedNames.Contains(remainder) && GlobMatch(remainder, pattern))
-                yield return new DosFileEntry(remainder, true, "", 0, DateTime.MinValue, FileAttributes.Directory, "");
+                yield return new(remainder, true, "", 0, DateTime.MinValue, FileAttributes.Directory, "");
         }
     }
 

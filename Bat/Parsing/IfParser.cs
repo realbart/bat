@@ -111,6 +111,6 @@ internal static class IfParser
             reader.Pos -= wsAfterThen.Count;
         }
 
-        return new IfCommandNode(flags, op, leftArg, rightArg, thenBranch, elseBranch, outerRedirs);
+        return new(flags, op, leftArg, rightArg, thenBranch, elseBranch, outerRedirs);
     }
 }

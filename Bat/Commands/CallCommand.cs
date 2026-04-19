@@ -107,39 +107,55 @@ internal class CallCommand : ICommand
             return 1;
         }
 
-        // Save current position as return address
-        var savedPosition = bc.FilePosition;
-        var savedLineNumber = bc.LineNumber;
-
-        // Build subroutine parameters from remaining positionals
+        // Build subroutine parameters
         var subParams = new string?[10];
         subParams[0] = bc.Parameters[0]; // Keep %0 as the batch file name
-        for (var i = 1; i < arguments.Positionals.Count && i < 10; i++)
-            subParams[i] = arguments.Positionals[i];
-
-        var savedParams = bc.Parameters;
-        var savedShift = bc.ShiftOffset;
-        bc.Parameters = subParams;
-        bc.ShiftOffset = 0;
-
-        // Jump to label (or EOF)
-        if (label.Equals("eof", StringComparison.OrdinalIgnoreCase))
+        
+        if (arguments.Positionals.Count > 1)
         {
-            bc.FilePosition = bc.FileContent.Length;
+            // If args provided: CALL :label arg1 arg2 ...
+            // Subroutine arguments start at Positionals[1]
+            for (var i = 1; i < arguments.Positionals.Count && i < 10; i++)
+                subParams[i] = arguments.Positionals[i];
         }
         else
         {
-            bc.FilePosition = bc.LabelPositions[label];
+            // If NO args provided: CALL :label
+            // Subroutines also inherit parameters in CMD if none provided to CALL
+            for (var i = 1; i < 10; i++)
+                subParams[i] = bc.Parameters[i];
         }
 
-        // Execute from the label position
-        await BatchExecutor.ExecuteBatchLoopAsync(bc);
+        // Jump to label (or EOF)
+        int targetPosition;
+        if (label.Equals("eof", StringComparison.OrdinalIgnoreCase))
+        {
+            targetPosition = bc.FileContent.Length;
+        }
+        else
+        {
+            targetPosition = bc.LabelPositions[label];
+        }
 
-        // Restore state
-        bc.FilePosition = savedPosition;
-        bc.LineNumber = savedLineNumber;
-        bc.Parameters = savedParams;
-        bc.ShiftOffset = savedShift;
+        // Execute from the label position in a NEW context
+        var childBc = new BatchContext
+        {
+            Context = bc.Context,
+            Parameters = subParams,
+            BatchFilePath = bc.BatchFilePath,
+            FileContent = bc.FileContent,
+            FilePosition = targetPosition,
+            LabelPositions = bc.LabelPositions,
+            Prev = bc
+        };
+
+        if (BatchExecutor.NestingDepth(childBc) > BatchExecutor.MaxNesting)
+        {
+            await bc.Console.Error.WriteLineAsync("Maximum batch nesting depth exceeded.");
+            return 1;
+        }
+
+        await BatchExecutor.ExecuteBatchLoopAsync(childBc);
 
         return bc.Context.ErrorCode;
     }

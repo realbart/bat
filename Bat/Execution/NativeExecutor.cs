@@ -29,7 +29,7 @@ internal class NativeExecutor(bool waitForExit = true, bool isGuiApp = false) : 
         if (!psi.UseShellExecute)
         {
             // TODO: Cache TranslateBatEnvironmentToHost result per environment snapshot for performance
-            foreach (var (key, value) in PathTranslator.TranslateBatEnvironmentToHost(context.EnvironmentVariables, context.FileSystem))
+            foreach (var (key, value) in PathTranslator.TranslateBatEnvironmentToHost((IReadOnlyDictionary<string, string>)context.EnvironmentVariables, context.FileSystem))
                 psi.Environment[key] = value;
         }
 

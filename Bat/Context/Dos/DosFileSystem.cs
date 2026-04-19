@@ -7,9 +7,9 @@ namespace Bat.Context.Dos;
 
 internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
 {
-    private readonly Dictionary<char, string> _roots = new Dictionary<char, string>(roots);
+    private readonly Dictionary<char, string> _roots = new(roots);
 
-    public DosFileSystem() : this(new Dictionary<char, string> { ['Z'] = @"C:\" }) { }
+    public DosFileSystem() : this(new() { ['Z'] = @"C:\" }) { }
 
     protected override string GetNativePathCore(char drive, string[] path)
     {
@@ -134,7 +134,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
                     var fullPath = Path.Combine(dirPath, data.cFileName);
                     var owner = GetFileOwner(fullPath);
 
-                    yield return new DosFileEntry(
+                    yield return new(
                         data.cFileName,
                         isDir,
                         data.cAlternateFileName ?? "",
@@ -197,7 +197,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
 
     public override Stream OpenWrite(char drive, string[] path, bool append) =>
         append
-            ? new FileStream(GetNativePath(drive, path), FileMode.Append, FileAccess.Write)
+            ? new(GetNativePath(drive, path), FileMode.Append, FileAccess.Write)
             : File.OpenWrite(GetNativePath(drive, path));
 
     public override string ReadAllText(char drive, string[] path) =>

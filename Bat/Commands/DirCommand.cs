@@ -70,7 +70,7 @@ internal class DirCommand : ICommand
         string Pattern);
 
     private static readonly ArgumentSpec _spec = ArgumentSpec.From(
-        [new BuiltInCommandAttribute("dir") { Flags = "B C D R W L S P Q N X 4", Options = "A O T" }]);
+        [new("dir") { Flags = "B C D R W L S P Q N X 4", Options = "A O T" }]);
 
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext,
         IReadOnlyList<Redirection> redirections)
@@ -402,7 +402,7 @@ internal class DirCommand : ICommand
             ? string.Concat(GetOptionValues(args, dircmd, "A"))
             : "-H-S";
 
-        return new DirOptions(
+        return new(
             BareNames: IsExplicit(args, "B") ? args.GetFlagValue("B")
                 : (!IsExplicit(args, "W") || !args.GetFlagValue("W")) && GetFlag(args, dircmd, "B"),
             WideFormat: GetFlag(args, dircmd, "W"),

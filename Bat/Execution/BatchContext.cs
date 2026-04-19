@@ -49,5 +49,6 @@ public record EnvironmentSnapshot(
     Dictionary<char, string[]> Paths,
     char CurrentDrive,
     bool DelayedExpansion,
-    bool ExtensionsEnabled
+    bool ExtensionsEnabled,
+    int ErrorCode
 );

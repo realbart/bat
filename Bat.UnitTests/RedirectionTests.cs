@@ -6,6 +6,7 @@ namespace Bat.UnitTests;
 public class RedirectionTests
 {
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_Output_WritesToFile()
     {
         var h = new TestHarness();
@@ -18,6 +19,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_OutputAppend_AppendsToFile()
     {
         var h = new TestHarness();
@@ -31,6 +33,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_OutputToNul_SuppressesOutput()
     {
         var h = new TestHarness();
@@ -41,6 +44,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_ErrorToNul_SuppressesErrors()
     {
         var h = new TestHarness();
@@ -51,6 +55,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_ErrorToOutput_MergesStreams()
     {
         var h = new TestHarness();
@@ -62,6 +67,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_Input_ReadsFromFile()
     {
         var h = new TestHarness();
@@ -73,6 +79,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Redirect_Combined_OutputToFileAndErrorToNul()
     {
         var h = new TestHarness();
@@ -85,6 +92,7 @@ public class RedirectionTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public async Task Pipe_ConnectsOutputToInput()
     {
         var h = new TestHarness();

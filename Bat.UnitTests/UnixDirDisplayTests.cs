@@ -42,7 +42,7 @@ public class UnixDirDisplayTests
         var symlinkFile = Path.Combine(_testRoot, "symlinkFile.txt");
         File.CreateSymbolicLink(symlinkFile, targetFile);
 
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
         var entries = fs.EnumerateEntries('Z', [], "*").ToList();
 
         var dirLink = entries.FirstOrDefault(e => e.Name == "symlinkDir");
@@ -76,7 +76,7 @@ public class UnixDirDisplayTests
         // We can't easily create a real mount point without sudo, 
         // but we can check if "/" is detected as <JUNCTION> if we map it.
         
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot, ['R'] = "/" });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot, ['R'] = "/" });
         var console = new TestConsole();
         var ctx = new UxContextAdapter(fs, console);
         ctx.SetCurrentDrive('Z');

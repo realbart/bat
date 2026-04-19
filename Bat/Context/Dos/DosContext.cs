@@ -7,13 +7,13 @@ internal class DosContext : Context
         InitializeFromEnvironment();
     }
 
-    private DosContext(DosFileSystem fs, global::Context.IConsole console, bool skipInit) : base(fs, console)
+    private DosContext(DosFileSystem fs, global::Context.IConsole console, DosContext inner) : base(fs, console, inner)
     {
     }
 
     public override global::Context.IContext StartNew(global::Context.IConsole? console = null)
     {
-        var newContext = new DosContext((DosFileSystem)FileSystem, console ?? Console, skipInit: true)
+        var newContext = new DosContext((DosFileSystem)FileSystem, console ?? Console, this)
         {
             CurrentDrive = this.CurrentDrive,
             ErrorCode = this.ErrorCode,

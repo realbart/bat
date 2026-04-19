@@ -19,6 +19,7 @@ internal class Dispatcher : IDispatcher
     {
         var bc = ReplBatchContext.Value;
         bc.Context = context;
+        // In REPL mode, we don't clear the stack between commands to allow setlocal/endlocal to span across lines
         var exitCode = await ExecuteNodeAsync(bc, command.Root);
         if (exitCode == ExitCommand.ExitSentinel)
             return false;
@@ -209,11 +210,20 @@ internal class Dispatcher : IDispatcher
     {
         var captured = new StringWriter();
         var prevConsole = bc.Context.Console;
-        var ctx2 = bc.Context.StartNew(prevConsole.WithOutput(captured));
-        var bctx2 = new BatchContext { Context = ctx2 };
-        await ExecuteNodeAsync(bctx2, pipe.Left);
-        bctx2.Context = bctx2.Context.StartNew(prevConsole.WithInput(new StringReader(captured.ToString())));
-        var result = await ExecuteNodeAsync(bc, pipe.Right);
+        
+        // Left side
+        var ctxL = bc.Context.StartNew(prevConsole.WithOutput(captured));
+        var bctxL = new BatchContext { Context = ctxL };
+        await ExecuteNodeAsync(bctxL, pipe.Left);
+        bc.Context.ApplySnapshot(ctxL);
+        bc.Context.ErrorCode = ctxL.ErrorCode;
+
+        // Right side
+        var input = captured.ToString();
+        var ctxR = bc.Context.StartNew(prevConsole.WithInput(new StringReader(input)));
+        var bctxR = new BatchContext { Context = ctxR };
+        var result = await ExecuteNodeAsync(bctxR, pipe.Right);
+        bc.Context.ApplySnapshot(ctxR);
         return result;
     }
 
@@ -223,11 +233,15 @@ internal class Dispatcher : IDispatcher
         // (using a new BatchContext copy for each redirection)
         if (redirections.Count == 0) return await action();
         var prevContext = bc.Context;
-        using var rh = RedirectionHandler.Apply(redirections, bc.Context, bc.Console);
-        bc.Context = bc.Context.StartNew(rh.Console);
+        var newContext = bc.Context.StartNew();
+        using var rh = RedirectionHandler.Apply(redirections, newContext, bc.Console);
+        newContext = newContext.StartNew(rh.Console);
+        bc.Context = newContext;
         try
         {
-            return await action();
+            var result = await action();
+            prevContext.ApplySnapshot(newContext);
+            return result;
         }
         finally
         {
@@ -295,8 +309,8 @@ internal class Dispatcher : IDispatcher
 
         return peType switch
         {
-            ExecutableType.DotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false)),
-            ExecutableType.PrefixedDotNetAssembly => new DotNetLibraryExecutor(new NativeExecutor(waitForExit: true, isGuiApp: false), isPrefixed: true),
+            ExecutableType.DotNetAssembly => new DotNetLibraryExecutor(new(waitForExit: true, isGuiApp: false)),
+            ExecutableType.PrefixedDotNetAssembly => new DotNetLibraryExecutor(new(waitForExit: true, isGuiApp: false), isPrefixed: true),
             ExecutableType.WindowsGui => new NativeExecutor(waitForExit: false, isGuiApp: true),
             ExecutableType.WindowsConsole => new NativeExecutor(waitForExit: true, isGuiApp: false),
             ExecutableType.Document => new NativeExecutor(waitForExit: false, isGuiApp: true),

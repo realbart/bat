@@ -13,7 +13,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         [".exe"] = "exefile"
     };
 
-    public UxFileSystemAdapter() : this(new Dictionary<char, string> { ['Z'] = "/" }, UnixFileOwner.GetOwner) { }
+    public UxFileSystemAdapter() : this(new() { ['Z'] = "/" }, UnixFileOwner.GetOwner) { }
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
 
@@ -173,7 +173,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             }
 
             _shortNameCache.TryGetValue(entry, out var shortName);
-            yield return new DosFileEntry(
+            yield return new(
                 name,
                 isDir,
                 shortName ?? "",
@@ -217,7 +217,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
     {
         var native = GetNativePath(drive, path);
         return append
-            ? new FileStream(native, FileMode.Append, FileAccess.Write)
+            ? new(native, FileMode.Append, FileAccess.Write)
             : File.OpenWrite(native);
     }
 
@@ -333,7 +333,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         {
             var uuid = GetUuidForDevice(device);
             var stableId = uuid ?? device;
-            info = new VolumeInfo
+            info = new()
             {
                 Label = uuid != null ? $"UUID_{uuid[..8].ToUpperInvariant()}" : "UNIX_DISK",
                 SerialNumber = GetStableHashCode(stableId)
@@ -341,7 +341,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         }
         else
         {
-            info = new VolumeInfo
+            info = new()
             {
                 Label = "",
                 SerialNumber = GetStableHashCode(fullPath)

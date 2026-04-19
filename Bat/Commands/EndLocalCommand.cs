@@ -45,6 +45,7 @@ internal class EndLocalCommand : ICommand
         ctx.SetCurrentDrive(snapshot.CurrentDrive);
         ctx.DelayedExpansion = snapshot.DelayedExpansion;
         ctx.ExtensionsEnabled = snapshot.ExtensionsEnabled;
+        ctx.ErrorCode = snapshot.ErrorCode;
     }
 
     internal static void UnwindSetLocalStack(BatchContext batchContext)

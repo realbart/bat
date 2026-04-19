@@ -43,7 +43,7 @@ internal class ParsedCommand(ICommandNode root, string? errorMessage = null, IRe
                 }
             }
             if (currentLine.Count > 0)
-                yield return new Line(currentLine);
+                yield return new(currentLine);
         }
     }
 

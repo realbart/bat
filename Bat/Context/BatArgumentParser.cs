@@ -53,7 +53,7 @@ internal class BatArgumentParser(char directorySeparator)
                 ref batchFile, ref colorSpec, ref driveMappings, args, ref i);
         }
 
-        return new BatArguments
+        return new()
         {
             Mode = _mode,
             ExitBehavior = exitBehavior,

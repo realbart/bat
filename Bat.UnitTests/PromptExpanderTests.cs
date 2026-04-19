@@ -24,8 +24,8 @@ public class PromptExpanderTests
             CurrentPath.Length == 0
                 ? $"{CurrentDrive}:\\"
                 : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
-        public Dictionary<string, string> EnvironmentVariables { get; } = [];
-        public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>();
+        public IDictionary<string, string> Macros { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public List<string> CommandHistory { get; } = [];
         public int HistorySize { get; set; } = 50;
         public int ErrorCode { get; set; }
@@ -43,12 +43,14 @@ public class PromptExpanderTests
         public IReadOnlyDictionary<char, string[]> GetAllDrivePaths() => new Dictionary<char, string[]>();
         public void RestoreAllDrivePaths(Dictionary<char, string[]> paths) { }
         public (bool Found, string NativePath) TryGetCurrentFolder() => (false, "");
+        public void ApplySnapshot(IContext other) { }
         public IContext StartNew(IConsole? console = null) => this;
     }
 
     // ── tests ────────────────────────────────────────────────────────────────
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_DefaultPG_ShowsPathAndGT()
     {
         var ctx = CreateContext('C', ["Users", "Bart"]);
@@ -58,6 +60,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_Multiline_Works()
     {
         var ctx = CreateContext('C', ["Users"]);
@@ -67,6 +70,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_DriveOnly()
     {
         var ctx = CreateContext('D', ["Projects"]);
@@ -76,6 +80,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_DateTime_Works()
     {
         var ctx = CreateContext();
@@ -84,10 +89,11 @@ public class PromptExpanderTests
         var prompt = PromptExpander.Expand(ctx);
 
         // Date separator is locale-dependent (/ on en-US, . on nl-NL, etc.) — accept any non-digit
-        StringAssert.Matches(prompt, new System.Text.RegularExpressions.Regex(@"^\S+ \d{2}.\d{2}.\d{4} \d{2}:\d{2}:\d{2}\.\d{2}$"));
+        StringAssert.Matches(prompt, new(@"^\S+ \d{2}.\d{2}.\d{4} \d{2}:\d{2}:\d{2}\.\d{2}$"));
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_PushDepth_ShowsPlusses()
     {
         var ctx = CreateContext();
@@ -99,6 +105,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_PushDepthZero_ShowsNoPlus()
     {
         var ctx = CreateContext();
@@ -108,6 +115,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_EscapedDollar()
     {
         var ctx = CreateContext();
@@ -117,6 +125,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_UnknownCode_RemainsLiteral()
     {
         var ctx = CreateContext('C', []);
@@ -126,6 +135,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_NoPromptVariable_UsesDefault()
     {
         var ctx = CreateContext('C', []);
@@ -135,6 +145,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_LiteralText_PassesThrough()
     {
         var ctx = CreateContext();
@@ -144,6 +155,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_AllSingleCharSymbols()
     {
         var ctx = CreateContext();
@@ -153,6 +165,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_TrailingDollarIsLiteral()
     {
         var ctx = CreateContext();
@@ -162,6 +175,7 @@ public class PromptExpanderTests
     }
 
     [TestMethod]
+    [Timeout(4000)]
     public void Expand_EmptyPromptVariable_UsesDefault()
     {
         var ctx = CreateContext('C', []);

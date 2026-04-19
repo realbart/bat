@@ -29,7 +29,7 @@ internal static class RedirectionParser
 
             if (redirToken is StdErrToStdOutRedirectionToken or StdOutToStdErrRedirectionToken)
             {
-                list.Add(new Redirection(redirToken, []));
+                list.Add(new(redirToken, []));
                 continue;
             }
 
@@ -37,7 +37,7 @@ internal static class RedirectionParser
             if (reader.Current is TextToken or CommandToken or QuotedTextToken)
                 target.Add(reader.Consume());
 
-            list.Add(new Redirection(redirToken, target));
+            list.Add(new(redirToken, target));
 
             reader.ConsumeWhitespace();
         }

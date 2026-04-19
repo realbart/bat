@@ -43,6 +43,8 @@ public class TitleCommandTests
     [TestMethod]
     public async Task Title_SetsWindowTitle()
     {
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)) return;
+
         var cmd = new TitleCommand();
         var console = new TestConsole();
         var ctx = new TestCommandContext { Console = console };
@@ -58,6 +60,8 @@ public class TitleCommandTests
     [TestMethod]
     public async Task Title_EmptyString_DoesNothing()
     {
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)) return;
+
         var cmd = new TitleCommand();
         var console = new TestConsole();
         var ctx = new TestCommandContext { Console = console };

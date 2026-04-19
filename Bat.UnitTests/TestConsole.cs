@@ -7,7 +7,7 @@ internal class TestConsole(string input = "") : IConsole
 {
     private readonly StringWriter _outWriter = new();
     private readonly StringWriter _errWriter = new();
-    private readonly StringReader _inReader = new StringReader(input);
+    private readonly StringReader _inReader = new(input);
     private readonly Queue<ConsoleKeyInfo> _keys = new();
 
     public TextWriter Out => _outWriter;
@@ -20,7 +20,7 @@ internal class TestConsole(string input = "") : IConsole
 
     public void EnqueueKey(ConsoleKeyInfo key) => _keys.Enqueue(key);
     public ConsoleKeyInfo ReadKey(bool intercept) =>
-        _keys.TryDequeue(out var key) ? key : new ConsoleKeyInfo('\0', ConsoleKey.NoName, false, false, false);
+        _keys.TryDequeue(out var key) ? key : new('\0', ConsoleKey.NoName, false, false, false);
 
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);

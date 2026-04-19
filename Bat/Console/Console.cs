@@ -12,8 +12,8 @@ internal class Console : IConsole
     {
         SC.OutputEncoding = System.Text.Encoding.UTF8;
         SC.InputEncoding = System.Text.Encoding.UTF8;
-        _out = new ScreenWriter(SC.Out);
-        _err = new ScreenWriter(SC.Error);
+        _out = new(SC.Out);
+        _err = new(SC.Error);
     }
 
     public TextWriter Out => _out;

@@ -51,11 +51,12 @@ internal class SetLocalCommand : ICommand
 
         var ctx = batchContext.Context;
         var snapshot = new EnvironmentSnapshot(
-            new Dictionary<string, string>(ctx.EnvironmentVariables, StringComparer.OrdinalIgnoreCase),
-            new Dictionary<char, string[]>(ctx.GetAllDrivePaths()),
+            new(ctx.EnvironmentVariables, StringComparer.OrdinalIgnoreCase),
+            new(ctx.GetAllDrivePaths()),
             ctx.CurrentDrive,
             ctx.DelayedExpansion,
-            ctx.ExtensionsEnabled
+            ctx.ExtensionsEnabled,
+            ctx.ErrorCode
         );
         batchContext.SetLocalStack.Push(snapshot);
 

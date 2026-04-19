@@ -9,15 +9,15 @@ using System.Diagnostics.CodeAnalysis;
 /// Copy-on-write dictionary using stack-based delta layers.
 /// null values encode "key does not exist" (deleted).
 /// </summary>
-internal class ClonableDictionary<TKey, TValue>() : IDictionary<TKey, TValue>
+internal class ClonableDictionary<TKey, TValue>(IEqualityComparer<TKey>? comparer = null) : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
     where TKey : notnull
     where TValue : class
 {
-    private Stack _stack = new();
+    private Stack _stack = new(comparer);
 
-    private sealed class Stack
+    private sealed class Stack(IEqualityComparer<TKey>? comparer)
     {
-        public Dictionary<TKey, TValue?> Dictionary = new();
+        public readonly Dictionary<TKey, TValue?> Dictionary = new(comparer);
         public Stack? Parent;
 
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
@@ -27,8 +27,9 @@ internal class ClonableDictionary<TKey, TValue>() : IDictionary<TKey, TValue>
                 value = val!;
                 return val != null;
             }
+
             if (Parent != null) return Parent.TryGetValue(key, out value);
-            value = default;
+            value = null;
             return false;
         }
 
@@ -50,15 +51,19 @@ internal class ClonableDictionary<TKey, TValue>() : IDictionary<TKey, TValue>
 
     public ClonableDictionary<TKey, TValue> Clone()
     {
-        if (_stack.Dictionary.Count > 0) _stack = new Stack { Parent = _stack };
-        return new ClonableDictionary<TKey, TValue> { _stack = new Stack { Parent = _stack.Parent } };
+        if (_stack.Dictionary.Count > 0) _stack = new(comparer) { Parent = _stack };
+        return new(comparer) { _stack = _stack };
     }
-
+    
     public TValue this[TKey key]
     {
         get => TryGetValue(key, out var v) ? v : throw new KeyNotFoundException();
         set => _stack.Dictionary[key] = value;
     }
+
+    IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
+
+    IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
 
     public void Add(TKey key, TValue value)
     {
@@ -81,15 +86,21 @@ internal class ClonableDictionary<TKey, TValue>() : IDictionary<TKey, TValue>
     public bool IsReadOnly => false;
 
     public void Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
-    public void Clear() => _stack = new();
+    public void ApplySnapshot(ClonableDictionary<TKey, TValue> other)
+    {
+        _stack = other._stack;
+    }
+
+    public void Clear() => _stack = new(comparer);
+
     public bool Contains(KeyValuePair<TKey, TValue> item) =>
         TryGetValue(item.Key, out var v) && EqualityComparer<TValue>.Default.Equals(v, item.Value);
+
     public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
-        var index = arrayIndex;
-        foreach (var kv in this)
-            array[index++] = kv;
+        foreach (var kv in this) array[arrayIndex++] = kv;
     }
+
     public bool Remove(KeyValuePair<TKey, TValue> item) => Remove(item.Key);
 
     public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
@@ -102,12 +113,12 @@ internal class ClonableDictionary<TKey, TValue>() : IDictionary<TKey, TValue>
             foreach (var kv in current.Dictionary)
             {
                 if (seen.Add(kv.Key) && kv.Value != null)
-                    yield return new KeyValuePair<TKey, TValue>(kv.Key, kv.Value);
+                    yield return new(kv.Key, kv.Value);
             }
+
             current = current.Parent;
         }
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
-

@@ -13,7 +13,7 @@ public class UxFileSystemTests : IDisposable
     {
         _testRoot = Path.Combine(Path.GetTempPath(), $"BatUxTest_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
-        _fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        _fs = new(new() { ['Z'] = _testRoot });
     }
 
     protected virtual void Dispose(bool disposing)
@@ -384,7 +384,7 @@ public class UxFileSystemTests : IDisposable
         Directory.CreateDirectory(root2);
         try
         {
-            var fs = new UxFileSystemAdapter(new Dictionary<char, string>
+            var fs = new UxFileSystemAdapter(new()
             {
                 ['C'] = _testRoot,
                 ['D'] = root2

@@ -53,6 +53,6 @@ internal static class BlockParser
         reader.ConsumeWhitespace();
         RedirectionParser.ParseRedirections(ref reader, outerRedirs);
 
-        return new BlockNode(subcommands, outerRedirs);
+        return new(subcommands, outerRedirs);
     }
 }

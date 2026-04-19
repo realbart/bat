@@ -53,7 +53,7 @@ To prevent infinite loops (especially in recursive commands like `tree` or when 
 - All general test code for batch files and interactive prompts **must** have timeouts.
 - A timeout reaching is considered a failing test.
 - Use `FileSystem` capabilities to detect reparse points to avoid manual depth limits or complex visited-path tracking when a simpler reparse point check suffices.
-- **Unit Testing**: Use MSTest. Every test should have a timeout. Refer to `TestHarness.cs` for central timeout handling.
+- **Unit Testing**: Use MSTest. Voor elke test waarbij de kans bestaat dat deze oneindig loopt (bijvoorbeeld door onvoorziene recursie in de code) moet een `[Timeout(4000)]` attribuut geplaatst worden. Refer to `TestHarness.cs` for central timeout handling.
 
 ## Reference Materials
 - ReactOS CMD source: https://doxygen.reactos.org/db/d4f/base_2shell_2cmd_2cmd_8c_source.html

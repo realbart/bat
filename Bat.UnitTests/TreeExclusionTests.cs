@@ -47,14 +47,14 @@ public class TreeExclusionTests
         var symlinkDir = Path.Combine(_testRoot, "symlinkDir");
         File.CreateSymbolicLink(symlinkDir, realDir);
 
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
         var console = new TestConsole();
         var ctx = new UxContextAdapter(fs, console);
         ctx.SetCurrentDrive('Z');
         ctx.SetPath('Z', []);
 
         // Run TREE /F (to see files)
-        var spec = ArgumentSpec.From([new BuiltInCommandAttribute("tree") { Flags = "F" }]);
+        var spec = ArgumentSpec.From([new("tree") { Flags = "F" }]);
         var args = ArgumentSet.Parse([Token.Text("/F")], spec);
         
         await Tree.Program.Main(ctx, args);
@@ -92,7 +92,7 @@ public class TreeExclusionTests
         var symlinkDir = Path.Combine(_testRoot, "symlinkDir");
         File.CreateSymbolicLink(symlinkDir, realDir);
 
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
         var console = new TestConsole();
         var ctx = new UxContextAdapter(fs, console);
         ctx.SetCurrentDrive('Z');
@@ -102,7 +102,7 @@ public class TreeExclusionTests
         var cmd = new DirCommand();
 
         // Run DIR /S /B
-        var spec = ArgumentSpec.From([new BuiltInCommandAttribute("dir") { Flags = "S B" }]);
+        var spec = ArgumentSpec.From([new("dir") { Flags = "S B" }]);
         var args = ArgumentSet.Parse([Token.Text("/S"), Token.Text("/B")], spec);
 
         await cmd.ExecuteAsync(args, bc, []);
@@ -138,14 +138,14 @@ public class TreeExclusionTests
         var symlinkDir = Path.Combine(_testRoot, ".symlinkDir");
         File.CreateSymbolicLink(symlinkDir, realDir);
 
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
         var console = new TestConsole();
         var ctx = new UxContextAdapter(fs, console);
         ctx.SetCurrentDrive('Z');
         ctx.SetPath('Z', []);
 
         // Run TREE /F (to see files)
-        var spec = ArgumentSpec.From([new BuiltInCommandAttribute("tree") { Flags = "F" }]);
+        var spec = ArgumentSpec.From([new("tree") { Flags = "F" }]);
         var args = ArgumentSet.Parse([Token.Text("/F")], spec);
         
         await Tree.Program.Main(ctx, args);
@@ -180,14 +180,14 @@ public class TreeExclusionTests
         var usersSymlink = Path.Combine(dotC, "Users");
         File.CreateSymbolicLink(usersSymlink, _testRoot);
 
-        var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = _testRoot });
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
         var console = new TestConsole();
         var ctx = new UxContextAdapter(fs, console);
         ctx.SetCurrentDrive('Z');
         ctx.SetPath('Z', [".c"]);
 
         // Run TREE
-        var spec = ArgumentSpec.From([new BuiltInCommandAttribute("tree")]);
+        var spec = ArgumentSpec.From([new("tree")]);
         var args = ArgumentSet.Parse([], spec);
 
         // We need a timeout for the test itself, but MSTest handles this if we use a Task and wait.
@@ -248,14 +248,14 @@ public class TreeExclusionTests
             // Gebruik een absoluut pad voor het target
             File.CreateSymbolicLink(usersSymlink, root);
 
-            var fs = new UxFileSystemAdapter(new Dictionary<char, string> { ['Z'] = root });
+            var fs = new UxFileSystemAdapter(new() { ['Z'] = root });
             var console = new TestConsole();
             var ctx = new UxContextAdapter(fs, console);
             ctx.SetCurrentDrive('Z');
             ctx.SetPath('Z', [".c"]);
 
             // Run TREE
-            var spec = ArgumentSpec.From([new BuiltInCommandAttribute("tree")]);
+            var spec = ArgumentSpec.From([new("tree")]);
             var args = ArgumentSet.Parse([], spec);
 
             var treeTask = Tree.Program.Main(ctx, args);

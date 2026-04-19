@@ -24,7 +24,7 @@ public class DirVolumeTests
         var ctx = new TestCommandContext(fs) { Console = console };
         ctx.SetCurrentDrive(drive);
         if (path != null) ctx.SetPath(drive, path);
-        return (cmd, console, new BatchContext { Context = ctx });
+        return (cmd, console, new() { Context = ctx });
     }
 
     [TestMethod]
@@ -63,7 +63,7 @@ public class DirVolumeTests
         
         var (cmd, console, bc) = Setup(fs, 'C', []);
         // Set US culture: M/dd/yyyy (base en-US uses M/d/yyyy)
-        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new System.Globalization.CultureInfo("en-US"));
+        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new("en-US"));
         
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
 
@@ -71,9 +71,9 @@ public class DirVolumeTests
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("04/15/2026") && l.Contains("13:30")), $"Output should contain date/time in normalized en-US format. Lines: {string.Join("\n", console.OutLines)}");
         
         // Set NL culture: dd-MM-yyyy
-        console = new TestConsole();
+        console = new();
         bc.Context = bc.Context.StartNew(console);
-        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new System.Globalization.CultureInfo("nl-NL"));
+        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new("nl-NL"));
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
         
         // nl-NL short date for 2026-04-15 is 15-04-2026, time 13:30

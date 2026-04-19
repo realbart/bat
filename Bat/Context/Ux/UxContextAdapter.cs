@@ -2,7 +2,7 @@
 
 internal class UxContextAdapter : Context
 {
-    public UxContextAdapter(global::Context.IConsole console) : this(new UxFileSystemAdapter(), console) { }
+    public UxContextAdapter(global::Context.IConsole console) : this(new(), console) { }
 
     public UxContextAdapter(UxFileSystemAdapter fs, global::Context.IConsole console) : base(fs, console)
     {

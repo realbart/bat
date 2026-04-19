@@ -18,8 +18,8 @@ internal class TestHarness
 
     public TestHarness(string input = "", char drive = 'C', string[]? path = null)
     {
-        Console = new TestConsole(input);
-        Context = new TestCommandContext(FileSystem)
+        Console = new(input);
+        Context = new(FileSystem)
         {
             Console = Console
         };
@@ -28,7 +28,7 @@ internal class TestHarness
         if (path != null) Context.SetPath(drive, path);
 
         // Clear the shared REPL singleton to ensure test isolation
-        ReplBatchContext.Value.SetLocalStack.Clear();
+        ReplBatchContext.Reset();
     }
 
     public async Task<bool> Execute(string command, int timeoutMs = 5000)

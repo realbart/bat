@@ -65,7 +65,7 @@ internal static class ForParser
         if (body == null || reader.ParseError != null)
         { reader.ParseError ??= "FOR: missing body command."; return null; }
 
-        return new ForCommandNode(switches, forParams, variable, list, body, outerRedirs);
+        return new(switches, forParams, variable, list, body, outerRedirs);
     }
 
     /// <summary>

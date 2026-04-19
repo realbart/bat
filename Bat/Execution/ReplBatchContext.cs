@@ -17,5 +17,17 @@ internal static class ReplBatchContext
 
     internal static BatchContext Value => _instance.Value!;
 
-    public static void UpdateLine(string line) => Value.FileContent = line;
+    public static void Reset()
+    {
+        var bc = Value;
+        bc.BatchFilePath = null;
+        bc.FileContent = "";
+        bc.FilePosition = 0;
+        bc.LineNumber = 0;
+        bc.Parameters = ["CMD", null, null, null, null, null, null, null, null, null];
+        bc.ShiftOffset = 0;
+        bc.SetLocalStack.Clear();
+        bc.Prev = null;
+        bc.LabelPositions = null;
+    }
 }

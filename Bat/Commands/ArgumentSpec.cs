@@ -28,6 +28,6 @@ internal record ArgumentSpec(
             foreach (var o in attr.Options.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 options.Add(o.ToUpperInvariant());
         }
-        return new ArgumentSpec(flags.ToFrozenSet(), options.ToFrozenSet());
+        return new(flags.ToFrozenSet(), options.ToFrozenSet());
     }
 }
