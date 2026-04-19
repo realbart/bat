@@ -1,8 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Bat.UnitTests;
-using Bat.Execution;
-
-namespace Bat.Tests;
+namespace Bat.UnitTests;
 
 [TestClass]
 public class ReproductionTests

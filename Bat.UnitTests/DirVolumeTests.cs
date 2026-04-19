@@ -1,15 +1,8 @@
 #if UNIX
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Bat.Commands;
-using Bat.Context;
 using Bat.Context.Ux;
 using Bat.Execution;
-using Bat.Tokens;
 using Context;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bat.UnitTests;
 

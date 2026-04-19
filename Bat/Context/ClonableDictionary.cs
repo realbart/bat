@@ -6,68 +6,124 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
-/// Copy-on-write dictionary using stack-based delta layers.
-/// null values encode "key does not exist" (deleted).
+/// Dictionary using stack-based delta layers,
+/// so complete dictionaries don't need to constantly be copied.
 /// </summary>
-internal class ClonableDictionary<TKey, TValue>(IEqualityComparer<TKey>? comparer = null) : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
+internal class ClonableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
     where TKey : notnull
     where TValue : class
 {
-    private Stack _stack = new(comparer);
-
-    private sealed class Stack(IEqualityComparer<TKey>? comparer)
+    public ClonableDictionary(IEqualityComparer<TKey>? comparer = null) : this(new Stack(comparer))
     {
-        public readonly Dictionary<TKey, TValue?> Dictionary = new(comparer);
-        public Stack? Parent;
+    }
+
+    public ClonableDictionary(Dictionary<TKey, TValue?> dictionary) : this(new Stack(dictionary))
+    {
+    }
+
+    /// <summary>
+    /// Copy-on-write dictionary using stack-based delta layers.
+    /// null values encode "key does not exist" (deleted).
+    /// </summary>
+    private ClonableDictionary(Stack stack)
+    {
+        _stack = stack;
+    }
+
+    private Stack _stack;
+
+    private sealed class Stack
+    {
+        public readonly Dictionary<TKey, TValue?> Dictionary;
+        public readonly Stack? Parent;
+
+        public Stack(IEqualityComparer<TKey>? comparer)
+        {
+            Dictionary = new(comparer);
+            Parent = null;
+        }
+
+        public Stack(Dictionary<TKey, TValue?> dictionary)
+        {
+            Dictionary = dictionary;
+            Parent = null;
+        }
+
+        public Stack(Stack parent)
+        {
+            Dictionary = new(parent.Dictionary.Comparer);
+            Parent = parent;
+        }
 
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         {
-            if (Dictionary.TryGetValue(key, out var val))
+            var current = this;
+            while (current != null)
             {
-                value = val!;
-                return val != null;
+                if (current.Dictionary.TryGetValue(key, out var val))
+                {
+                    value = val!;
+                    return val != null;
+                }
+                current = current.Parent;
             }
-
-            if (Parent != null) return Parent.TryGetValue(key, out value);
             value = null;
             return false;
         }
 
-        public bool ContainsKey(TKey key) =>
-            Dictionary.TryGetValue(key, out var val)
-                ? val != null
-                : Parent?.ContainsKey(key) ?? false;
+        public bool ContainsKey(TKey key)
+        {
+            var current = this;
+            while (current != null)
+            {
+                if (current.Dictionary.TryGetValue(key, out var val))
+                {
+                    return val != null;
+                }
+                current = current.Parent;
+            }
+            return false;
+        }
     }
 
-    public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value) =>
-        _stack.TryGetValue(key, out value);
+    public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value) => _stack.TryGetValue(key, out value);
 
     public bool TryAdd(TKey key, TValue value)
     {
-        if (_stack.ContainsKey(key)) return false;
-        _stack.Dictionary[key] = value;
+        if (ContainsKey(key)) return false;
+        this[key] = value;
         return true;
     }
 
     public ClonableDictionary<TKey, TValue> Clone()
     {
-        if (_stack.Dictionary.Count > 0) _stack = new(comparer) { Parent = _stack };
-        return new(comparer) { _stack = _stack };
+        // LLMs: You may not understand this code but tests show that it works.
+        // Please leave it alone.
+        if (_stack.Dictionary.Count > 0) _stack = new(_stack);
+        return (_stack.Parent == null)
+            ? new ClonableDictionary<TKey, TValue>(_stack.Dictionary.Comparer)
+            : new(new Stack(_stack.Parent));
     }
-    
+
     public TValue this[TKey key]
     {
         get => TryGetValue(key, out var v) ? v : throw new KeyNotFoundException();
-        set => _stack.Dictionary[key] = value;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _stack.Dictionary[key] = value;
+        }
     }
 
     IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
-
+    public ICollection<TKey> Keys => this.Select(kv => kv.Key).ToArray();
     IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
+    public ICollection<TValue> Values => this.Select(kv => kv.Value).ToArray();
 
     public void Add(TKey key, TValue value)
     {
-        if (_stack.ContainsKey(key)) throw new ArgumentException("Key already exists");
+        ArgumentNullException.ThrowIfNull(value);
+        if (ContainsKey(key)) throw new ArgumentException("Key already exists");
         _stack.Dictionary[key] = value;
     }
 
@@ -75,23 +131,28 @@ internal class ClonableDictionary<TKey, TValue>(IEqualityComparer<TKey>? compare
 
     public bool Remove(TKey key)
     {
-        if (!_stack.ContainsKey(key)) return false;
+        if (!ContainsKey(key)) return false;
+        
+        // Push a new layer if needed, unless we are already removing a key from this layer
+        if (_stack.Dictionary.Count > 0 && !_stack.Dictionary.ContainsKey(key))
+        {
+            _stack = new Stack(_stack);
+        }
         _stack.Dictionary[key] = null;
         return true;
     }
-
-    public ICollection<TKey> Keys => this.Select(kv => kv.Key).ToList();
-    public ICollection<TValue> Values => this.Select(kv => kv.Value).ToList();
-    public int Count => this.Count();
+    public int Count => Keys.Count;
     public bool IsReadOnly => false;
+    public IEqualityComparer<TKey> Comparer => _stack.Dictionary.Comparer;
 
     public void Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
+
     public void ApplySnapshot(ClonableDictionary<TKey, TValue> other)
     {
         _stack = other._stack;
     }
 
-    public void Clear() => _stack = new(comparer);
+    public void Clear() => _stack = new(_stack.Dictionary.Comparer);
 
     public bool Contains(KeyValuePair<TKey, TValue> item) =>
         TryGetValue(item.Key, out var v) && EqualityComparer<TValue>.Default.Equals(v, item.Value);

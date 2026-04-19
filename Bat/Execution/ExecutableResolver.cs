@@ -1,4 +1,3 @@
-using Bat.Context;
 using Context;
 
 namespace Bat.Execution;

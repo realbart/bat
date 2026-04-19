@@ -1,7 +1,5 @@
 using System.Collections.Frozen;
 using Bat.Commands;
-using Bat.Console;
-using Bat.Context;
 using Bat.Context.Dos;
 using Bat.Execution;
 using Bat.Tokens;

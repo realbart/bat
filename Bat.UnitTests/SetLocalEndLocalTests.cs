@@ -1,7 +1,4 @@
-using Bat.Commands;
-using Bat.Console;
 using Bat.Execution;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bat.UnitTests;
 

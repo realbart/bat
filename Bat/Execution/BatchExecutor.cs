@@ -2,7 +2,6 @@ using Bat.Commands;
 using Bat.Console;
 using Bat.Nodes;
 using Bat.Parsing;
-using Context;
 
 namespace Bat.Execution;
 

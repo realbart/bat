@@ -1,7 +1,5 @@
-using Bat.Console;
 using Bat.Execution;
 using Bat.Nodes;
-using Bat.Tokens;
 using Context;
 
 namespace Bat.Commands;

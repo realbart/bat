@@ -1,7 +1,5 @@
 #if UNIX
 using System.Text.RegularExpressions;
-using Bat.Console;
-using Bat.Context;
 using Context;
 
 namespace Bat.UnitTests;

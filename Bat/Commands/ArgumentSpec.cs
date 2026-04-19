@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Reflection;
 
 namespace Bat.Commands;
 

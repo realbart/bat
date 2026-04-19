@@ -1,6 +1,4 @@
-using Bat.UnitTests;
-
-namespace Bat.Tests;
+namespace Bat.UnitTests;
 
 [TestClass]
 public class LoopVerificationTests

@@ -1,12 +1,7 @@
 using Bat.Context.Ux;
-using Bat.Console;
-using Bat.Context;
 using Bat.Execution;
 using Bat.Tokens;
 using Bat.Commands;
-using Context;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Tree;
 
 namespace Bat.UnitTests;
 

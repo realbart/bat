@@ -1,7 +1,6 @@
 #if UNIX
 using System.Reflection;
 using Bat.Commands;
-using Bat.Parsing;
 using Bat.Tokens;
 using Context;
 

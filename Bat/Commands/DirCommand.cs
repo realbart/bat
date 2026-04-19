@@ -1,4 +1,3 @@
-using Bat.Console;
 using Bat.Context;
 using Bat.Execution;
 using Bat.Nodes;
