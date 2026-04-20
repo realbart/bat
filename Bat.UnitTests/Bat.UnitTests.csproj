@@ -47,6 +47,18 @@
     </Content>
   </ItemGroup>
 
+  <!-- Build and copy a Windows-native bat.exe for ExampleScriptTests on Windows -->
+  <Target Name="CopyBatExe" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="dotnet restore &quot;$(MSBuildThisFileDirectory)..\Bat\Bat.csproj&quot; -r win-x64 --nologo -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\Bat\Bat.csproj&quot; -c $(Configuration) -r win-x64 --no-self-contained -p:RuntimeIdentifier=win-x64 --nologo -v quiet" />
+    <ItemGroup>
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.exe" />
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.dll" />
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BatExeFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="false" />
+  </Target>
+
   <ItemGroup>
     <None Remove="Examples\cd.bat" />
     <None Remove="Examples\doskey.bat" />

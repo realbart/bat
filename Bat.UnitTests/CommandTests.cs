@@ -298,7 +298,7 @@ public class RemCommandTests
         // From REM /? help: "REM [comment]"
         var cmd = new RemCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console } };
         var result = await cmd.ExecuteAsync(TestArgs.For<RemCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains("REM [comment]"));
@@ -315,8 +315,9 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public string[] CurrentPath => _paths.TryGetValue(CurrentDrive, out var p) ? p : [];
     public string CurrentPathDisplayName =>
         CurrentPath.Length == 0 ? $"{CurrentDrive}:\\" : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
-    public Dictionary<string, string> EnvironmentVariables { get; } = [];
-    public Dictionary<string, string> Macros { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>();
+    public IDictionary<string, string> Macros { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public System.Globalization.CultureInfo FileCulture { get; } = System.Globalization.CultureInfo.InvariantCulture;
     public List<string> CommandHistory { get; } = [];
     public int HistorySize { get; set; } = 50;
     public int ErrorCode { get; set; }
@@ -342,6 +343,21 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
             return (false, "");
         return (true, FileSystem.GetNativePath(CurrentDrive, CurrentPath));
+    }
+
+    public void ApplySnapshot(IContext other)
+    {
+        ErrorCode = other.ErrorCode;
+        EchoEnabled = other.EchoEnabled;
+        DelayedExpansion = other.DelayedExpansion;
+        ExtensionsEnabled = other.ExtensionsEnabled;
+        PromptFormat = other.PromptFormat;
+        EnvironmentVariables.Clear();
+        foreach (var kv in other.EnvironmentVariables)
+            EnvironmentVariables[kv.Key] = kv.Value;
+        Macros.Clear();
+        foreach (var kv in other.Macros)
+            Macros[kv.Key] = kv.Value;
     }
 
     public IContext StartNew(IConsole? console = null)
@@ -538,7 +554,7 @@ public class ClsCommandTests
         // From CLS /? help: "Clears the screen."
         var cmd = new ClsCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console } };
         await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(), bc, []);
         Assert.IsTrue(console.OutText.Contains("\x1b[2J"));
     }
@@ -549,7 +565,7 @@ public class ClsCommandTests
         // From CLS /? help: "CLS"
         var cmd = new ClsCommand();
         var console = new TestConsole();
-        var bc = new BatchContext { Context = new TestCommandContext { Console = console }, Console = console };
+        var bc = new BatchContext { Context = new TestCommandContext { Console = console } };
         var result = await cmd.ExecuteAsync(TestArgs.For<ClsCommand>(Token.Text("/?")), bc, []);
         Assert.AreEqual(0, result);
         Assert.IsTrue(console.OutText.Contains("CLS"));
@@ -1270,7 +1286,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse("dir/w");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("Volume")));
         var content = console.OutText;
@@ -1290,7 +1306,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse(@"dir\subdir");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory")));
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("file.txt")));
@@ -1304,7 +1320,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse("dir-w");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(1, ctx.ErrorCode);
         Assert.IsTrue(console.ErrLines.Any(l => l.Contains("'dir-w'") && l.Contains("not recognized")));
@@ -1318,7 +1334,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse("foo");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(1, ctx.ErrorCode);
         Assert.IsTrue(console.ErrLines.Any(l => l.Contains("'foo'") && l.Contains("not recognized")));
@@ -1333,7 +1349,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse("dir /g");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(1, ctx.ErrorCode);
         Assert.IsTrue(console.ErrLines.Any(l => l.Contains("Invalid switch") && l.Contains("\"g\"")));
@@ -1348,7 +1364,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
         var cmd = Parser.Parse("dir/q");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(0, ctx.ErrorCode, $"Should succeed. Errors: {string.Join(", ", console.ErrLines)}");
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("DOMAIN\\User")), "Should show owner");
@@ -1371,7 +1387,7 @@ public class DispatcherIntegrationTests
         var headType = cmdNode.Head.GetType().Name;
         var tailTokens = string.Join(", ", cmdNode.Tail.Select(t => $"{t.GetType().Name}:{t.Raw}"));
 
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         var allOutput = string.Join("\n", console.OutLines) + "\n" + string.Join("\n", console.ErrLines);
         var debugInfo = $"Head={headType}[{headRaw}], Tail=[{tailTokens}]";
@@ -1388,7 +1404,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', ["Users", "Bart"]);
 
         var cmd = Parser.Parse(@"cd..");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         CollectionAssert.AreEqual(new[] { "Users" }, ctx.CurrentPath);
@@ -1403,7 +1419,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', ["Users", "Bart"]);
 
         var cmd = Parser.Parse(@"cd.");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         CollectionAssert.AreEqual(new[] { "Users", "Bart" }, ctx.CurrentPath);
@@ -1418,7 +1434,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', ["Users", "Bart"]);
 
         var cmd = Parser.Parse(@"cd.\Documents");
-        await dispatcher.ExecuteCommandAsync(ctx, console, cmd);
+        await dispatcher.ExecuteCommandAsync(ctx, cmd);
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         CollectionAssert.AreEqual(new[] { "Users", "Bart", "Documents" }, ctx.CurrentPath);
@@ -1432,7 +1448,7 @@ public class DispatcherIntegrationTests
         fs.AddDir('D', []);
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
-        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("D:"));
+        await dispatcher.ExecuteCommandAsync(ctx, Parser.Parse("D:"));
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         Assert.AreEqual('D', ctx.CurrentDrive);
@@ -1445,7 +1461,7 @@ public class DispatcherIntegrationTests
         var fs = new TestFileSystem();
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
-        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("X:"));
+        await dispatcher.ExecuteCommandAsync(ctx, Parser.Parse("X:"));
 
         Assert.AreEqual(1, ctx.ErrorCode);
         Assert.AreEqual('C', ctx.CurrentDrive);
@@ -1462,7 +1478,7 @@ public class DispatcherIntegrationTests
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
         ctx.SetPath('D', ["Work"]);  // D: was last visited at D:\Work
 
-        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("D:"));
+        await dispatcher.ExecuteCommandAsync(ctx, Parser.Parse("D:"));
 
         Assert.AreEqual('D', ctx.CurrentDrive);
         CollectionAssert.AreEqual(new[] { "Work" }, ctx.CurrentPath);
@@ -1476,7 +1492,7 @@ public class DispatcherIntegrationTests
         fs.AddDir('D', []);
         var (dispatcher, console, ctx) = Setup(fs, 'C', []);
 
-        await dispatcher.ExecuteCommandAsync(ctx, console, Parser.Parse("d:"));
+        await dispatcher.ExecuteCommandAsync(ctx, Parser.Parse("d:"));
 
         Assert.AreEqual(0, ctx.ErrorCode, console.ErrText);
         Assert.AreEqual('D', ctx.CurrentDrive);

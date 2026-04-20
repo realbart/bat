@@ -115,7 +115,6 @@ public class ExpanderTests
             // Arrange
             var bc = new BatchContext 
             { 
-                Console = null!,
                 Context = null!,
                 Parameters = ["test.bat", "arg1", "arg2", "arg3", null, null, null, null, null, null],
                 ShiftOffset = 1
