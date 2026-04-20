@@ -10,50 +10,49 @@ internal static partial class ContextFactory
     public static IContext CreateContext() =>
         CreateContext(new() { ['Z'] = "/" });
 
-    public static IContext CreateContext(Dictionary<char, string> driveMappings)
+    public static IContext CreateContext(Dictionary<char, string> driveMappings) =>
+        CreateContext(driveMappings, Environment.CurrentDirectory);
+
+    public static IContext CreateContext(Dictionary<char, string> driveMappings, string nativeCwd)
     {
         var context = new Ux.UxContextAdapter(
             new(driveMappings, UnixFileOwner.GetOwner),
             new Console.Console());
 
-        var cwd = Environment.CurrentDirectory;
-        var uxFileSystem = (Ux.UxFileSystemAdapter)context.FileSystem;
-        var roots = uxFileSystem.GetRoots();
-
-        // 1. Probeer de CWD te mappen naar een drive
-        char? foundDrive = null;
-        foreach (var (drive, root) in roots)
-        {
-            var rootNorm = root.TrimEnd('/');
-            if (cwd == rootNorm || cwd.StartsWith(rootNorm + "/", StringComparison.Ordinal))
-            {
-                foundDrive = drive;
-                context.SetCurrentDrive(drive);
-                var remainder = cwd.Length > rootNorm.Length ? cwd[(rootNorm.Length + 1)..] : "";
-                context.SetPath(drive, remainder.Length > 0
-                    ? remainder.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                    : []);
-                break;
-            }
-        }
-
-        // 2. Als CWD niet onder een gemapte drive valt, kies een default drive
-        if (foundDrive == null)
-        {
-            var currentDrive = driveMappings.ContainsKey('Z') ? 'Z' : driveMappings.Keys.First();
-            context.SetCurrentDrive(currentDrive);
-            // Voor Z:\ (als gemapt naar /), probeer alsnog CWD te zetten
-            if (currentDrive == 'Z' && driveMappings['Z'] == "/")
-            {
-                if (cwd.StartsWith("/"))
-                {
-                    var segments = cwd[1..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-                    context.SetPath('Z', segments);
-                }
-            }
-        }
+        // Map native CWD to virtual drive + path (longest prefix match)
+        var (drive, path) = MapNativePathToVirtual(nativeCwd, driveMappings);
+        context.SetCurrentDrive(drive);
+        context.SetPath(drive, path);
 
         return context;
+    }
+
+    private static (char Drive, string[] Path) MapNativePathToVirtual(string nativePath, Dictionary<char, string> mappings)
+    {
+        // Find longest matching root
+        var bestMatch = mappings
+            .OrderByDescending(kv => kv.Value.Length)
+            .FirstOrDefault(kv =>
+            {
+                var root = kv.Value.TrimEnd('/');
+                return nativePath.StartsWith(root + "/", StringComparison.Ordinal) ||
+                       nativePath.Equals(root, StringComparison.Ordinal);
+            });
+
+        if (bestMatch.Key == '\0')
+        {
+            // No match — fallback to first drive, root path
+            return (mappings.Keys.First(), []);
+        }
+
+        // Extract relative path
+        var root = bestMatch.Value.TrimEnd('/');
+        if (nativePath.Equals(root, StringComparison.Ordinal))
+            return (bestMatch.Key, []);
+
+        var relative = nativePath[(root.Length + 1)..]; // skip root + slash
+        var segments = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return (bestMatch.Key, segments);
     }
 }
 #endif

@@ -113,7 +113,7 @@ public static class Program
             System.Console.Write(BannerText);
 
         var context = batArgs.DriveMappings is { Count: > 0 }
-            ? ContextFactory.CreateContext(batArgs.DriveMappings)
+            ? ContextFactory.CreateContext(batArgs.DriveMappings, batArgs.NativeCwd)
             : ContextFactory.CreateContext();
         context.DelayedExpansion = batArgs.DelayedExpansion;
         context.ExtensionsEnabled = batArgs.ExtensionsEnabled;
