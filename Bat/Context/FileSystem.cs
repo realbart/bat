@@ -1,4 +1,5 @@
-﻿using Context;
+﻿using System.Runtime.CompilerServices;
+using Context;
 
 namespace Bat.Context;
 
@@ -13,9 +14,6 @@ internal abstract class FileSystem : IFileSystem
 
     /// <summary>PATH entry separator used by the host OS (';' on Windows, ':' on Unix).</summary>
     public virtual char NativePathSeparator => ';';
-
-    /// <summary>Returns false by default; Unix filesystem overrides to check the execute bit.</summary>
-    public virtual bool IsExecutable(char drive, string[] path) => false;
 
     public string GetFullPathDisplayName(char drive, string[] path) =>
         path.Length == 0
@@ -80,38 +78,43 @@ internal abstract class FileSystem : IFileSystem
         return true;
     }
 
-    public abstract bool FileExists(char drive, string[] path);
-    public abstract bool DirectoryExists(char drive, string[] path);
-    public abstract void CreateDirectory(char drive, string[] path);
-    public abstract void DeleteFile(char drive, string[] path);
-    public abstract void DeleteDirectory(char drive, string[] path, bool recursive);
-    public abstract IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern);
-    public abstract Stream OpenRead(char drive, string[] path);
-    public abstract Stream OpenWrite(char drive, string[] path, bool append);
-    public abstract string ReadAllText(char drive, string[] path);
-    public abstract void WriteAllText(char drive, string[] path, string content);
-    public abstract void CopyFile(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, bool overwrite);
-    public abstract void MoveFile(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath);
-    public abstract void RenameFile(char drive, string[] path, string newName);
-    public abstract FileAttributes GetAttributes(char drive, string[] path);
-    public abstract void SetAttributes(char drive, string[] path, FileAttributes attributes);
-    public abstract long GetFileSize(char drive, string[] path);
-    public abstract DateTime GetLastWriteTime(char drive, string[] path);
-    public uint GetVolumeSerialNumber(char drive)
-        => GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), []));
-    protected abstract uint GetVolumeSerialNumber(string nativeRoot);
-
-    public string GetVolumeLabel(char drive)
-        => GetVolumeLabel(GetNativePath(char.ToUpperInvariant(drive), []));
-    protected abstract string GetVolumeLabel(string nativeRoot);
-
-    public long GetFreeBytes(char drive)
-        => GetFreeBytes(GetNativePath(char.ToUpperInvariant(drive), []));
-    protected abstract long GetFreeBytes(string nativeRoot);
-
-    public abstract IReadOnlyDictionary<string, string> GetFileAssociations();
-
     public IReadOnlyDictionary<char, string> GetSubsts() => Substs;
     public void AddSubst(char drive, string nativePath) => Substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => Substs.Remove(char.ToUpperInvariant(drive));
+
+    // ── Async members ──────────────────────────────────────────────────────────
+
+    public abstract Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public virtual Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+        => Task.FromResult(false);
+    public abstract Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default);
+    public abstract IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(char drive, string[] path, string pattern, CancellationToken cancellationToken = default);
+    public abstract Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default);
+    public abstract Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default);
+    public abstract Task CopyFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, bool overwrite, CancellationToken cancellationToken = default);
+    public abstract Task MoveFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, CancellationToken cancellationToken = default);
+    public abstract Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default);
+    public abstract Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default);
+    public abstract Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    public abstract Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+
+    public Task<uint> GetVolumeSerialNumberAsync(char drive, CancellationToken cancellationToken = default)
+        => Task.FromResult(GetVolumeSerialNumber(GetNativePath(char.ToUpperInvariant(drive), [])));
+    protected abstract uint GetVolumeSerialNumber(string nativeRoot);
+
+    public Task<string> GetVolumeLabelAsync(char drive, CancellationToken cancellationToken = default)
+        => Task.FromResult(GetVolumeLabel(GetNativePath(char.ToUpperInvariant(drive), [])));
+    protected abstract string GetVolumeLabel(string nativeRoot);
+
+    public Task<long> GetFreeBytesAsync(char drive, CancellationToken cancellationToken = default)
+        => Task.FromResult(GetFreeBytes(GetNativePath(char.ToUpperInvariant(drive), [])));
+    protected abstract long GetFreeBytes(string nativeRoot);
+
+    public abstract Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken cancellationToken = default);
 }

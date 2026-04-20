@@ -72,8 +72,8 @@ internal class DosContext : Context
         if (EnvironmentVariables.TryGetValue("HOMEDRIVE", out var hd)
             && EnvironmentVariables.TryGetValue("HOMEPATH", out var hp)
             && hd.Length == 2 && hp.Length > 0
-            && FileSystem.DirectoryExists(hd[0],
-                hp.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries)))
+            && FileSystem.DirectoryExistsAsync(hd[0],
+                hp.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries)).GetAwaiter().GetResult())
             return;
 
         EnvironmentVariables["HOMEDRIVE"] = $"{fallbackDrive}:";

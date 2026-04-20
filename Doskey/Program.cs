@@ -116,14 +116,14 @@ public static class Program
     private static async Task LoadMacroFileAsync(IContext context, string filePath, TextWriter output)
     {
         var (drive, segments) = ParsePath(filePath, context);
-        if (!context.FileSystem.FileExists(drive, segments))
+        if (!await context.FileSystem.FileExistsAsync(drive, segments))
         {
             await output.WriteLineAsync($"The system cannot find the file specified.");
             return;
         }
 
-        var content = context.FileSystem.ReadAllText(drive, segments);
-        foreach (var line in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        var content = await context.FileSystem.ReadAllTextAsync(drive, segments);
+        foreach (var line in content.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries))
         {
             var eqIdx = line.IndexOf('=');
             if (eqIdx <= 0) continue;

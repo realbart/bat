@@ -1,6 +1,7 @@
 using Bat.Context.Ux;
 using Bat.Commands;
 using Bat.Execution;
+using Context;
 
 namespace Bat.UnitTests;
 

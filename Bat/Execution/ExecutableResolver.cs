@@ -13,27 +13,33 @@ internal static class ExecutableResolver
     private static readonly string[] ExecutableExtensions = [".bat", ".cmd", ".com", ".exe"];
 
     /// <summary>
+    /// Synchronous wrapper for backwards compatibility with tests.
+    /// </summary>
+    public static string? Resolve(string commandName, IContext context)
+        => ResolveAsync(commandName, context).GetAwaiter().GetResult();
+
+    /// <summary>
     /// Resolves an executable name to a full file path.
     /// Searches current directory first, then PATH directories.
     /// </summary>
     /// <param name="commandName">Command name (with or without extension)</param>
     /// <param name="context">Execution context</param>
     /// <returns>Full Bat virtual path (e.g., "Z:\Windows\notepad.exe"), or null if not found</returns>
-    public static string? Resolve(string commandName, IContext context)
+    public static async Task<string?> ResolveAsync(string commandName, IContext context)
     {
-        if (commandName.StartsWith('\\')) return ResolveAbsolute(commandName[1..], context.CurrentDrive, context);
+        if (commandName.StartsWith('\\')) return await ResolveAbsoluteAsync(commandName[1..], context.CurrentDrive, context);
 
         // Drive-letter path: e.g. Z:\helper.bat or C:\dir\file.exe
         if (commandName.Length >= 3 && char.IsLetter(commandName[0]) && commandName[1] == ':' && commandName[2] == '\\')
-            return ResolveAbsolute(commandName[3..], char.ToUpperInvariant(commandName[0]), context);
+            return await ResolveAbsoluteAsync(commandName[3..], char.ToUpperInvariant(commandName[0]), context);
 
         var hasExplicitExt = commandName.Contains('.');
         return hasExplicitExt
-            ? SearchWithExplicitExtension(commandName, context)
-            : SearchWithImplicitExtensions(Path.GetFileNameWithoutExtension(commandName), context);
+            ? await SearchWithExplicitExtensionAsync(commandName, context)
+            : await SearchWithImplicitExtensionsAsync(Path.GetFileNameWithoutExtension(commandName), context);
     }
 
-    private static string? ResolveAbsolute(string pathFromRoot, char drive, IContext context)
+    private static async Task<string?> ResolveAbsoluteAsync(string pathFromRoot, char drive, IContext context)
     {
         var segments = pathFromRoot.Split('\\', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 0) return null;
@@ -41,7 +47,7 @@ internal static class ExecutableResolver
         var hasExplicitExt = segments[^1].Contains('.');
         if (hasExplicitExt)
         {
-            if (context.FileSystem.FileExists(drive, segments))
+            if (await context.FileSystem.FileExistsAsync(drive, segments))
                 return context.FileSystem.GetFullPathDisplayName(drive, segments);
             return null;
         }
@@ -51,16 +57,16 @@ internal static class ExecutableResolver
         foreach (var ext in ExecutableExtensions)
         {
             string[] fullPath = [.. dirSegments, baseName + ext];
-            if (context.FileSystem.FileExists(drive, fullPath))
+            if (await context.FileSystem.FileExistsAsync(drive, fullPath))
                 return context.FileSystem.GetFullPathDisplayName(drive, fullPath);
         }
         return null;
     }
 
-    private static string? SearchWithExplicitExtension(string fileName, IContext context)
+    private static async Task<string?> SearchWithExplicitExtensionAsync(string fileName, IContext context)
     {
         string[] currentDirPath = [.. context.CurrentPath, fileName];
-        if (context.FileSystem.FileExists(context.CurrentDrive, currentDirPath))
+        if (await context.FileSystem.FileExistsAsync(context.CurrentDrive, currentDirPath))
             return context.FileSystem.GetFullPathDisplayName(context.CurrentDrive, currentDirPath);
 
         var pathVar = context.EnvironmentVariables.TryGetValue("PATH", out var p) ? p : "";
@@ -68,26 +74,26 @@ internal static class ExecutableResolver
         {
             var (drive, pathSegments) = ParsePathEntry(pathEntry, context.CurrentDrive);
             string[] fullPath = [.. pathSegments, fileName];
-            if (context.FileSystem.FileExists(drive, fullPath))
+            if (await context.FileSystem.FileExistsAsync(drive, fullPath))
                 return context.FileSystem.GetFullPathDisplayName(drive, fullPath);
         }
 
         return null;
     }
 
-    private static string? SearchWithImplicitExtensions(string baseName, IContext context)
+    private static async Task<string?> SearchWithImplicitExtensionsAsync(string baseName, IContext context)
     {
         // Try known extensions first (batch files take priority on all platforms)
         foreach (var ext in ExecutableExtensions)
         {
             string[] currentDirPath = [.. context.CurrentPath, baseName + ext];
-            if (context.FileSystem.FileExists(context.CurrentDrive, currentDirPath))
+            if (await context.FileSystem.FileExistsAsync(context.CurrentDrive, currentDirPath))
                 return context.FileSystem.GetFullPathDisplayName(context.CurrentDrive, currentDirPath);
         }
 
         // Try extensionless (Unix executables: ls, bash, apt, etc.)
         string[] noExtCurrentDir = [.. context.CurrentPath, baseName];
-        if (context.FileSystem.IsExecutable(context.CurrentDrive, noExtCurrentDir))
+        if (await context.FileSystem.IsExecutableAsync(context.CurrentDrive, noExtCurrentDir))
             return context.FileSystem.GetFullPathDisplayName(context.CurrentDrive, noExtCurrentDir);
 
         var pathVar = context.EnvironmentVariables.TryGetValue("PATH", out var p) ? p : "";
@@ -97,13 +103,13 @@ internal static class ExecutableResolver
             foreach (var ext in ExecutableExtensions)
             {
                 string[] fullPath = [.. pathSegments, baseName + ext];
-                if (context.FileSystem.FileExists(drive, fullPath))
+                if (await context.FileSystem.FileExistsAsync(drive, fullPath))
                     return context.FileSystem.GetFullPathDisplayName(drive, fullPath);
             }
 
             // Try extensionless in PATH
             string[] noExtPath = [.. pathSegments, baseName];
-            if (context.FileSystem.IsExecutable(drive, noExtPath))
+            if (await context.FileSystem.IsExecutableAsync(drive, noExtPath))
                 return context.FileSystem.GetFullPathDisplayName(drive, noExtPath);
         }
 

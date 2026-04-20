@@ -94,7 +94,7 @@ internal abstract class Context : IContext
 
     public (bool Found, string NativePath) TryGetCurrentFolder()
     {
-        if (!fileSystem.DirectoryExists(CurrentDrive, CurrentPath))
+        if (!fileSystem.DirectoryExistsAsync(CurrentDrive, CurrentPath).GetAwaiter().GetResult())
             return (false, "");
         return (true, fileSystem.GetNativePath(CurrentDrive, CurrentPath));
     }

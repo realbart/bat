@@ -1,4 +1,5 @@
-﻿using Context;
+﻿using System.Runtime.CompilerServices;
+using Context;
 
 namespace Bat.Context.Ux;
 
@@ -17,23 +18,21 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
 
-    /// <summary>
-    /// Returns drive mappings in insertion order for CWD resolution.
-    /// </summary>
     public IEnumerable<KeyValuePair<char, string>> GetRoots() => mappings;
 
-    public override IReadOnlyDictionary<string, string> GetFileAssociations() => UnixAssociations;
+    public override Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyDictionary<string, string>>(UnixAssociations);
 
     public override char NativeDirectorySeparator => '/';
     public override char NativePathSeparator => ':';
 
-    public override bool IsExecutable(char drive, string[] path)
+    public override Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
 #pragma warning disable CA1416 // File.GetUnixFileMode is supported on Unix
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
-        if (!File.Exists(native)) return false;
+        if (!File.Exists(native)) return Task.FromResult(false);
         var mode = File.GetUnixFileMode(native);
-        return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+        return Task.FromResult((mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
 #pragma warning restore CA1416
     }
 
@@ -84,28 +83,41 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             .FirstOrDefault(e => string.Equals(Path.GetFileName(e), name, StringComparison.OrdinalIgnoreCase));
     }
 
-    public override bool FileExists(char drive, string[] path)
+    // ── Async implementations ──────────────────────────────────────────────────
+
+    public override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
-        return File.Exists(native);
+        return Task.FromResult(File.Exists(native));
     }
 
-    public override bool DirectoryExists(char drive, string[] path)
+    public override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
-        return Directory.Exists(native);
+        return Task.FromResult(Directory.Exists(native));
     }
 
-    public override void CreateDirectory(char drive, string[] path) =>
+    public override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    {
         Directory.CreateDirectory(GetNativePath(drive, path));
+        return Task.CompletedTask;
+    }
 
-    public override void DeleteDirectory(char drive, string[] path, bool recursive) =>
+    public override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
+    {
         Directory.Delete(ResolveCaseInsensitive(GetNativePath(drive, path)), recursive);
+        return Task.CompletedTask;
+    }
 
-    public override void DeleteFile(char drive, string[] path) =>
+    public override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    {
         File.Delete(ResolveCaseInsensitive(GetNativePath(drive, path)));
+        return Task.CompletedTask;
+    }
 
-    public override IEnumerable<DosFileEntry> EnumerateEntries(char drive, string[] path, string pattern)
+    public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
+        char drive, string[] path, string pattern,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
         if (!Directory.Exists(native)) yield break;
@@ -114,13 +126,11 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
         foreach (var entry in Directory.EnumerateFileSystemEntries(native, pattern))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var name = Path.GetFileName(entry);
             var linfo = new FileInfo(entry);
             var attributes = linfo.Attributes;
 
-            // On Linux, FileInfo.Attributes might not always have ReparsePoint set for symlinks 
-            // depending on the runtime version or filesystem.
-            // Check explicitly using LinkTarget or UnixFileMode to see if it's a symlink.
             if (linfo.LinkTarget != null)
             {
                 attributes |= FileAttributes.ReparsePoint;
@@ -129,12 +139,9 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             {
                 try
                 {
-                    // Use File.GetAttributes which is more likely to use the lstat system call correctly.
                     var linkAttributes = File.GetAttributes(entry);
                     if (linkAttributes.HasFlag(FileAttributes.ReparsePoint))
-                    {
                         attributes |= FileAttributes.ReparsePoint;
-                    }
                 }
                 catch { }
             }
@@ -142,34 +149,24 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             var isDir = (attributes & FileAttributes.Directory) != 0;
             var isLink = (attributes & FileAttributes.ReparsePoint) != 0;
 
-            // Fallback: check if it's a symbolic link using lstat if possible or check if it's not a regular file/directory.
-            if (!isLink)
+            if (!isLink && isDir)
             {
-                // In some cases on Linux, directory symlinks might not have ReparsePoint.
-                // We've already tried LinkTarget and File.GetAttributes.
-                // If we still don't have it, but it's a directory, let's see if it's actually a symlink.
-                if (isDir)
+                try
                 {
-                    // For directories, we can check if it's a symbolic link by using ResolveLinkTarget.
-                    // This is more robust than just checking LinkTarget property on some systems.
-                    try
+                    var target = linfo.ResolveLinkTarget(false);
+                    if (target != null)
                     {
-                        var target = linfo.ResolveLinkTarget(false);
-                        if (target != null)
-                        {
-                            attributes |= FileAttributes.ReparsePoint;
-                            isLink = true;
-                        }
-                    }
-                    catch { }
+                        attributes |= FileAttributes.ReparsePoint;
+                        isLink = true;
+                      }
                 }
+                catch { }
             }
-            
-            // Check if it's a mount point (Junction)
+
             if (isDir && !isLink && IsMountPoint(entry))
             {
                 attributes |= FileAttributes.ReparsePoint;
-                attributes |= FileAttributes.Offline; // We use Offline as a marker for Junction/Mount
+                attributes |= FileAttributes.Offline;
             }
 
             _shortNameCache.TryGetValue(entry, out var shortName);
@@ -188,7 +185,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
     {
         var fullPath = Path.GetFullPath(path).TrimEnd('/');
         if (fullPath == "") fullPath = "/";
-        
+
         try
         {
             if (File.Exists("/proc/mounts"))
@@ -210,63 +207,71 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         return false;
     }
 
-    public override Stream OpenRead(char drive, string[] path) =>
-        File.OpenRead(ResolveCaseInsensitive(GetNativePath(drive, path)));
+    public override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(File.OpenRead(ResolveCaseInsensitive(GetNativePath(drive, path))));
 
-    public override Stream OpenWrite(char drive, string[] path, bool append)
+    public override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default)
     {
         var native = GetNativePath(drive, path);
-        return append
-            ? new(native, FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(native);
+        return Task.FromResult<Stream>(append
+            ? new FileStream(native, FileMode.Append, FileAccess.Write)
+            : File.OpenWrite(native));
     }
 
-    public override string ReadAllText(char drive, string[] path) =>
-        File.ReadAllText(ResolveCaseInsensitive(GetNativePath(drive, path)));
+    public override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        await File.ReadAllTextAsync(ResolveCaseInsensitive(GetNativePath(drive, path)), cancellationToken);
 
-    public override void WriteAllText(char drive, string[] path, string content) =>
-        File.WriteAllText(GetNativePath(drive, path), content);
+    public override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(GetNativePath(drive, path), content, cancellationToken);
 
-    public override void CopyFile(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite) =>
+    public override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
+    {
         File.Copy(ResolveCaseInsensitive(GetNativePath(srcDrive, srcPath)), GetNativePath(dstDrive, dstPath), overwrite);
+        return Task.CompletedTask;
+    }
 
-    public override void MoveFile(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath) =>
+    public override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
+    {
         File.Move(ResolveCaseInsensitive(GetNativePath(srcDrive, srcPath)), GetNativePath(dstDrive, dstPath));
+        return Task.CompletedTask;
+    }
 
-    public override void RenameFile(char drive, string[] path, string newName)
+    public override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
     {
         var src = ResolveCaseInsensitive(GetNativePath(drive, path));
         var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
         File.Move(src, dst);
+        return Task.CompletedTask;
     }
 
-    public override FileAttributes GetAttributes(char drive, string[] path)
+    public override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
         var native = ResolveCaseInsensitive(GetNativePath(drive, path));
         var linfo = new FileInfo(native);
         var attributes = linfo.Attributes;
-        
+
         if (linfo.LinkTarget != null)
-        {
             attributes |= FileAttributes.ReparsePoint;
-        }
 
         if ((attributes & FileAttributes.Directory) != 0 && (attributes & FileAttributes.ReparsePoint) == 0 && IsMountPoint(native))
         {
             attributes |= FileAttributes.ReparsePoint;
             attributes |= FileAttributes.Offline;
         }
-        return attributes;
+        return Task.FromResult(attributes);
     }
 
-    public override void SetAttributes(char drive, string[] path, FileAttributes attributes) =>
+    public override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
+    {
         File.SetAttributes(ResolveCaseInsensitive(GetNativePath(drive, path)), attributes);
+        return Task.CompletedTask;
+    }
 
-    public override long GetFileSize(char drive, string[] path) =>
-        new FileInfo(ResolveCaseInsensitive(GetNativePath(drive, path))).Length;
+    public override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new FileInfo(ResolveCaseInsensitive(GetNativePath(drive, path))).Length);
 
-    public override DateTime GetLastWriteTime(char drive, string[] path) =>
-        File.GetLastWriteTime(ResolveCaseInsensitive(GetNativePath(drive, path)));
+    public override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetLastWriteTime(ResolveCaseInsensitive(GetNativePath(drive, path))));
 
     protected override uint GetVolumeSerialNumber(string nativeRoot)
     {
@@ -290,9 +295,8 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
     private VolumeInfo GetVolumeInfo(string nativeRoot)
     {
-        // We zoeken de langste match in /proc/mounts die een prefix is van nativeRoot
         var fullPath = Path.GetFullPath(nativeRoot);
-        
+
         if (_volumeCache.TryGetValue(fullPath, out var cached)) return cached;
 
         string? bestMountPoint = null;
@@ -308,7 +312,6 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
                     var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length < 2) continue;
                     var mountPoint = parts[1];
-                    // Normaliseer mountPoint om trailing slash problemen te voorkomen, behalve voor root
                     var normalizedMount = mountPoint == "/" ? "/" : mountPoint.TrimEnd('/');
                     var normalizedPath = fullPath == "/" ? "/" : fullPath.TrimEnd('/');
 
@@ -323,10 +326,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
                 }
             }
         }
-        catch
-        {
-            // Fallback naar hash van het pad
-        }
+        catch { }
 
         VolumeInfo info;
         if (device != null)
@@ -358,9 +358,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         {
             var hash = 2166136261;
             foreach (var c in str)
-            {
                 hash = (hash ^ c) * 16777619;
-            }
             return hash;
         }
     }
@@ -377,15 +375,10 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
             {
                 var target = ReadSymbolicLink(link);
                 if (target != null && Path.GetFileName(target) == deviceName)
-                {
                     return Path.GetFileName(link);
-                }
             }
         }
-        catch
-        {
-            // Ignore
-        }
+        catch { }
         return null;
     }
 
@@ -395,9 +388,7 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         {
             var info = new FileInfo(path);
             if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
-            {
                 return info.LinkTarget;
-            }
         }
         catch { }
         return null;
@@ -412,19 +403,11 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
         }
         catch
         {
-            return 1024 * 1024 * 1024; // 1 GB fallback
+            return 1024 * 1024 * 1024;
         }
     }
 
-    // ── Owner ────────────────────────────────────────────────────────────────
-
     private string GetFileOwner(string fullPath) => getOwner?.Invoke(fullPath) ?? "";
-
-    // ── 8.3 short-name generation ─────────────────────────────────────────────
-    //
-    // Format:  {stem[0..2].ToUpper()}{((short)fullname.GetHashCode()):X4}~{n}.{ext[0..3].ToUpper()}
-    // Collision (~2, ~3, …): files sorted by creation date within the same directory.
-    // Results are cached for the lifetime of the adapter so names stay stable.
 
     private readonly Dictionary<string, string> _shortNameCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _processedDirs = new(StringComparer.OrdinalIgnoreCase);
@@ -455,19 +438,8 @@ internal class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<strin
 
     private static DateTime GetTimestampSafe(string path)
     {
-        try
-        {
-            // On Unix, GetLastWriteTime is more reliable than GetCreationTime
-            return File.GetLastWriteTime(path);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return DateTime.MinValue;
-        }
-        catch (IOException)
-        {
-            return DateTime.MinValue;
-        }
+        try { return File.GetLastWriteTime(path); }
+        catch { return DateTime.MinValue; }
     }
 
     private static bool NeedsShortName(string name)

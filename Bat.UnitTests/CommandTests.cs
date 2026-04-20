@@ -543,6 +543,33 @@ internal sealed class TestFileSystem : IFileSystem
     public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
     public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
     public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
+
+    // ── Async members ──────────────────────────────────────────────────────────
+    public Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(FileExists(drive, path));
+    public Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(DirectoryExists(drive, path));
+    public Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(IsExecutable(drive, path));
+    public Task CreateDirectoryAsync(char drive, string[] path, CancellationToken ct = default) { CreateDirectory(drive, path); return Task.CompletedTask; }
+    public Task DeleteFileAsync(char drive, string[] path, CancellationToken ct = default) { DeleteFile(drive, path); return Task.CompletedTask; }
+    public Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken ct = default) { DeleteDirectory(drive, path, recursive); return Task.CompletedTask; }
+    public async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(char drive, string[] path, string pattern, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        foreach (var e in EnumerateEntries(drive, path, pattern)) yield return e;
+    }
+    public Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(OpenRead(drive, path));
+    public Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken ct = default) => Task.FromResult(OpenWrite(drive, path, append));
+    public Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(ReadAllText(drive, path));
+    public Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken ct = default) { WriteAllText(drive, path, content); return Task.CompletedTask; }
+    public Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken ct = default) { CopyFile(srcDrive, srcPath, dstDrive, dstPath, overwrite); return Task.CompletedTask; }
+    public Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken ct = default) { MoveFile(srcDrive, srcPath, dstDrive, dstPath); return Task.CompletedTask; }
+    public Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken ct = default) { RenameFile(drive, path, newName); return Task.CompletedTask; }
+    public Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetAttributes(drive, path));
+    public Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken ct = default) { SetAttributes(drive, path, attributes); return Task.CompletedTask; }
+    public Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetFileSize(drive, path));
+    public Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetLastWriteTime(drive, path));
+    public Task<uint> GetVolumeSerialNumberAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetVolumeSerialNumber(drive));
+    public Task<string> GetVolumeLabelAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetVolumeLabel(drive));
+    public Task<long> GetFreeBytesAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetFreeBytes(drive));
+    public Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken ct = default) => Task.FromResult(GetFileAssociations());
 }
 
 [TestClass]

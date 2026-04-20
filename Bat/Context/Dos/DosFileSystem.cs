@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Context;
@@ -26,7 +27,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
     /// </summary>
     public IEnumerable<KeyValuePair<char, string>> GetRoots() => _roots;
 
-    public override IReadOnlyDictionary<string, string> GetFileAssociations()
+    public override Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken cancellationToken = default)
     {
         var assoc = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -42,7 +43,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
             }
         }
         catch { }
-        return assoc;
+        return Task.FromResult<IReadOnlyDictionary<string, string>>(assoc);
     }
 
     protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
@@ -99,20 +100,29 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
         char[]? lpFileSystemNameBuffer,
         int nFileSystemNameSize);
 
-    public override bool FileExists(char drive, string[] path) =>
-        File.Exists(GetNativePath(drive, path));
+    // ── Async implementations ──────────────────────────────────────────────────
 
-    public override bool DirectoryExists(char drive, string[] path) =>
-        Directory.Exists(GetNativePath(drive, path));
+    public override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.Exists(GetNativePath(drive, path)));
 
-    public override void CreateDirectory(char drive, string[] path) =>
+    public override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Directory.Exists(GetNativePath(drive, path)));
+
+    public override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    {
         Directory.CreateDirectory(GetNativePath(drive, path));
+        return Task.CompletedTask;
+    }
 
-    public override void DeleteDirectory(char drive, string[] path, bool recursive) =>
+    public override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
+    {
         Directory.Delete(GetNativePath(drive, path), recursive);
+        return Task.CompletedTask;
+    }
 
-    public override IEnumerable<DosFileEntry> EnumerateEntries(
-        char drive, string[] path, string pattern)
+    public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
+        char drive, string[] path, string pattern,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var searchPath = Path.Combine(GetNativePath(drive, path), pattern);
         var dirPath = GetNativePath(drive, path);
@@ -125,6 +135,7 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
         {
             do
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (data.cFileName != "." && data.cFileName != "..")
                 {
                     var isDir = (data.dwFileAttributes & 0x10) != 0;
@@ -173,49 +184,60 @@ internal partial class DosFileSystem(Dictionary<char, string> roots) : FileSyste
         }
     }
 
-    public override void DeleteFile(char drive, string[] path) =>
+    public override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    {
         File.Delete(GetNativePath(drive, path));
+        return Task.CompletedTask;
+    }
 
-    public override void CopyFile(
-        char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite) =>
+    public override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
+    {
         File.Copy(GetNativePath(srcDrive, srcPath), GetNativePath(dstDrive, dstPath), overwrite);
+        return Task.CompletedTask;
+    }
 
-    public override void MoveFile(
-        char srcDrive, string[] srcPath, char dstDrive, string[] dstPath) =>
+    public override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
+    {
         File.Move(GetNativePath(srcDrive, srcPath), GetNativePath(dstDrive, dstPath));
+        return Task.CompletedTask;
+    }
 
-    public override void RenameFile(char drive, string[] path, string newName)
+    public override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
     {
         var src = GetNativePath(drive, path);
         var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
         File.Move(src, dst);
+        return Task.CompletedTask;
     }
 
-    public override Stream OpenRead(char drive, string[] path) =>
-        File.OpenRead(GetNativePath(drive, path));
+    public override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(File.OpenRead(GetNativePath(drive, path)));
 
-    public override Stream OpenWrite(char drive, string[] path, bool append) =>
-        append
-            ? new(GetNativePath(drive, path), FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(GetNativePath(drive, path));
+    public override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(append
+            ? new FileStream(GetNativePath(drive, path), FileMode.Append, FileAccess.Write)
+            : File.OpenWrite(GetNativePath(drive, path)));
 
-    public override string ReadAllText(char drive, string[] path) =>
-        File.ReadAllText(GetNativePath(drive, path));
+    public override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        await File.ReadAllTextAsync(GetNativePath(drive, path), cancellationToken);
 
-    public override void WriteAllText(char drive, string[] path, string content) =>
-        File.WriteAllText(GetNativePath(drive, path), content);
+    public override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(GetNativePath(drive, path), content, cancellationToken);
 
-    public override FileAttributes GetAttributes(char drive, string[] path) =>
-        File.GetAttributes(GetNativePath(drive, path));
+    public override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetAttributes(GetNativePath(drive, path)));
 
-    public override void SetAttributes(char drive, string[] path, FileAttributes attributes) =>
+    public override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
+    {
         File.SetAttributes(GetNativePath(drive, path), attributes);
+        return Task.CompletedTask;
+    }
 
-    public override long GetFileSize(char drive, string[] path) =>
-        new FileInfo(GetNativePath(drive, path)).Length;
+    public override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new FileInfo(GetNativePath(drive, path)).Length);
 
-    public override DateTime GetLastWriteTime(char drive, string[] path) =>
-        File.GetLastWriteTime(GetNativePath(drive, path));
+    public override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetLastWriteTime(GetNativePath(drive, path)));
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct WIN32_FIND_DATA

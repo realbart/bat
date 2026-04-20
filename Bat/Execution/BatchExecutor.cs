@@ -17,7 +17,7 @@ internal class BatchExecutor : IExecutor
     {
         var context = batchContext.Context.StartNew();
         var (drive, path) = ParseNativePath(executablePath);
-        var content = context.FileSystem.ReadAllText(drive, path);
+        var content = await context.FileSystem.ReadAllTextAsync(drive, path);
 
         var childContext = new BatchContext
         {

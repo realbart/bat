@@ -113,7 +113,7 @@ internal class Dispatcher : IDispatcher
                 break;
             case IfOperator.Exist:
                 var (drive, segments) = ParseNativePath(right, bc);
-                conditionMet = bc.Context.FileSystem.FileExists(drive, segments) || bc.Context.FileSystem.DirectoryExists(drive, segments);
+                conditionMet = await bc.Context.FileSystem.FileExistsAsync(drive, segments) || await bc.Context.FileSystem.DirectoryExistsAsync(drive, segments);
                 break;
             case IfOperator.Defined:
                 conditionMet = bc.Context.EnvironmentVariables.ContainsKey(right);
@@ -167,7 +167,7 @@ internal class Dispatcher : IDispatcher
         if (rawName.Length == 2 && char.IsAsciiLetter(rawName[0]) && rawName[1] == ':')
         {
             var targetDrive = char.ToUpperInvariant(rawName[0]);
-            if (bc.Context.FileSystem.DirectoryExists(targetDrive, []))
+            if (await bc.Context.FileSystem.DirectoryExistsAsync(targetDrive, []))
             {
                 bc.Context.SetCurrentDrive(targetDrive);
                 return 0;
@@ -183,7 +183,7 @@ internal class Dispatcher : IDispatcher
             if (result.HasValue) return result.Value;
         }
 
-        var executablePath = ExecutableResolver.Resolve(rawName, bc.Context);
+        var executablePath = await ExecutableResolver.ResolveAsync(rawName, bc.Context);
         if (executablePath == null)
         {
             await bc.Console.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");

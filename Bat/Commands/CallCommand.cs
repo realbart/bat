@@ -160,7 +160,7 @@ internal class CallCommand : ICommand
 
     private static async Task<int> CallFileAsync(string target, IArgumentSet arguments, BatchContext bc)
     {
-        var resolvedPath = ExecutableResolver.Resolve(target, bc.Context);
+        var resolvedPath = await ExecutableResolver.ResolveAsync(target, bc.Context);
         if (resolvedPath == null)
         {
             await bc.Console.Error.WriteLineAsync($"'{target}' is not recognized as an internal or external command,");

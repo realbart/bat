@@ -94,7 +94,7 @@ internal class CdCommand : ICommand
 
         var newPath = ResolvePath(context, targetDrive, pathPart);
 
-        if (!context.FileSystem.DirectoryExists(targetDrive, newPath))
+        if (!await context.FileSystem.DirectoryExistsAsync(targetDrive, newPath))
         {
             await batchContext.Console.Error.WriteLineAsync("The system cannot find the path specified.");
             return 1;

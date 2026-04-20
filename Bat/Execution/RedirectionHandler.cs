@@ -61,7 +61,7 @@ internal sealed class RedirectionHandler : IDisposable
             return isError ? console.WithError(TextWriter.Null) : console.WithOutput(TextWriter.Null);
 
         var (drive, path) = ResolvePath(ctx, targetText);
-        var stream = ctx.FileSystem.OpenWrite(drive, path, append);
+        var stream = ctx.FileSystem.OpenWriteAsync(drive, path, append).GetAwaiter().GetResult();
         var writer = new StreamWriter(stream) { AutoFlush = true, NewLine = "\r\n" };
         handler._streams.Add(writer);
         handler._streams.Add(stream);
@@ -71,7 +71,7 @@ internal sealed class RedirectionHandler : IDisposable
     private static IConsole ApplyInputRedirection(RedirectionHandler handler, IContext ctx, IConsole console, string targetText)
     {
         var (drive, path) = ResolvePath(ctx, targetText);
-        var stream = ctx.FileSystem.OpenRead(drive, path);
+        var stream = ctx.FileSystem.OpenReadAsync(drive, path).GetAwaiter().GetResult();
         var reader = new StreamReader(stream);
         handler._streams.Add(reader);
         handler._streams.Add(stream);

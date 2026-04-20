@@ -466,7 +466,8 @@ internal class LineEditor
 
         var (drive, dir, prefix) = ParseCompletionArg(partial, context);
         var entries = context.FileSystem
-            .EnumerateEntries(drive, dir, prefix + "*")
+            .EnumerateEntriesAsync(drive, dir, prefix + "*")
+            .ToBlockingEnumerable()
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 

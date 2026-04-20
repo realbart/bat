@@ -96,39 +96,39 @@ internal class DirCommand : ICommand
     private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path,
         DirOptions opts, string pattern, bool recurse)
     {
-        var (found, entries) = TryGetFilteredEntries(context, drive, path, pattern, opts);
+        var (found, entries) = await TryGetFilteredEntriesAsync(context, drive, path, pattern, opts);
         if (!found)
         {
             // Drive root unreachable (e.g. subst deleted): no header, specific message.
             // Drive reachable but subpath missing: header shown, "File Not Found".
-            var driveReachable = context.FileSystem.DirectoryExists(drive, []);
-            if (!opts.BareNames && driveReachable) await WriteDirectoryHeader(console, context, drive, path);
+            var driveReachable = await context.FileSystem.DirectoryExistsAsync(drive, []);
+            if (!opts.BareNames && driveReachable) await WriteDirectoryHeaderAsync(console, context, drive, path);
             await console.Out.WriteLineAsync(driveReachable ? "File Not Found" : "The system cannot find the path specified.");
             return;
         }
 
-        if (!opts.BareNames) await WriteDirectoryHeader(console, context, drive, path);
+        if (!opts.BareNames) await WriteDirectoryHeaderAsync(console, context, drive, path);
 
         var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, context, entries, opts);
 
-        if (!opts.BareNames) await WriteDirectorySummary(console, context, drive, fileCount, dirCount, totalSize, opts);
+        if (!opts.BareNames) await WriteDirectorySummaryAsync(console, context, drive, fileCount, dirCount, totalSize, opts);
 
         if (!recurse) return;
-        foreach (var entry in context.FileSystem.EnumerateEntries(drive, path, "*").Where(e => e.IsDirectory))
+        await foreach (var entry in context.FileSystem.EnumerateEntriesAsync(drive, path, "*"))
         {
-            if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            if (!entry.IsDirectory || entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 continue;
 
             await ListDirectoryAsync(console, context, drive, [.. path, entry.Name], opts, pattern, recurse: true);
         }
     }
 
-    private static async Task WriteDirectoryHeader(IConsole console, IContext context, char drive, string[] path)
+    private static async Task WriteDirectoryHeaderAsync(IConsole console, IContext context, char drive, string[] path)
     {
         var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
-        var serial = context.FileSystem.GetVolumeSerialNumber(drive);
+        var serial = await context.FileSystem.GetVolumeSerialNumberAsync(drive);
         var serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
-        var label = context.FileSystem.GetVolumeLabel(drive);
+        var label = await context.FileSystem.GetVolumeLabelAsync(drive);
         if (string.IsNullOrEmpty(label))
             await console.Out.WriteLineAsync($" Volume in drive {drive} has no label.");
         else
@@ -139,107 +139,28 @@ internal class DirCommand : ICommand
         await console.Out.WriteLineAsync();
     }
 
-    private static async Task WriteDirectorySummary(IConsole console, IContext context, char drive, int fileCount, int dirCount, long totalSize, DirOptions opts)
+    private static async Task WriteDirectorySummaryAsync(IConsole console, IContext context, char drive, int fileCount, int dirCount, long totalSize, DirOptions opts)
     {
         var totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
         await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
 
-        var freeBytes = context.FileSystem.GetFreeBytes(drive);
+        var freeBytes = await context.FileSystem.GetFreeBytesAsync(drive);
         var freeStr = opts.ThousandSeparator ? $"{freeBytes,15:N0}" : $"{freeBytes,15}";
         await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)  {freeStr} bytes free");
         await console.Out.WriteLineAsync();
     }
 
-    private static (bool Found, List<DosFileEntry> Entries) TryGetFilteredEntries(IContext context, char drive, string[] path, string pattern, DirOptions opts)
+    private static async Task<(bool Found, List<DosFileEntry> Entries)> TryGetFilteredEntriesAsync(IContext context, char drive, string[] path, string pattern, DirOptions opts)
     {
-        if (!context.FileSystem.DirectoryExists(drive, path))
+        if (!await context.FileSystem.DirectoryExistsAsync(drive, path))
             return (false, []);
 
-        IEnumerable<DosFileEntry> entries = context.FileSystem.EnumerateEntries(drive, path, pattern).ToList();
+        var entries = await context.FileSystem.EnumerateEntriesAsync(drive, path, pattern).ToListAsync();
 
-        if (opts.AttributeFilter.Length > 0) entries = entries.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));
-        entries = ApplySortOrder(entries, opts);
-        return (true, entries.ToList());
-    }
-
-    private static IEnumerable<DosFileEntry> ApplySortOrder(IEnumerable<DosFileEntry> entries, DirOptions opts)
-    {
-        entries = opts.SortKey switch
-        {
-            "N" => opts.SortReverse
-                ? entries.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                : entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
-            "E" => opts.SortReverse
-                ? entries.OrderByDescending(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
-                : entries.OrderBy(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
-            "S" => opts.SortReverse
-                ? entries.OrderByDescending(e => e.Size)
-                : entries.OrderBy(e => e.Size),
-            "D" => opts.SortReverse
-                ? entries.OrderByDescending(e => e.LastWriteTime)
-                : entries.OrderBy(e => e.LastWriteTime),
-            _ => entries
-        };
-
-        if (opts.GroupDirsFirst)
-            entries = entries.OrderBy(e => e.IsDirectory ? 0 : 1);
-
-        return entries;
-    }
-
-    private static string GetReparseLabel(DosFileEntry entry)
-    {
-        // For now, on Linux we will show <SYMLINKD> for directories that are symlinks.
-        // If we want <JUNCTION>, we need a way to distinguish them.
-        // In the Bat filesystem abstraction, we can use the Attributes or a custom flag.
-        // Windows uses specific reparse tags.
-        
-        // Let's use a convention: if it has ReparsePoint AND it's a directory,
-        // we'll check if it's a "junction" (mount point on Linux).
-        
-        if (entry.Attributes.HasFlag((FileAttributes)0x400)) // ReparsePoint
-        {
-            // We use a custom bit in Attributes to distinguish Junction from Symlink if possible,
-            // or we just check if it's a symlink.
-            // On Windows:
-            // <SYMLINKD> - symlink to directory
-            // <JUNCTION> - junction point
-            
-            // For Linux, we'll implement the logic in the FileSystem to set these.
-            // Since FileAttributes is an enum, we might be limited.
-            // But we can check for other bits.
-            
-            // If the FileSystem sets the "Archive" bit for symlinks but not for junctions? No.
-            
-            // Let's look at how we can distinguish them in DosFileEntry.
-            // Wait, DosFileEntry is a record struct.
-            
-            // Let's assume for now that if it has ReparsePoint, we want to know if it's a symlink or junction.
-            // We'll use a heuristic for now or better, update DosFileEntry if we can.
-            // But I should try to avoid changing DosFileEntry if possible.
-            
-            // What if we use the 'Owner' field or 'ShortName' to pass extra info? No, that's dirty.
-            
-            // Actually, Windows DIR output for junctions and symlinks also shows the target:
-            // [target]
-            // But the requirement only asks for the <TAG>.
-            
-            // Let's assume we use Attribute 0x1000 (Compressed) or something for Junctions?
-            // No, let's just use what we have.
-            
-            if (entry.Attributes.HasFlag(FileAttributes.Directory))
-            {
-                // If it's a mount point (junction in our mapping), we want <JUNCTION>
-                // If it's a symlink to a directory, we want <SYMLINKD>
-                
-                // Let's use a bit that is unlikely to be set on Linux: FileAttributes.Offline (0x1000) for Junctions?
-                if (entry.Attributes.HasFlag(FileAttributes.Offline))
-                    return "<JUNCTION>";
-                
-                return "<SYMLINKD>";
-            }
-        }
-        return "<DIR>";
+        IEnumerable<DosFileEntry> filtered = entries;
+        if (opts.AttributeFilter.Length > 0) filtered = filtered.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));
+        filtered = ApplySortOrder(filtered, opts);
+        return (true, filtered.ToList());
     }
 
     private static async Task<(int FileCount, int DirCount, long TotalSize)> WriteEntriesAsync(
@@ -321,6 +242,48 @@ internal class DirCommand : ICommand
             }
         }
         if (col > 0) await console.Out.WriteLineAsync();
+    }
+
+    private static IEnumerable<DosFileEntry> ApplySortOrder(IEnumerable<DosFileEntry> entries, DirOptions opts)
+    {
+        entries = opts.SortKey switch
+        {
+            "N" => opts.SortReverse
+                ? entries.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                : entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
+            "E" => opts.SortReverse
+                ? entries.OrderByDescending(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)
+                : entries.OrderBy(e => Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase),
+            "S" => opts.SortReverse
+                ? entries.OrderByDescending(e => e.Size)
+                : entries.OrderBy(e => e.Size),
+            "D" => opts.SortReverse
+                ? entries.OrderByDescending(e => e.LastWriteTime)
+                : entries.OrderBy(e => e.LastWriteTime),
+            _ => entries
+        };
+
+        if (opts.GroupDirsFirst)
+            entries = entries.OrderBy(e => e.IsDirectory ? 0 : 1);
+
+        return entries;
+    }
+
+    private static string GetReparseLabel(DosFileEntry entry)
+    {
+        if (entry.Attributes.HasFlag((FileAttributes)0x400)) // ReparsePoint
+        {
+            if (entry.Attributes.HasFlag(FileAttributes.Directory))
+            {
+                // If it's a mount point (junction in our mapping), we want <JUNCTION>
+                // If it's a symlink to a directory, we want <SYMLINKD>
+                if (entry.Attributes.HasFlag(FileAttributes.Offline))
+                    return "<JUNCTION>";
+                
+                return "<SYMLINKD>";
+            }
+        }
+        return "<DIR>";
     }
 
     private static bool MatchesAttributeFilter(DosFileEntry entry, string filter)

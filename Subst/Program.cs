@@ -79,7 +79,7 @@ public static class Program
         }
 
         var (targetDrive, targetSegments) = ParseDosPath(pathArg, context);
-        if (!context.FileSystem.DirectoryExists(targetDrive, targetSegments))
+        if (!await context.FileSystem.DirectoryExistsAsync(targetDrive, targetSegments))
         {
             await output.WriteLineAsync($"Path not found - {pathArg}");
             return 1;

@@ -92,18 +92,18 @@ public static class Program
 
         async Task PrintTree(char currentDrive, string[] currentPath, string prefix)
         {
-            var directories = context.FileSystem
-                .EnumerateEntries(currentDrive, currentPath, "*")
+            var directories = await context.FileSystem
+                .EnumerateEntriesAsync(currentDrive, currentPath, "*")
                 .Where(e => e.IsDirectory)
                 .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+                .ToListAsync();
 
             var files = hasF
-                ? context.FileSystem
-                    .EnumerateEntries(currentDrive, currentPath, "*")
+                ? await context.FileSystem
+                    .EnumerateEntriesAsync(currentDrive, currentPath, "*")
                     .Where(e => !e.IsDirectory)
                     .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToList()
+                    .ToListAsync()
                 : [];
 
             if (hasF)

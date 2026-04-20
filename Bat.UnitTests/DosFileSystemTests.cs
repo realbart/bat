@@ -1,6 +1,7 @@
 #if WINDOWS
 using Bat.Context;
 using Bat.Context.Dos;
+using Context;
 
 namespace Bat.UnitTests;
 
