@@ -1,7 +1,25 @@
 # STEP 12 - Command Line Parameters van Bat
 
-**Doel:** Bat accepteert command line opties die grotendeels compatibel zijn met CMD.EXE, met een
+**Doel:** Bat accepteert command line opties die gedeeltelijk compatibel zijn met CMD.EXE, met een
 aantal uitbreidingen en een automatische Windows/Unix-modusdetectie.
+
+## Linux voorbeeld
+
+bat -c «clientcommand» «hostfile» «hostfile»
+bijvoorbeeld
+bat -c "subst C: Z:\home\bart\program files\foo.bat" ~/autoexec.bat "../my files/bar.cmd"
+
+voert achtereenvolgens het commando letterlijke commando uit,
+gevolgd door de twee opgegeven batch bestanden.
+
+## Windows voorbeeld
+bat /C:«clientcommand» «hostfile» «hostfile»
+bijvoorbeeld
+bat /C "subst C: Z:\home\bart\program files\foo.bat" %HOME%\autoexec.bat "..\my files\bar.cmd"
+
+voert achtereenvolgens het commando letterlijke commando uit,
+gevolgd door de twee opgegeven batch bestanden.
+
 
 ## Modusdetectie: Windows vs. Unix
 

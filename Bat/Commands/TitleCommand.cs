@@ -19,13 +19,13 @@ internal class TitleCommand : ICommand
     public async Task<int> ExecuteAsync(IArgumentSet arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         if (arguments.IsHelpRequest) { await batchContext.Console.Out.WriteLineAsync(HelpText); return 0; }
-        
+
         var title = arguments.FullArgument;
         if (!string.IsNullOrEmpty(title))
         {
-            System.Console.Title = title;
+            await batchContext.Console.Out.WriteAsync($"\x1b]0;{title}\x07");
         }
-        
+
         return 0;
     }
 }

@@ -42,8 +42,6 @@ public class TitleCommandTests
     [TestMethod]
     public async Task Title_SetsWindowTitle()
     {
-        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)) return;
-
         var cmd = new TitleCommand();
         var console = new TestConsole();
         var ctx = new TestCommandContext { Console = console };
@@ -53,24 +51,21 @@ public class TitleCommandTests
         var exitCode = await cmd.ExecuteAsync(args, bc, []);
 
         Assert.AreEqual(0, exitCode);
-        Assert.AreEqual("My Window Title", System.Console.Title);
+        Assert.IsTrue(console.OutText.Contains("\x1b]0;My Window Title\x07"), "Should emit ANSI OSC sequence");
     }
 
     [TestMethod]
     public async Task Title_EmptyString_DoesNothing()
     {
-        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)) return;
-
         var cmd = new TitleCommand();
         var console = new TestConsole();
         var ctx = new TestCommandContext { Console = console };
         var bc = new BatchContext { Context = ctx };
 
-        var originalTitle = System.Console.Title;
         var exitCode = await cmd.ExecuteAsync(TestArgs.For<TitleCommand>(), bc, []);
 
         Assert.AreEqual(0, exitCode);
-        Assert.AreEqual(originalTitle, System.Console.Title);
+        Assert.AreEqual("", console.OutText, "Should not emit ANSI sequence for empty title");
     }
 
     [TestMethod]
