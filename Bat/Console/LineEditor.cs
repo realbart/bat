@@ -80,264 +80,309 @@ internal class LineEditor
         var console = context.Console;
         await console.Out.WriteAsync(prompt);
 
+        // Non-interactive (redirected stdin) → fallback to line-based input (no fancy editing)
+        if (!console.IsInteractive)
+        {
+            var line = await console.In.ReadLineAsync();
+            if (line != null) AddToHistory(line);
+            return line;
+        }
+
         var lastLineBreak = prompt.LastIndexOfAny(['\r', '\n']);
         var promptLength = lastLineBreak >= 0 ? prompt.Length - lastLineBreak - 1 : prompt.Length;
 
-        var buffer = new List<char>();
-        var cursor = 0;
-        var historyIndex = _history.Count;
-        var insertMode = true;
-        var template = _history.Count > 0 ? _history[^1] : null;
-        await SetCursorShapeAsync(console, insertMode);
+        var state = new EditorState
+        {
+            Buffer = [],
+            Cursor = 0,
+            HistoryIndex = _history.Count,
+            InsertMode = true,
+            Template = _history.Count > 0 ? _history[^1] : null
+        };
+
+        await SetCursorShapeAsync(console, state.InsertMode);
         _completionCandidates = null;
 
         while (true)
         {
             var key = await console.ReadKeyAsync(intercept: true, cancellationToken);
-
             if (key.Key != ConsoleKey.Tab) _completionCandidates = null;
 
-            if (key.Key == ConsoleKey.Enter)
+            var result = await ProcessKeyAsync(key, state, console, prompt, promptLength, context, cancellationToken);
+            if (result.ShouldReturn)
             {
-                await console.Out.WriteLineAsync();
-                var line = new string([.. buffer]);
-                AddToHistory(line);
-                return line;
+                if (result.Line != null) AddToHistory(result.Line);
+                return result.Line;
             }
-
-            if (key.Key == ConsoleKey.Tab)
-            {
-                cursor = await TryCompleteAsync(console, buffer, cursor, promptLength, context,
-                    !key.Modifiers.HasFlag(ConsoleModifiers.Shift));
-                continue;
-            }
-
-            switch (key.Key)
-            {
-                case ConsoleKey.Escape:
-                    await ClearLineAsync(console, buffer, promptLength);
-                    buffer.Clear();
-                    cursor = 0;
-                    continue;
-
-                case ConsoleKey.C when key.Modifiers.HasFlag(ConsoleModifiers.Control):
-                    await console.Out.WriteLineAsync("^C");
-                    return null;
-
-                case ConsoleKey.Z when key.Modifiers.HasFlag(ConsoleModifiers.Control):
-                    cursor = await InsertCharAsync(console, buffer, cursor, '\x1a', insertMode, promptLength);
-                    continue;
-
-                // ── History ──────────────────────────────────────────────────
-                case ConsoleKey.UpArrow:
-                    if (historyIndex > 0)
-                        cursor = await ReplaceBufferAsync(console, buffer, _history[--historyIndex], promptLength);
-                    continue;
-
-                case ConsoleKey.DownArrow:
-                    if (historyIndex < _history.Count - 1)
-                        cursor = await ReplaceBufferAsync(console, buffer, _history[++historyIndex], promptLength);
-                    else if (historyIndex < _history.Count)
-                    {
-                        historyIndex = _history.Count;
-                        cursor = await ReplaceBufferAsync(console, buffer, "", promptLength);
-                    }
-                    continue;
-
-                case ConsoleKey.PageUp:
-                    if (_history.Count > 0)
-                    {
-                        historyIndex = 0;
-                        cursor = await ReplaceBufferAsync(console, buffer, _history[0], promptLength);
-                    }
-                    continue;
-
-                case ConsoleKey.PageDown:
-                    if (_history.Count > 0)
-                    {
-                        historyIndex = _history.Count - 1;
-                        cursor = await ReplaceBufferAsync(console, buffer, _history[^1], promptLength);
-                    }
-                    continue;
-
-                case ConsoleKey.F7:
-                    if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
-                    {
-                        ClearHistory();
-                    }
-                    else
-                    {
-                        (var selected, cursor) = await ShowHistoryListAsync(
-                            console, prompt, promptLength, buffer, cursor, cancellationToken);
-                        if (selected != null) return selected;
-                    }
-                    continue;
-
-                // ── Template ─────────────────────────────────────────────────
-                case ConsoleKey.F3:
-                    if (template != null && cursor < template.Length)
-                    {
-                        var tail = template[cursor..];
-                        buffer.AddRange(tail);
-                        await console.Out.WriteAsync(tail);
-                        cursor = buffer.Count;
-                    }
-                    continue;
-
-                case ConsoleKey.F5:
-                    template = new string([.. buffer]);
-                    await ClearLineAsync(console, buffer, promptLength);
-                    buffer.Clear();
-                    cursor = 0;
-                    continue;
-
-                case ConsoleKey.F1:
-                    if (template != null && cursor < template.Length)
-                        cursor = await InsertCharAsync(console, buffer, cursor, template[cursor], insertMode, promptLength);
-                    continue;
-
-                case ConsoleKey.F2:
-                {
-                    var next = await console.ReadKeyAsync(intercept: true, cancellationToken);
-                    if (template != null && cursor < template.Length)
-                    {
-                        var idx = template.IndexOf(next.KeyChar, cursor);
-                        if (idx > cursor)
-                            foreach (var c in template[cursor..idx])
-                                cursor = await InsertCharAsync(console, buffer, cursor, c, insertMode, promptLength);
-                    }
-                    continue;
-                }
-
-                case ConsoleKey.F4:
-                {
-                    var next = await console.ReadKeyAsync(intercept: true, cancellationToken);
-                    if (template != null && cursor < template.Length)
-                    {
-                        var idx = template.IndexOf(next.KeyChar, cursor);
-                        if (idx >= 0)
-                            template = template[..cursor] + template[idx..];
-                    }
-                    continue;
-                }
-
-                case ConsoleKey.F8:
-                {
-                    var prefix = new string([.. buffer[..cursor]]);
-                    var searchFrom = historyIndex < _history.Count ? historyIndex - 1 : _history.Count - 1;
-                    for (var i = searchFrom; i >= 0; i--)
-                    {
-                        if (_history[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        {
-                            historyIndex = i;
-                            cursor = await ReplaceBufferAsync(console, buffer, _history[i], promptLength);
-                            cursor = prefix.Length;
-                            console.CursorLeft = promptLength + cursor;
-                            break;
-                        }
-                    }
-                    continue;
-                }
-
-                case ConsoleKey.F9:
-                {
-                    var numKey = await console.ReadKeyAsync(intercept: true, cancellationToken);
-                    if (char.IsDigit(numKey.KeyChar))
-                    {
-                        var digits = new List<char> { numKey.KeyChar };
-                        while (true)
-                        {
-                            var nk = await console.ReadKeyAsync(intercept: true, cancellationToken);
-                            if (nk.Key == ConsoleKey.Enter) break;
-                            if (char.IsDigit(nk.KeyChar)) digits.Add(nk.KeyChar);
-                        }
-                        if (int.TryParse(new string([.. digits]), out var idx)
-                            && idx >= 0 && idx < _history.Count)
-                        {
-                            historyIndex = idx;
-                            cursor = await ReplaceBufferAsync(console, buffer, _history[idx], promptLength);
-                        }
-                    }
-                    continue;
-                }
-
-                // ── Navigation ───────────────────────────────────────────────
-                case ConsoleKey.LeftArrow:
-                    cursor = key.Modifiers.HasFlag(ConsoleModifiers.Control)
-                        ? MoveCursorWordLeft(buffer, cursor)
-                        : Math.Max(0, cursor - 1);
-                    console.CursorLeft = promptLength + cursor;
-                    continue;
-
-                case ConsoleKey.RightArrow:
-                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
-                        cursor = MoveCursorWordRight(buffer, cursor);
-                    else if (cursor < buffer.Count)
-                        cursor++;
-                    else if (template != null && cursor < template.Length)
-                    {
-                        cursor = await InsertCharAsync(console, buffer, cursor, template[cursor], insertMode, promptLength);
-                        continue;
-                    }
-                    console.CursorLeft = promptLength + cursor;
-                    continue;
-
-                case ConsoleKey.Home:
-                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && cursor > 0)
-                    {
-                        buffer.RemoveRange(0, cursor);
-                        cursor = 0;
-                        console.CursorLeft = promptLength;
-                        await console.Out.WriteAsync(new string([.. buffer]) + " ");
-                    }
-                    cursor = 0;
-                    console.CursorLeft = promptLength;
-                    continue;
-
-                case ConsoleKey.End:
-                    if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && cursor < buffer.Count)
-                    {
-                        var eraseCount = buffer.Count - cursor;
-                        buffer.RemoveRange(cursor, eraseCount);
-                        console.CursorLeft = promptLength + cursor;
-                        await console.Out.WriteAsync(new string(' ', eraseCount));
-                        console.CursorLeft = promptLength + cursor;
-                    }
-                    else
-                    {
-                        cursor = buffer.Count;
-                        console.CursorLeft = promptLength + cursor;
-                    }
-                    continue;
-
-                // ── Editing ──────────────────────────────────────────────────
-                case ConsoleKey.Backspace:
-                    if (cursor > 0)
-                    {
-                        cursor--;
-                        buffer.RemoveAt(cursor);
-                        await RedrawFromCursorAsync(console, buffer, cursor, promptLength);
-                    }
-                    continue;
-
-                case ConsoleKey.Delete:
-                    if (cursor < buffer.Count)
-                    {
-                        buffer.RemoveAt(cursor);
-                        await RedrawFromCursorAsync(console, buffer, cursor, promptLength);
-                    }
-                    continue;
-
-                case ConsoleKey.Insert:
-                    insertMode = !insertMode;
-                    await SetCursorShapeAsync(console, insertMode);
-                    continue;
-            }
-
-            // ── Printable character ───────────────────────────────────────────
-            if (key.KeyChar >= ' ')
-                cursor = await InsertCharAsync(console, buffer, cursor, key.KeyChar, insertMode, promptLength);
         }
+    }
+
+    private async Task<(bool ShouldReturn, string? Line)> ProcessKeyAsync(
+        ConsoleKeyInfo key, EditorState state, IConsole console, string prompt, int promptLength,
+        IContext context, CancellationToken cancellationToken)
+    {
+        switch (key.Key)
+        {
+            case ConsoleKey.Enter:
+                await console.Out.WriteLineAsync();
+                return (true, new string([.. state.Buffer]));
+
+            case ConsoleKey.Tab:
+                state.Cursor = await TryCompleteAsync(console, state.Buffer, state.Cursor, promptLength, context,
+                    !key.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                break;
+
+            case ConsoleKey.Escape:
+                await ClearLineAsync(console, state.Buffer, promptLength);
+                state.Buffer.Clear();
+                state.Cursor = 0;
+                break;
+
+            case ConsoleKey.C when key.Modifiers.HasFlag(ConsoleModifiers.Control):
+                await console.Out.WriteLineAsync("^C");
+                return (true, null);
+
+            case ConsoleKey.Z when key.Modifiers.HasFlag(ConsoleModifiers.Control):
+                state.Cursor = await InsertCharAsync(console, state.Buffer, state.Cursor, '\x1a', state.InsertMode, promptLength);
+                break;
+
+            // ── History ──────────────────────────────────────────────────────
+            case ConsoleKey.UpArrow:
+                if (state.HistoryIndex > 0)
+                    state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[--state.HistoryIndex], promptLength);
+                break;
+
+            case ConsoleKey.DownArrow:
+                if (state.HistoryIndex < _history.Count - 1)
+                    state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[++state.HistoryIndex], promptLength);
+                else if (state.HistoryIndex < _history.Count)
+                {
+                    state.HistoryIndex = _history.Count;
+                    state.Cursor = await ReplaceBufferAsync(console, state.Buffer, "", promptLength);
+                }
+                break;
+
+            case ConsoleKey.PageUp:
+                if (_history.Count > 0)
+                {
+                    state.HistoryIndex = 0;
+                    state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[0], promptLength);
+                }
+                break;
+
+            case ConsoleKey.PageDown:
+                if (_history.Count > 0)
+                {
+                    state.HistoryIndex = _history.Count - 1;
+                    state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[^1], promptLength);
+                }
+                break;
+
+            case ConsoleKey.F7:
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+                    ClearHistory();
+                else
+                {
+                    (var selected, state.Cursor) = await ShowHistoryListAsync(
+                        console, prompt, promptLength, state.Buffer, state.Cursor, cancellationToken);
+                    if (selected != null) return (true, selected);
+                }
+                break;
+
+            // ── Template ─────────────────────────────────────────────────────
+            case ConsoleKey.F3:
+                if (state.Template != null && state.Cursor < state.Template.Length)
+                {
+                    var tail = state.Template[state.Cursor..];
+                    state.Buffer.AddRange(tail);
+                    await console.Out.WriteAsync(tail);
+                    state.Cursor = state.Buffer.Count;
+                }
+                break;
+
+            case ConsoleKey.F5:
+                state.Template = new string([.. state.Buffer]);
+                await ClearLineAsync(console, state.Buffer, promptLength);
+                state.Buffer.Clear();
+                state.Cursor = 0;
+                break;
+
+            case ConsoleKey.F1:
+                if (state.Template != null && state.Cursor < state.Template.Length)
+                    state.Cursor = await InsertCharAsync(console, state.Buffer, state.Cursor, state.Template[state.Cursor], state.InsertMode, promptLength);
+                break;
+
+            case ConsoleKey.F2:
+                state.Cursor = await HandleF2Async(console, state, promptLength, cancellationToken);
+                break;
+
+            case ConsoleKey.F4:
+                await HandleF4Async(console, state, cancellationToken);
+                break;
+
+            case ConsoleKey.F8:
+                state.Cursor = await HandleF8Async(console, state, promptLength);
+                break;
+
+            case ConsoleKey.F9:
+                state.Cursor = await HandleF9Async(console, state, promptLength, cancellationToken);
+                break;
+
+            // ── Navigation ───────────────────────────────────────────────────
+            case ConsoleKey.LeftArrow:
+                state.Cursor = key.Modifiers.HasFlag(ConsoleModifiers.Control)
+                    ? MoveCursorWordLeft(state.Buffer, state.Cursor)
+                    : Math.Max(0, state.Cursor - 1);
+                console.CursorLeft = promptLength + state.Cursor;
+                break;
+
+            case ConsoleKey.RightArrow:
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+                    state.Cursor = MoveCursorWordRight(state.Buffer, state.Cursor);
+                else if (state.Cursor < state.Buffer.Count)
+                    state.Cursor++;
+                else if (state.Template != null && state.Cursor < state.Template.Length)
+                {
+                    state.Cursor = await InsertCharAsync(console, state.Buffer, state.Cursor, state.Template[state.Cursor], state.InsertMode, promptLength);
+                    break;
+                }
+                console.CursorLeft = promptLength + state.Cursor;
+                break;
+
+            case ConsoleKey.Home:
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && state.Cursor > 0)
+                {
+                    state.Buffer.RemoveRange(0, state.Cursor);
+                    state.Cursor = 0;
+                    console.CursorLeft = promptLength;
+                    await console.Out.WriteAsync(new string([.. state.Buffer]) + " ");
+                }
+                state.Cursor = 0;
+                console.CursorLeft = promptLength;
+                break;
+
+            case ConsoleKey.End:
+                if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && state.Cursor < state.Buffer.Count)
+                {
+                    var eraseCount = state.Buffer.Count - state.Cursor;
+                    state.Buffer.RemoveRange(state.Cursor, eraseCount);
+                    console.CursorLeft = promptLength + state.Cursor;
+                    await console.Out.WriteAsync(new string(' ', eraseCount));
+                    console.CursorLeft = promptLength + state.Cursor;
+                }
+                else
+                {
+                    state.Cursor = state.Buffer.Count;
+                    console.CursorLeft = promptLength + state.Cursor;
+                }
+                break;
+
+            // ── Editing ──────────────────────────────────────────────────────
+            case ConsoleKey.Backspace:
+                if (state.Cursor > 0)
+                {
+                    state.Cursor--;
+                    state.Buffer.RemoveAt(state.Cursor);
+                    await RedrawFromCursorAsync(console, state.Buffer, state.Cursor, promptLength);
+                }
+                break;
+
+            case ConsoleKey.Delete:
+                if (state.Cursor < state.Buffer.Count)
+                {
+                    state.Buffer.RemoveAt(state.Cursor);
+                    await RedrawFromCursorAsync(console, state.Buffer, state.Cursor, promptLength);
+                }
+                break;
+
+            case ConsoleKey.Insert:
+                state.InsertMode = !state.InsertMode;
+                await SetCursorShapeAsync(console, state.InsertMode);
+                break;
+
+            default:
+                // Printable character
+                if (key.KeyChar >= ' ')
+                    state.Cursor = await InsertCharAsync(console, state.Buffer, state.Cursor, key.KeyChar, state.InsertMode, promptLength);
+                break;
+        }
+
+        return (false, null);
+    }
+
+    // ── F-key handlers ────────────────────────────────────────────────────────
+
+    private static async Task<int> HandleF2Async(IConsole console, EditorState state, int promptLength, CancellationToken cancellationToken)
+    {
+        var next = await console.ReadKeyAsync(intercept: true, cancellationToken);
+        if (state.Template != null && state.Cursor < state.Template.Length)
+        {
+            var idx = state.Template.IndexOf(next.KeyChar, state.Cursor);
+            if (idx > state.Cursor)
+                foreach (var c in state.Template[state.Cursor..idx])
+                    state.Cursor = await InsertCharAsync(console, state.Buffer, state.Cursor, c, state.InsertMode, promptLength);
+        }
+        return state.Cursor;
+    }
+
+    private static async Task HandleF4Async(IConsole console, EditorState state, CancellationToken cancellationToken)
+    {
+        var next = await console.ReadKeyAsync(intercept: true, cancellationToken);
+        if (state.Template != null && state.Cursor < state.Template.Length)
+        {
+            var idx = state.Template.IndexOf(next.KeyChar, state.Cursor);
+            if (idx >= 0)
+                state.Template = state.Template[..state.Cursor] + state.Template[idx..];
+        }
+    }
+
+    private async Task<int> HandleF8Async(IConsole console, EditorState state, int promptLength)
+    {
+        var prefix = new string([.. state.Buffer[..state.Cursor]]);
+        var searchFrom = state.HistoryIndex < _history.Count ? state.HistoryIndex - 1 : _history.Count - 1;
+        for (var i = searchFrom; i >= 0; i--)
+        {
+            if (_history[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                state.HistoryIndex = i;
+                state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[i], promptLength);
+                state.Cursor = prefix.Length;
+                console.CursorLeft = promptLength + state.Cursor;
+                break;
+            }
+        }
+        return state.Cursor;
+    }
+
+    private async Task<int> HandleF9Async(IConsole console, EditorState state, int promptLength, CancellationToken cancellationToken)
+    {
+        var numKey = await console.ReadKeyAsync(intercept: true, cancellationToken);
+        if (char.IsDigit(numKey.KeyChar))
+        {
+            var digits = new List<char> { numKey.KeyChar };
+            while (true)
+            {
+                var nk = await console.ReadKeyAsync(intercept: true, cancellationToken);
+                if (nk.Key == ConsoleKey.Enter) break;
+                if (char.IsDigit(nk.KeyChar)) digits.Add(nk.KeyChar);
+            }
+            if (int.TryParse(new string([.. digits]), out var idx)
+                && idx >= 0 && idx < _history.Count)
+            {
+                state.HistoryIndex = idx;
+                state.Cursor = await ReplaceBufferAsync(console, state.Buffer, _history[idx], promptLength);
+            }
+        }
+        return state.Cursor;
+    }
+
+    private class EditorState
+    {
+        public required List<char> Buffer { get; set; }
+        public required int Cursor { get; set; }
+        public required int HistoryIndex { get; set; }
+        public required bool InsertMode { get; set; }
+        public required string? Template { get; set; }
     }
 
     private static async Task SetCursorShapeAsync(IConsole console, bool insertMode) =>
