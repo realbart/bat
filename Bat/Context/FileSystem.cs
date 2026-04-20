@@ -1,5 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-using Context;
+﻿using Context;
 
 namespace Bat.Context;
 

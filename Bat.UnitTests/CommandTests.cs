@@ -1,13 +1,10 @@
 #if WINDOWS
-using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Bat.Commands;
 using Bat.Console;
-using Bat.Context;
 using Bat.Context.Dos;
 using Bat.Execution;
-using Bat.Nodes;
 using Bat.Parsing;
 using Bat.Tokens;
 using Context;

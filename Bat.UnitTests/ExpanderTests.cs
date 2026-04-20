@@ -1,5 +1,4 @@
 #if WINDOWS
-using Bat.Context;
 using Bat.Context.Dos;
 using Bat.Execution;
 

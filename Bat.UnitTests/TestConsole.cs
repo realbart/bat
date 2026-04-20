@@ -22,6 +22,13 @@ internal class TestConsole(string input = "") : IConsole
     public ConsoleKeyInfo ReadKey(bool intercept) =>
         _keys.TryDequeue(out var key) ? key : new('\0', ConsoleKey.NoName, false, false, false);
 
+    public async Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
+    {
+        while (_keys.Count == 0)
+            await Task.Delay(10, cancellationToken);
+        return _keys.Dequeue();
+    }
+
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);
     public IConsole WithInput(TextReader newIn) => new RedirectedConsole(this, null, null, newIn);
