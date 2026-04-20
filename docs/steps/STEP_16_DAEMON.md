@@ -1,8 +1,94 @@
-# Stap 15: Daemon-architectuur (optioneel)
+# STEP 16 — Daemon Architecture
 
-## Doel
+> Moved to [STEP_16_DAEMON_START_CMD.md](STEP_16_DAEMON_START_CMD.md) (steps 16a–16d).
 
-Eén gedeelde daemon-instance voor alle BAT-sessies voor snellere startup en systeem-brede SUBST-mappings.
+
+## Goal
+
+One shared `bat-daemon` process per user session. Keeps filesystem emulation logic in
+memory once; all `bat-client` instances connect to it via named pipe IPC.
+
+## Why
+
+- Five simultaneous `bat` windows → emulation code loaded once, not five times.
+- DOS attribute overlay (hidden/archive bits) survives window close.
+- Drive mappings (SUBST equivalent) are machine-wide, just like real DOS/CMD.
+- `START CMD` opens a new window without duplicating the full runtime footprint.
+
+## Daemon state (shared, global)
+
+| State | Owner |
+|-------|-------|
+| Drive mappings (`Dictionary<char, string>`) | Daemon |
+| DOS attribute overlay (hidden/archive/readonly bits per path) | Daemon |
+| `IFileSystem` instance | Daemon |
+| Batch execution logic, command dispatcher | Daemon (loaded once) |
+
+## Per-session state (not shared)
+
+| State | Owner |
+|-------|-------|
+| Environment variables | Client |
+| CWD + per-drive paths | Client |
+| Echo enabled, delayed expansion, extensions | Client |
+| `IContext` instance | Client |
+
+## Lifetime
+
+Plain background process — no service registration, no sudo required.
+
+- Starts on first `bat` invocation if not already running.
+- Stays alive after the last client disconnects (default: until reboot).
+- On reboot all in-memory state (attributes, mappings) is lost — same as real DOS.
+
+## Drive mapping merge on new client
+
+Mirrors CMD/SUBST behaviour:
+
+- New client **without** `/M` → inherits existing daemon mappings unchanged.
+- New client **with** `/M` → merged into daemon state; conflicting drive letters are
+  overwritten. No error is raised (same instability as `SUBST` across sessions in CMD).
+
+## IPC transport
+
+Named pipe (cross-platform via .NET `NamedPipeServerStream`):
+
+- Windows: `\\.\pipe\bat-daemon-<username>`
+- Linux: `/tmp/bat-daemon-<username>.sock` (Unix domain socket via named pipe API)
+
+One connection per client session. Protocol: length-prefixed JSON or MessagePack (TBD).
+
+## Process layout
+
+```
+bat.exe  (launcher, ~5 MB)
+  ├─ check: is bat-daemon running?
+  │   no → spawn bat-daemon.exe (detached, no console)
+  ├─ spawn bat-client.exe (inherits stdin/stdout/stderr)
+  └─ exit(0)
+
+bat-daemon.exe  (no console, background)
+  └─ named pipe server
+       ├─ IFileSystem
+       ├─ drive mappings
+       ├─ DOS attribute overlay
+       └─ command dispatcher / batch executor
+
+bat-client.exe  (lightweight, ~1 MB)
+  └─ named pipe client → delegates fs + exec calls to daemon
+  └─ owns IContext (env vars, CWD, echo state)
+```
+
+## Without daemon (fallback)
+
+If daemon is unavailable, `bat-client` falls back to in-process mode (current
+behaviour). All existing tests remain valid — daemon is an optional optimisation.
+
+## Out of scope
+
+- Persistence across reboots (by design: reboot clears state)
+- Multi-user isolation (daemon is per-user via username in pipe name)
+- Service registration (no sudo required, no install step)
 
 ## Achtergrond
 

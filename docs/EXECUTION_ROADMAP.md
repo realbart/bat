@@ -31,9 +31,29 @@
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
+| 16 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+| 34 | 🔴 TODO | START / Daemon / CMD — groep | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+| 43 | 🔴 TODO | CMD | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+
+Implementatievolgorde binnen deze groep: `34a → 34b → 16a → 16b → 16c → 16d → 34c → 34d → 43`
+
+| Substap | Status | Beschrijving |
+|---------|--------|--------------|
+| 34a | 🔴 TODO | START — native process spawnen, flags |
+| 34b | 🔴 TODO | START — nieuw venster (naïef, zonder daemon) |
+| 16a | 🔴 TODO | IPC protocol (named pipe, unit-testbaar) |
+| 16b | 🔴 TODO | Daemon server |
+| 16c | 🔴 TODO | bat-client.exe (met fallback naar in-process) |
+| 16d | 🔴 TODO | bat.exe launcher → daemon → client |
+| 34c | 🔴 TODO | START — cross-platform terminal detectie (Linux) |
+| 34d | 🔴 TODO | START CMD/BAT via daemon |
+| 43  | 🔴 TODO | CMD executable (wrapper rond bat-client) |
+
+
+| Stap | Status | Beschrijving | Instructiebestand |
+|---|---|---|---|
 | 14.1 | 🔴 TODO | IConsole integratie in IContext | [STEP_14_ICONSOLE_INTEGRATION.md](steps/STEP_14_ICONSOLE_INTEGRATION.md) |
 | 15 | 🔴 TODO | Error handling voor satellietapplicaties | [STEP_15_SATELLITE_ERROR_HANDLING.md](steps/STEP_15_SATELLITE_ERROR_HANDLING.md) |
-| 16 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_16_DAEMON.md](steps/STEP_16_DAEMON.md) |
 
 ### Commando-implementatiestappen (16-53)
 
@@ -57,7 +77,6 @@
 | 31 | 🔴 TODO | VER | intern | 4 |
 | 32 | 🔴 TODO | VOL | intern | 3, 4 |
 | 33 | 🔴 TODO | LABEL | intern | 3, 4 |
-| 34 | 🔴 TODO | START | intern | 6 |
 | 35 | 🔴 TODO | BREAK | intern | 4 |
 | 36 | 🔴 TODO | VERIFY | intern | 4 |
 | 37 | 🔴 TODO | ASSOC | intern | 4 |
@@ -66,7 +85,6 @@
 | 40 | 🔴 TODO | FOR | intern (complex) | 1, 4, 8 |
 | 41 | 🔴 TODO | XCOPY | extern .NET | 6, 14 |
 | 42 | 🔴 TODO | DOSKEY | extern .NET | 6, 14 |
-| 43 | 🔴 TODO | CMD | extern .NET | 6, 14 |
 | 44 | 🔴 TODO | FIND | extern .NET | 6, 7, 14 |
 | 45 | 🔴 TODO | FINDSTR | extern .NET | 6, 7, 14 |
 | 46 | 🔴 TODO | SORT | extern .NET | 6, 7, 14 |
