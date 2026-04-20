@@ -1,4 +1,4 @@
-﻿using Context;
+using Context;
 using SC = System.Console;
 
 namespace Bat.Console;
@@ -23,8 +23,6 @@ internal class Console : IConsole
     public int WindowHeight => SC.WindowHeight;
     public int CursorLeft { get => SC.CursorLeft; set => SC.CursorLeft = value; }
     public bool IsInteractive => !SC.IsInputRedirected;
-    public ConsoleKeyInfo ReadKey(bool intercept) => SC.ReadKey(intercept);
-
     public async Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
     {
         while (!SC.KeyAvailable)
@@ -35,3 +33,4 @@ internal class Console : IConsole
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);
     public IConsole WithInput(TextReader newIn) => new RedirectedConsole(this, null, null, newIn);
 }
+

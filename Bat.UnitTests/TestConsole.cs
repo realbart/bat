@@ -19,8 +19,6 @@ internal class TestConsole(string input = "") : IConsole
     public bool IsInteractive => false;
 
     public void EnqueueKey(ConsoleKeyInfo key) => _keys.Enqueue(key);
-    public ConsoleKeyInfo ReadKey(bool intercept) =>
-        _keys.TryDequeue(out var key) ? key : new('\0', ConsoleKey.NoName, false, false, false);
 
     public async Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
     {

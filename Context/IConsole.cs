@@ -9,7 +9,6 @@ public interface IConsole
     int WindowHeight { get; }
     int CursorLeft { get; set; }
     bool IsInteractive { get; }
-    ConsoleKeyInfo ReadKey(bool intercept);
     Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default);
     IConsole WithOutput(TextWriter newOut);
     IConsole WithError(TextWriter newError);

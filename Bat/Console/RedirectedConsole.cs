@@ -14,7 +14,6 @@ internal class RedirectedConsole(IConsole inner, TextWriter? outOverride, TextWr
     public int WindowHeight => inner.WindowHeight;
     public int CursorLeft { get => inner.CursorLeft; set => inner.CursorLeft = value; }
     public bool IsInteractive => false;
-    public ConsoleKeyInfo ReadKey(bool intercept) => inner.ReadKey(intercept);
     public Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default) =>
         inner.ReadKeyAsync(intercept, cancellationToken);
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(inner, newOut, errorOverride, inOverride);
