@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -32,9 +32,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Bat\Bat.csproj" />
+    <ProjectReference Include="..\Bat.Daemon\Bat.Daemon.csproj" />
     <ProjectReference Include="..\Subst\Subst.csproj" />
     <ProjectReference Include="..\Tree\Tree.csproj" />
+    <ProjectReference Include="..\Bat.Shared\Bat.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,14 +48,14 @@
     </Content>
   </ItemGroup>
 
-  <!-- Build and copy a Windows-native bat.exe for ExampleScriptTests on Windows -->
+  <!-- Build and copy a Windows-native batd.exe for ExampleScriptTests on Windows -->
   <Target Name="CopyBatExe" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
-    <Exec Command="dotnet restore &quot;$(MSBuildThisFileDirectory)..\Bat\Bat.csproj&quot; -r win-x64 --nologo -v quiet" />
-    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\Bat\Bat.csproj&quot; -c $(Configuration) -r win-x64 --no-self-contained -p:RuntimeIdentifier=win-x64 --nologo -v quiet" />
+    <Exec Command="dotnet restore &quot;$(MSBuildThisFileDirectory)..\Bat.Daemon\Bat.Daemon.csproj&quot; -r win-x64 --nologo -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\Bat.Daemon\Bat.Daemon.csproj&quot; -c $(Configuration) -r win-x64 --no-self-contained -p:RuntimeIdentifier=win-x64 --nologo -v quiet" />
     <ItemGroup>
-      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.exe" />
-      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.dll" />
-      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\win-x64\bat.runtimeconfig.json" />
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat.Daemon\bin\$(Configuration)\$(TargetFramework)\win-x64\batd.exe" />
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat.Daemon\bin\$(Configuration)\$(TargetFramework)\win-x64\batd.dll" />
+      <_BatExeFiles Include="$(MSBuildThisFileDirectory)..\Bat.Daemon\bin\$(Configuration)\$(TargetFramework)\win-x64\batd.runtimeconfig.json" />
     </ItemGroup>
     <Copy SourceFiles="@(_BatExeFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="false" />
   </Target>
@@ -68,3 +69,4 @@
   </ItemGroup>
 
 </Project>
+

@@ -49,6 +49,11 @@ Implementatievolgorde binnen deze groep: `34a → 34b → 16a → 16b → 16c �
 | 34d | 🔴 TODO | START CMD/BAT via daemon |
 | 43  | 🔴 TODO | CMD executable (wrapper rond bat-client) |
 
+| Substap | Status | Beschrijving |
+|---------|--------|--------------|
+| 00 | 🔴 TODO | TASKLIST -  extern commando. geeft ook processen die binnen batd draaien weer. |
+| 00  | 🔴 TODO | TASKKILL - extern commando. beëindigt systeemprocessen of individuele processen binnen batd. |
+
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|

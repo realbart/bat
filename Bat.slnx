@@ -35,8 +35,9 @@
     <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
   </Folder>
+  <Project Path="Bat.Shared/Bat.Shared.csproj" />
   <Project Path="Bat.UnitTests/Bat.UnitTests.csproj" />
-  <Project Path="Bat/Bat.csproj" />
+  <Project Path="Bat.Daemon/Bat.Daemon.csproj" />
   <Project Path="Context/Context.csproj" />
   <Project Path="Doskey/Doskey.csproj" Id="6aaba0ab-16a9-4a2f-8e26-9abf3472ec2c" />
   <Project Path="Subst/Subst.csproj" Id="3f6d6b27-6aaa-47a3-bb50-606d3a53dcfc" />

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyName>bat</AssemblyName>
+    <AssemblyName>batd</AssemblyName>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <RuntimeIdentifiers>linux-x64;win-x64;osx-arm64</RuntimeIdentifiers>

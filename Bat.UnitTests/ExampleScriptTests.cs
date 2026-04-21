@@ -19,7 +19,7 @@ public class ExampleScriptTests
         Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Examples");
 
     private static readonly string BatExe =
-        Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "bat.exe");
+        Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "batd.exe");
 
     public static IEnumerable<object[]> GetScripts()
     {
