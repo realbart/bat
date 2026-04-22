@@ -18,6 +18,8 @@ internal sealed class SocketConsole : IConsole, IDisposable
     private int _windowWidth;
     private int _windowHeight;
 
+    public event Action<int, int>? Resized;
+
     public SocketConsole(Stream stream, int windowWidth, int windowHeight, bool isInteractive)
     {
         _stream = stream;
@@ -66,6 +68,7 @@ internal sealed class SocketConsole : IConsole, IDisposable
                     var (w, h) = TerminalProtocol.ParseResize(msg.Value.Payload);
                     _windowWidth = w;
                     _windowHeight = h;
+                    Resized?.Invoke(w, h);
                     continue; // Keep reading for the next Key
 
                 default:
@@ -143,6 +146,7 @@ internal sealed class RedirectedSocketConsole(SocketConsole inner, TextWriter ou
     public int WindowHeight => inner.WindowHeight;
     public int CursorLeft { get => inner.CursorLeft; set => inner.CursorLeft = value; }
     public bool IsInteractive => inner.IsInteractive;
+    public event Action<int, int>? Resized { add => inner.Resized += value; remove => inner.Resized -= value; }
     public Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
         => inner.ReadKeyAsync(intercept, cancellationToken);
     public IConsole WithOutput(TextWriter newOut) => new RedirectedSocketConsole(inner, newOut, Error, In);

@@ -161,7 +161,18 @@ internal sealed class DaemonServer : IDisposable
             throw new FileNotFoundException("cmd.exe satellite not found", cmdPath);
 
         var bytes = File.ReadAllBytes(cmdPath);
-        var assembly = Assembly.Load(bytes[PrefixLength..]);
+        var assemblyBytes = bytes[PrefixLength..];
+
+        // Load PDB alongside the assembly so the debugger can attach breakpoints
+
+#if DEBUG
+        var pdbPath = Path.ChangeExtension(cmdPath, ".pdb");
+        var assembly = File.Exists(pdbPath)
+            ? Assembly.Load(assemblyBytes, File.ReadAllBytes(pdbPath))
+            : Assembly.Load(assemblyBytes);
+#else
+        assembly = Assembly.Load(assemblyBytes);
+#endif
 
         _cmdMain = assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))

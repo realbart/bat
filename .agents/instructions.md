@@ -2,6 +2,21 @@
 
 These are the general instructions for developing and maintaining the `bat` project.
 
+## Projects
+* Do not add new projects unless explicitly asked to
+
+## Comment Style
+
+- Avoid letterboxing or long decorative lines in comments.
+- Do not use patterns like `// ── Section ────────────────────`.
+- Use method-level comments where necessary.
+- Keep comments short and functional.
+
+## Daemon Behavior
+
+- Never run interactive processes (like `bat.exe`, `batd.exe`, or any shell) in the terminal, as these block and never terminate. For testing, use `-ArgumentList` with `/C` and redirect output to a file, or just verify via build/file checks.
+
+
 ## OS & Platform Independence
 - OS-specific behavior should be handled using compile-time checks (e.g., `#if WINDOWS`, `#if LINUX`) and platform-specific files where possible, rather than runtime detection.
 - All OS-specific behavior flows through the `IContext`/`IFileSystem` abstraction. `DosFileSystem` is Windows-only; `UxFileSystemAdapter` is Unix-only — no fallback code for the other platform inside either class.

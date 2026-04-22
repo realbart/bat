@@ -17,6 +17,7 @@ internal class TestConsole(string input = "") : IConsole
     public int WindowHeight { get; set; } = 24;
     public int CursorLeft { get; set; }
     public bool IsInteractive { get; set; } = true; // default: interactive mode voor tests
+    public event Action<int, int>? Resized;
 
     public void EnqueueKey(ConsoleKeyInfo key) => _keys.Enqueue(key);
 

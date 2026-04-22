@@ -6,26 +6,14 @@
     <Project Path="Tree/Tree.csproj" />
     <Project Path="Xcopy/Xcopy.csproj" />
   </Folder>
-  <Folder Name="/Solution Items/">
+  <Folder Name="/_Plans/">
     <File Path="cmdhelp.txt" />
+    <File Path="Design.md" />
     <File Path="docs/EXECUTION_ROADMAP.md" />
-    <File Path="docs/steps/STEP_01_REPAIR_DESIGN.md" />
-    <File Path="docs/steps/STEP_02_PROMPT_EXPANSION.md" />
-    <File Path="docs/steps/STEP_03_DOS_FILESYSTEM.md" />
-    <File Path="docs/steps/STEP_04_MINIMAL_REPL.md" />
-    <File Path="docs/steps/STEP_05_CD_DIR_COMMANDS.md" />
-    <File Path="docs/steps/STEP_06_EXECUTE_NATIVE.md" />
-    <File Path="docs/steps/STEP_07_EXECUTE_DOTNET.md" />
-    <File Path="docs/steps/STEP_08_BATCH_EXECUTE.md" />
-    <File Path="docs/steps/STEP_09_REDIRECTIONS.md" />
-    <File Path="docs/steps/STEP_10_SUBST_DRIVE_SWITCHING.md" />
-    <File Path="docs/steps/STEP_11_SETLOCAL.md" />
-    <File Path="docs/steps/STEP_12_BAT_CMDLINE.md" />
-    <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
     <File Path="prefix.bin" />
   </Folder>
-  <Folder Name="/Solution Items/Plans/">
+  <Folder Name="/_Plans/Plans/">
     <File Path="docs/EXECUTION_ROADMAP.md" />
     <File Path="docs/steps/STEP_01_REPAIR_DESIGN.md" />
     <File Path="docs/steps/STEP_02_PROMPT_EXPANSION.md" />

@@ -90,6 +90,18 @@ cmd.exe                      # → "This program requires Bat"
 | 00 | 🔴 TODO | TASKLIST -  extern commando. geeft ook processen die binnen batd draaien weer. |
 | 00  | 🔴 TODO | TASKKILL - extern commando. beëindigt systeemprocessen of individuele processen binnen batd. |
 
+### PTY-ondersteuning (interactieve programma's)
+
+| Stap | Status | Beschrijving |
+|---|---|---|
+| PTY-1 | 🔴 TODO | ConPTY wrapper voor Windows (`CreatePseudoConsole`) |
+| PTY-2 | 🔴 TODO | POSIX PTY wrapper voor Linux/macOS (`posix_openpt`, `forkpty`) |
+| PTY-3 | 🔴 TODO | `NativeExecutor` uitbreiden met PTY-modus voor interactieve processen |
+| PTY-4 | 🔴 TODO | Resize-berichten (`TIOCSWINSZ` / `ResizePseudoConsole`) doorsturen |
+
+**Vereist voor:** `pwsh`, `vim`, `edit`, `more` (interactief), en andere TUI-applicaties.
+
+**Huidige beperking:** Interactieve programma's werken niet correct omdat `isatty()` false retourneert.
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|

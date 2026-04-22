@@ -13,4 +13,10 @@ public interface IConsole
     IConsole WithOutput(TextWriter newOut);
     IConsole WithError(TextWriter newError);
     IConsole WithInput(TextReader newIn);
+
+    /// <summary>
+    /// Event raised when the terminal window is resized.
+    /// Used by PTY to forward resize to child process.
+    /// </summary>
+    event Action<int, int>? Resized;
 }

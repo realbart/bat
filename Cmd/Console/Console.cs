@@ -23,6 +23,7 @@ internal class Console : IConsole
     public int WindowHeight => SC.WindowHeight;
     public int CursorLeft { get => SC.CursorLeft; set => SC.CursorLeft = value; }
     public bool IsInteractive => !SC.IsInputRedirected;
+    public event Action<int, int>? Resized;
     public async Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
     {
         while (!SC.KeyAvailable)

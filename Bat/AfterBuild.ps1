@@ -17,6 +17,7 @@ if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
 
 # Stop any running batd to release file locks before copying
 taskkill /f /im batd.exe 2>$null
+taskkill /f /im bat.exe 2>$null
 Start-Sleep -Milliseconds 500
 
 Write-Host "Configuration: $Configuration"
@@ -88,6 +89,23 @@ foreach ($exe in $exes) {
 
 foreach ($com in $coms) {
     ProcessFile -ProjectName $com -Extension ".com"
+}
+
+# Copy prefixed satellites to BatD output dir so debugging BatD as startup project works
+$batdOutputDir = Join-Path $solutionDir "BatD\bin\$Configuration\net10.0"
+if (Test-Path $batdOutputDir) {
+    foreach ($exe in $exes) {
+        $src = Join-Path $OutputPath "$($exe.ToLower()).exe"
+        if (Test-Path $src) { Copy-Item $src $batdOutputDir -Force; Write-Host "Copied to BatD: $($exe.ToLower()).exe" }
+        $pdb = Join-Path $OutputPath "$($exe.ToLower()).pdb"
+        if (Test-Path $pdb) { Copy-Item $pdb $batdOutputDir -Force }
+    }
+    foreach ($com in $coms) {
+        $src = Join-Path $OutputPath "$($com.ToLower()).com"
+        if (Test-Path $src) { Copy-Item $src $batdOutputDir -Force; Write-Host "Copied to BatD: $($com.ToLower()).com" }
+        $pdb = Join-Path $OutputPath "$($com.ToLower()).pdb"
+        if (Test-Path $pdb) { Copy-Item $pdb $batdOutputDir -Force }
+    }
 }
 
 # Build and copy batd to bat's output directory

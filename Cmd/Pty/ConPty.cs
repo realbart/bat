@@ -1,0 +1,240 @@
+#if WINDOWS
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+namespace Bat.Pty;
+
+/// <summary>
+/// Windows ConPTY implementation.
+/// Based on https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
+/// </summary>
+internal sealed class ConPty : IPseudoTerminal
+{
+    private SafeFileHandle? _inputWriteHandle;
+    private SafeFileHandle? _outputReadHandle;
+    private FileStream? _inputStream;
+    private FileStream? _outputStream;
+    private nint _hPC;
+    private SafeProcessHandle? _processHandle;
+    private int _processId;
+    private bool _disposed;
+
+    public int ProcessId => _processId;
+    public bool HasExited => _processHandle != null && WaitForSingleObject(_processHandle.DangerousGetHandle(), 0) == 0;
+
+    public void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        CreatePipePair(out var inputRead, out var inputWrite);
+        CreatePipePair(out var outputRead, out var outputWrite);
+
+        _inputWriteHandle = inputWrite;
+        _outputReadHandle = outputRead;
+
+        var size = new COORD { X = 120, Y = 30 };
+        var hr = CreatePseudoConsole(size, inputRead.DangerousGetHandle(), outputWrite.DangerousGetHandle(), 0, out _hPC);
+        if (hr != 0)
+            Marshal.ThrowExceptionForHR(hr);
+
+        // PTY owns these ends now
+        inputRead.Dispose();
+        outputWrite.Dispose();
+
+        var attrList = AllocAttributeList();
+        try
+        {
+            var siEx = new STARTUPINFOEXW();
+            siEx.StartupInfo.cb = Marshal.SizeOf<STARTUPINFOEXW>();
+            siEx.lpAttributeList = attrList;
+
+            var cmdLine = string.IsNullOrEmpty(arguments)
+                ? $"\"{executable}\""
+                : $"\"{executable}\" {arguments}";
+
+            // Inherit parent environment — no custom block needed for correctness.
+            // Bat-specific vars are set by the shell, not by native process spawning.
+            if (!CreateProcessW(
+                null,
+                cmdLine,
+                nint.Zero,
+                nint.Zero,
+                false,
+                EXTENDED_STARTUPINFO_PRESENT,
+                nint.Zero,
+                workingDirectory,
+                ref siEx,
+                out var pi))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            _processHandle = new SafeProcessHandle(pi.hProcess, true);
+            _processId = pi.dwProcessId;
+            CloseHandle(pi.hThread);
+
+            _inputStream = new FileStream(_inputWriteHandle, FileAccess.Write, 256, isAsync: false);
+            _outputStream = new FileStream(_outputReadHandle, FileAccess.Read, 256, isAsync: false);
+        }
+        finally
+        {
+            FreeAttributeList(attrList);
+        }
+    }
+
+    public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed || _inputStream == null, this);
+        var s = _inputStream;
+        await Task.Run(() => { s.Write(data.Span); s.Flush(); }, ct);
+    }
+
+    public async Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed || _outputStream == null, this);
+        var s = _outputStream;
+        return await Task.Run(() =>
+        {
+            try { return s.Read(buffer.Span); }
+            catch (IOException) { return 0; }
+        }, ct);
+    }
+
+    public void Resize(int columns, int rows)
+    {
+        if (_disposed || _hPC == nint.Zero) return;
+        ResizePseudoConsole(_hPC, new COORD { X = (short)columns, Y = (short)rows });
+    }
+
+    public async Task<int> WaitForExitAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed || _processHandle == null, this);
+        var h = _processHandle.DangerousGetHandle();
+        await Task.Run(() => WaitForSingleObject(h, 0xFFFFFFFF), ct);
+        GetExitCodeProcess(h, out var code);
+        return (int)code;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _inputStream?.Dispose();
+        _outputStream?.Dispose();
+        _inputWriteHandle?.Dispose();
+        _outputReadHandle?.Dispose();
+        _processHandle?.Dispose();
+        if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
+    }
+
+    private static void CreatePipePair(out SafeFileHandle read, out SafeFileHandle write)
+    {
+        if (!CreatePipe(out var r, out var w, nint.Zero, 0))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        read = new SafeFileHandle(r, true);
+        write = new SafeFileHandle(w, true);
+    }
+
+    private nint AllocAttributeList()
+    {
+        nint size = 0;
+        InitializeProcThreadAttributeList(nint.Zero, 1, 0, ref size);
+        var list = Marshal.AllocHGlobal(size);
+        if (!InitializeProcThreadAttributeList(list, 1, 0, ref size))
+        {
+            Marshal.FreeHGlobal(list);
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        if (!UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+            _hPC, (nint)nint.Size, nint.Zero, nint.Zero))
+        {
+            DeleteProcThreadAttributeList(list);
+            Marshal.FreeHGlobal(list);
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        return list;
+    }
+
+    private static void FreeAttributeList(nint list)
+    {
+        DeleteProcThreadAttributeList(list);
+        Marshal.FreeHGlobal(list);
+    }
+
+    // Constants
+    private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
+    private static readonly nint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
+
+    // Structs
+    [StructLayout(LayoutKind.Sequential)]
+    private struct COORD { public short X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct STARTUPINFOEXW
+    {
+        public STARTUPINFOW StartupInfo;
+        public nint lpAttributeList;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct STARTUPINFOW
+    {
+        public int cb;
+        public nint lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public nint lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION
+    {
+        public nint hProcess, hThread;
+        public int dwProcessId, dwThreadId;
+    }
+
+    // P/Invoke
+    [DllImport("kernel32.dll")]
+    private static extern int CreatePseudoConsole(COORD size, nint hInput, nint hOutput, uint flags, out nint phPC);
+
+    [DllImport("kernel32.dll")]
+    private static extern int ResizePseudoConsole(nint hPC, COORD size);
+
+    [DllImport("kernel32.dll")]
+    private static extern void ClosePseudoConsole(nint hPC);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreatePipe(out nint read, out nint write, nint sa, uint size);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(nint h);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool InitializeProcThreadAttributeList(nint list, int count, uint flags, ref nint size);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UpdateProcThreadAttribute(nint list, uint flags, nint attr, nint value, nint cbSize, nint prev, nint retSize);
+
+    [DllImport("kernel32.dll")]
+    private static extern void DeleteProcThreadAttributeList(nint list);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateProcessW(
+        string? app, string cmdLine, nint procAttr, nint threadAttr,
+        [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags, nint env, string cwd,
+        ref STARTUPINFOEXW si, out PROCESS_INFORMATION pi);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(nint h, uint ms);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetExitCodeProcess(nint h, out uint code);
+}
+#endif

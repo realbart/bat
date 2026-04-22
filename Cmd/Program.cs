@@ -7,6 +7,9 @@ namespace Cmd;
 
 public static class Program
 {
+    private static string BannerText =>
+        $"🦇Cmd [Version {typeof(Program).Assembly.GetName().Version}]\r\n(c) Bart Kemps. Released under GPLv3+.\r\n";
+
     internal const string HelpText =
         """
         Starts a new instance of the command interpreter.
@@ -94,6 +97,9 @@ public static class Program
             if (exitAfter)
                 return context.ErrorCode;
         }
+
+        // Show banner before starting REPL
+        await context.Console.Out.WriteAsync(BannerText);
 
         await repl.StartAsync(context);
         return context.ErrorCode;

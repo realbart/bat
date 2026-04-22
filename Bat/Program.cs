@@ -51,7 +51,9 @@ internal static class Program
         }
 
         if (!suppressBanner)
-            await Console.Out.WriteAsync(BannerText);
+        {
+            // Pass /N suppression state to cmd.exe so it can show/hide its own banner
+        }
 
         // Connect to daemon (or start it)
         var daemonPath = Path.Combine(AppContext.BaseDirectory, DaemonExe);
