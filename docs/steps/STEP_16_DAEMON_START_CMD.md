@@ -20,24 +20,82 @@ memory-mapping when the same binary runs multiple times. The daemon's main value
 
 ```
 bin/
-  bat            (Linux, no extension)    ← NativeAOT, launcher + arg parsing
-  bat.exe        (Windows)                ← NativeAOT, launcher + arg parsing
-  cmd.exe        (both platforms)         ← small .NET shell, loads batd assemblies
-  batd           (Linux, no extension)    ← self-contained .NET, headless daemon
-  batd.exe       (Windows)                ← self-contained .NET, headless daemon
+  bat            (Linux, no extension)    ← thin terminal proxy (keystroke → socket → output)
+  bat.exe        (Windows)                ← thin terminal proxy
+  batd           (Linux, no extension)    ← .NET, all logic runs here
+  batd.exe       (Windows)                ← .NET, all logic runs here
+  cmd.exe        (both platforms)         ← satellite library (loaded by batd)
   tree.exe
+  subst.exe
   xcopy.exe
   ...
 ```
 
-**Linux notes:**
-- `bat` and `batd` have no extension; `cmd.exe` keeps `.exe`.
-- Running `cmd.exe` directly on Linux → `"This program requires Bat"` (same as `tree.exe`).
-- Calling `cmd` from a bat prompt works — bat resolves the `.exe` extension.
-- All binaries must have the executable bit set.
+**bat is a dumb keystroke/output proxy.** It connects to batd via Unix domain
+sockets, forwards raw `ConsoleKeyInfo` structs, and renders stdout/stderr output
+received from batd. bat itself does not parse commands or load .NET assemblies
+beyond what is needed for the socket connection.
 
-**Deployment:** copy the folder as-is — no installer, no PATH manipulation required
-(user adds the folder root to PATH manually once).
+**batd owns all logic.** REPL, LineEditor, command dispatching, IFileSystem,
+batch execution — everything runs inside batd. Each connected bat client gets
+its own session (IContext) inside the single batd process.
+
+**cmd.exe is a satellite library** (like subst.exe, tree.com). Loaded by batd
+in-process. Multiple sessions share the same loaded assembly in memory.
+
+---
+
+## Architecture: bat ↔ batd terminal protocol
+
+```
+┌──────────────────────────┐       Unix domain socket       ┌──────────────────────────────┐
+│  bat (thin proxy)         │  ────────────────────────────▶ │  batd (all logic)              │
+│                           │                                │                                │
+│  System.Console.ReadKey() │  ── ConsoleKeyInfo ────────▶   │  SocketConsole.ReadKeyAsync()  │
+│                           │                                │    ↓                           │
+│                           │                                │  LineEditor / REPL / Commands  │
+│                           │                                │    ↓                           │
+│  System.Console.Write()   │  ◀── stdout bytes ──────────  │  SocketConsole.Out.Write()     │
+│  System.Console.Error     │  ◀── stderr bytes ──────────  │  SocketConsole.Error.Write()   │
+│                           │                                │                                │
+│  WindowWidth/Height       │  ── terminal info ──────────▶  │  SocketConsole.WindowWidth     │
+└──────────────────────────┘                                └──────────────────────────────┘
+```
+
+### Wire protocol (over Unix domain socket)
+
+| Direction | Message | Content |
+|-----------|---------|---------|
+| bat → batd | `Key` | Serialized `ConsoleKeyInfo` (char + ConsoleKey + modifiers) |
+| bat → batd | `TermInfo` | WindowWidth, WindowHeight, IsInteractive |
+| bat → batd | `Resize` | New WindowWidth, WindowHeight |
+| batd → bat | `Out` | Raw bytes (stdout, including ANSI sequences) |
+| batd → bat | `Err` | Raw bytes (stderr) |
+| batd → bat | `Exit` | Exit code (session ended) |
+| batd → bat | `CursorSet` | New CursorLeft position |
+
+Length-prefixed: `[1-byte type][4-byte big-endian length][payload]`
+
+### IConsole adaptation
+
+`IConsole` already abstracts all terminal I/O. Two new implementations:
+
+| Implementation | Lives in | Role |
+|---------------|----------|------|
+| `SocketConsole` | batd (via Cmd library) | `ReadKeyAsync()` reads from socket. `Out`/`Error` write to socket. |
+| `ProxyConsole` | bat (thin client) | Reads real terminal → sends to socket. Receives socket → writes to real terminal. |
+
+`SocketConsole` plugs into the existing `IContext.Console` — LineEditor, REPL,
+and all commands see no difference. They call `console.ReadKeyAsync()` and it
+returns a `ConsoleKeyInfo` that came over the wire from bat.
+
+### Why Unix domain sockets (not named pipes)
+
+- ~1–5µs latency — imperceptible for keystroke forwarding
+- Cross-platform: .NET `UnixDomainSocketEndPoint` works on Linux and Windows
+- Full-duplex: both directions on one connection
+- No file cleanup issues (unlike named pipes / FIFOs)
+- `Socket.ConnectAsync` for daemon detection (replaces pipe probe)
 
 ---
 
@@ -45,25 +103,30 @@ bin/
 
 | Binary | Type | Role |
 |--------|------|------|
-| `bat` / `bat.exe` | NativeAOT | Starts `batd` if not running. Parses bat-style args (`-c`, `/C`). Has path translation. Spawns `cmd.exe` for new windows. |
-| `cmd.exe` | .NET (small) | CMD-compat shell. Loads `batd` assemblies in-process (incl. `LineEditor`). Requires daemon. Ignores unknown flags. No path translation. |
-| `batd` / `batd.exe` | Self-contained .NET | Headless. Owns `IFileSystem`, drive mappings, DOS attribute overlay, command dispatcher, `LineEditor`. |
+| `bat` / `bat.exe` | Thin proxy | Connects to batd socket. Forwards keystrokes, renders output. Host-style arg parsing. Starts batd if not running. |
+| `batd` / `batd.exe` | .NET exe | Everything: REPL, commands, IFileSystem, LineEditor, batch execution. Manages sessions. Loads satellite libraries. |
+| `cmd.exe` | Library (satellite) | Shell logic library loaded by batd. Not independently executable. |
 
 **Only `bat` / `bat.exe` starts the daemon.**
-If `cmd.exe` is invoked without a running daemon, it prints `"This program requires Bat"` and exits.
+If `cmd.exe` is invoked directly (not via batd), it prints `"This program requires Bat"` and exits.
 
 ---
 
-## Shared (daemon) vs. per-session (client) state
+## Shared (daemon) vs. per-session state
 
 | State | Owner |
 |-------|-------|
-| `IFileSystem` instance | `batd` |
+| `IFileSystem` instance | `batd` (single instance, shared) |
 | Drive mappings `Dictionary<char, string>` | `batd` |
-| DOS attribute overlay (hidden/archive/readonly bits) | `batd` |
-| Command dispatcher, batch executor | `batd` |
-| `LineEditor` class (codebase lives here, loaded in-process by `cmd.exe`) | `batd` assembly |
-| `IContext` (env vars, CWD, echo, delayed expansion) | Client (`bat` or `cmd.exe`) |
+| DOS attribute overlay | `batd` |
+| Session tracking | `batd` (one session per connected bat) |
+| Satellite library loading | `batd` |
+| REPL, command parsing, dispatching | `batd` (via Cmd library) |
+| BatchExecutor, LineEditor | `batd` (via Cmd library) |
+| All built-in commands | `batd` (via Cmd library) |
+| `IContext` (env vars, CWD, echo) | Per-session (inside batd) |
+| `SocketConsole` (network-backed IConsole) | Per-session (inside batd) |
+| Real terminal I/O | `bat` (thin proxy, `ProxyConsole`) |
 
 ---
 
@@ -86,10 +149,16 @@ If `cmd.exe` is invoked without a running daemon, it prints `"This program requi
 
 ## IPC transport
 
-Named pipe (cross-platform via .NET `NamedPipeServerStream`):
+Unix domain sockets (cross-platform via .NET `UnixDomainSocketEndPoint`):
 
-- Windows: `\\.\pipe\batd-<username>`
-- Linux: `/tmp/batd-<username>.sock`
+- Endpoint: `/tmp/batd-<username>.sock` (Linux), `%TEMP%\batd-<username>.sock` (Windows)
+- Full-duplex: keystrokes upstream, stdout/stderr downstream on same connection
+- ~1–5µs latency — invisible for interactive typing
+- OS cleans up socket when process dies (no stale files)
+
+The existing named-pipe based `IpcProtocol` (Bat.Shared) is **replaced** by the
+socket-based terminal protocol. State sync (SUBST etc.) travels over the same
+socket connection as control messages.
 
 ---
 
@@ -97,15 +166,13 @@ Named pipe (cross-platform via .NET `NamedPipeServerStream`):
 
 | Project | Output | Notes |
 |---------|--------|-------|
-| `Bat.Launcher` | NativeAOT → `bat` / `bat.exe` | Arg parsing, daemon detection, spawn. Uses `#if WINDOWS` / `#if UNIX` — separate only if `#if` volume becomes unmanageable. |
-| `Bat.Daemon` | Self-contained → `batd` / `batd.exe` | Current `Bat` logic + plugin loader |
-| `Bat.Cmd` | .NET exe → `cmd.exe` | Thin CMD-compat shell, loads `Bat.Daemon` assemblies |
-| `Bat.Shared` | Library | Interfaces + IPC protocol shared between all projects |
-| `Bat.UnitTests` | Test | Tests remain valid; daemon is optional/fallback |
-
-**Terminal detection lives in `Bat.Launcher`** (not the daemon): the launcher has
-the process PID and can walk the process tree. It passes the detected terminal info
-to the daemon as part of session registration via IPC.
+| `Bat` | Exe → `bat` / `bat.exe` | Thin terminal proxy. Connects to batd socket, forwards keystrokes, renders output. Host-style arg parsing. Starts batd if not running. Owns AfterBuild.ps1. |
+| `Bat.Daemon` (BatD) | Exe → `batd` / `batd.exe` | All logic: DaemonServer, session management, loads Cmd library. Each bat connection = one session with its own SocketConsole + IContext. |
+| `Bat.Cmd` (Cmd) | Library | Satellite library (like Subst, Tree). REPL, parser, commands, LineEditor, BatchExecutor. Loaded by batd. |
+| `Bat.Shared` (Ipc) | Library | Socket terminal protocol, IPC messages, shared interfaces. Referenced by Bat and Bat.Daemon. |
+| `Context` | Library | IContext, IConsole, IFileSystem interfaces. |
+| `Bat.UnitTests` (UnitTests) | Test | Tests for all projects. |
+| Subst, Tree, Doskey, Xcopy | Libraries | Existing satellite commands. |
 
 ---
 
@@ -141,95 +208,65 @@ No memory optimisation yet — full binary spawned. Temporary.
 
 ---
 
-## Step 16a — IPC protocol
+## Singleton daemon detection
 
-**Goal:** Define and unit-test the named pipe message protocol in isolation.
-Protocol: length-prefixed JSON (simple) or MessagePack (compact). Decide at
-implementation time — keep it swappable behind an interface.
-
-**Testable after:** pure unit tests, no processes needed.
-
----
-
-## Step 16b — Daemon server (`batd`)
-
-**Goal:** `batd` — headless background process, named pipe server.
-
-**Testable after:** integration test: client ↔ server in one test process.
-
----
-
-## Step 16c — Daemon client (`bat` + `cmd.exe`)
-
-**Goal:** Both `bat` and `cmd.exe` connect to daemon, delegate fs + exec calls.
-
-- **`bat`:** fallback to in-process mode if daemon unavailable (existing behaviour).
-- **`cmd.exe`:** exits with `"This program requires Bat"` if daemon not found.
-- **`cmd.exe`** loads `batd` assemblies in-process → `LineEditor` runs locally, no IPC per keystroke.
-
-**Testable after:** `bat` works standalone (fallback) + connected; `cmd.exe` fails gracefully.
-
----
-
-## Step 16d — Launcher (bat starts daemon)
-
-**Goal:** `bat` detects and starts daemon before connecting.
+batd is a singleton. The socket endpoint path **is** the lock:
 
 ```
-bat
-  ├─ batd running? no → spawn batd (detached, no console)
-  ├─ wait for pipe to appear
-  └─ connect and continue as shell
+batd startup:
+  1. Try Socket.Bind(socketPath)
+  2. Success → I am the daemon. Listen for connections.
+  3. EADDRINUSE → another batd holds the socket.
+     a. Try Socket.Connect(socketPath) + Ping
+     b. Got response → other daemon is healthy. Exit silently.
+     c. Timeout/error → stale socket. Delete file, retry Bind.
 ```
 
-**Testable after:** end-to-end: `bat` → daemon starts → shell runs.
+```
+bat startup:
+  1. Try Socket.Connect(socketPath)
+  2. Success → daemon is running. Send Init, start proxying.
+  3. Refused/timeout → daemon not running.
+     a. Spawn batd (detached, no console).
+     b. Retry connect with backoff (20 × 100ms).
+     c. Still failing → print error, exit 1.
+```
+
+No PID files, no mutexes. The socket bind **is** the lock.
 
 ---
 
-## Step 34c — START: cross-platform terminal detection (Linux)
+## Init message
 
-**Goal:** `START CMD` opens a new window in the same terminal emulator.
+The first message bat sends after connecting is `Init`. It contains the full
+command line that bat was invoked with. batd parses this and starts the
+appropriate mode (REPL, /C command, batch file, etc.).
 
-Algorithm:
-1. Walk `/proc/<pid>/status` (PPid) upward until known terminal found.
-2. Fall back to `$TERM_PROGRAM` / `$TERMINAL`.
-3. Probe known terminals in order:
-
-| Terminal | Launch template |
-|----------|----------------|
-| `x-terminal-emulator` | `x-terminal-emulator -e {cmd}` |
-| `konsole` | `konsole -e {cmd}` |
-| `gnome-terminal-server` | `gnome-terminal -- {cmd}` |
-| `xfce4-terminal` | `xfce4-terminal -e {cmd}` |
-| `tilix` | `tilix -e {cmd}` |
-| `alacritty` | `alacritty -e {cmd}` |
-| `xterm` | `xterm -e {cmd}` |
-
-**Testable after:** Linux integration test (skipped on Windows).
+```
+bat /N /M:C=/ /C echo hello
+  → connect socket
+  → send Init { commandLine: "/N /M:C=/ /C echo hello" }
+  → batd parses args, creates IContext + SocketConsole, runs command
+  → batd sends Out/Err frames back
+  → batd sends Exit { exitCode: 0 }
+  → bat exits with code 0
+```
 
 ---
 
-## Step 34d — START CMD via daemon
+## Implementation steps
 
-**Goal:** `START CMD` now uses daemon; both sessions share drive mappings.
-
-**Testable after:** two `cmd.exe` windows share SUBST state via daemon.
-
----
-
-## Step 43 — `cmd.exe`
-
-**Goal:** 100% compatible with Windows `cmd.exe`.
-
-Start by running `cmd.exe /?` and capturing the full help text as the reference spec.
-Every flag, every error message, every edge case defers to real CMD behaviour.
-
-- Accepts only CMD flags: `/C`, `/K`, `/Q`, `/?`. Ignores unknown flags silently.
-- Loads `batd` assemblies in-process → `LineEditor` runs locally.
-- No path translation (lives entirely in the virtual path world).
-- Requires daemon; exits with `"This program requires Bat"` if not found.
-
-**Testable after:** `cmd /C echo hello`, `cmd /?`, "requires Bat" on direct Linux invocation.
+| Step | Status | Description |
+|------|--------|-------------|
+| 34a | ✅ DONE | START — native process spawning, flags |
+| 34b | ✅ DONE | START — new window (naïve, no daemon) |
+| 16a | ✅ DONE | Terminal protocol (binary framing, unit-testable) |
+| 16b | ✅ DONE | SocketConsole (IConsole backed by socket) |
+| 16c | ✅ DONE | Daemon server (Unix domain socket, singleton) |
+| 16d | ✅ DONE | bat client (connect, Init, proxy keystrokes/output) |
+| 34c | ✅ DONE | START — cross-platform terminal detection (Linux) |
+| 34d | 🔴 TODO | START CMD via daemon (shared SUBST state) |
+| 43 | 🔴 TODO | cmd.exe satellite library |
 
 ---
 

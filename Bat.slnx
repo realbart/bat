@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/Commands/">
+    <Project Path="Cmd/Cmd.csproj" />
+    <Project Path="Doskey/Doskey.csproj" Id="6aaba0ab-16a9-4a2f-8e26-9abf3472ec2c" />
+    <Project Path="Subst/Subst.csproj" Id="3f6d6b27-6aaa-47a3-bb50-606d3a53dcfc" />
+    <Project Path="Tree/Tree.csproj" />
+    <Project Path="Xcopy/Xcopy.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="cmdhelp.txt" />
     <File Path="docs/EXECUTION_ROADMAP.md" />
@@ -35,12 +42,9 @@
     <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
   </Folder>
-  <Project Path="Bat.Shared/Bat.Shared.csproj" />
-  <Project Path="Bat.UnitTests/Bat.UnitTests.csproj" />
-  <Project Path="Bat.Daemon/Bat.Daemon.csproj" />
+  <Project Path="Bat/Bat.csproj" Id="0e00064d-4755-493e-ac6b-e890775da22b" />
+  <Project Path="BatD/BatD.csproj" />
   <Project Path="Context/Context.csproj" />
-  <Project Path="Doskey/Doskey.csproj" Id="6aaba0ab-16a9-4a2f-8e26-9abf3472ec2c" />
-  <Project Path="Subst/Subst.csproj" Id="3f6d6b27-6aaa-47a3-bb50-606d3a53dcfc" />
-  <Project Path="Tree/Tree.csproj" />
-  <Project Path="Xcopy/Xcopy.csproj" />
+  <Project Path="UnitTests/UnitTests.csproj" />
 </Solution>
+

@@ -1,9 +1,16 @@
 <Project>
   <PropertyGroup>
-    <!-- Suppress MSBuild informational messages -->
     <MSBuildLoggerVerbosity>minimal</MSBuildLoggerVerbosity>
-    
-    <!-- Suppress specific analyzer warnings globally -->
     <NoWarn>$(NoWarn);MSTEST0001;MSTEST0037</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Version: 2.0.{days since 2026-04-21}.{minutes since midnight UTC} -->
+    <_BatEpoch>2026-04-21</_BatEpoch>
+    <_BatDaysSinceEpoch>$([System.Math]::Max(0, $([System.DateTime]::UtcNow.Subtract($([System.DateTime]::Parse('$(_BatEpoch)'))).Days)))</_BatDaysSinceEpoch>
+    <_BatMinuteOfDay>$([System.Math]::Truncate($([System.DateTime]::UtcNow.TimeOfDay.TotalMinutes)))</_BatMinuteOfDay>
+    <Version>2.0.$(_BatDaysSinceEpoch).$(_BatMinuteOfDay)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
   </PropertyGroup>
 </Project>

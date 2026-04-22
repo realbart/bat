@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <_RidLower>$([System.String]::Copy('$(RuntimeIdentifier)').ToLowerInvariant())</_RidLower>
+    <RootNamespace>Bat.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and $([System.String]::Copy('$(_RidLower)').StartsWith('win'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RidLower)' != '' and ($([System.String]::Copy('$(_RidLower)').StartsWith('linux')) or $([System.String]::Copy('$(_RidLower)').StartsWith('osx')))">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' != 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BatD\BatD.csproj" />
+    <ProjectReference Include="..\Subst\Subst.csproj" />
+    <ProjectReference Include="..\Tree\Tree.csproj" />
+    <ProjectReference Include="..\Cmd\Cmd.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Examples\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Examples\cd.bat" />
+    <None Remove="Examples\doskey.bat" />
+    <None Remove="Examples\echo.bat" />
+    <None Remove="Examples\goto.bat" />
+    <None Remove="Examples\tree.bat" />
+  </ItemGroup>
+
+  <!-- Copy satellite executables (prefix+dll) from Bat project output for ExampleScriptTests -->
+  <Target Name="CopySatellites" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <PropertyGroup>
+      <_BatOutputDir>$(MSBuildThisFileDirectory)..\Bat\bin\$(Configuration)\$(TargetFramework)\</_BatOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_SatelliteFiles Include="$(_BatOutputDir)doskey.exe" Condition="Exists('$(_BatOutputDir)doskey.exe')" />
+      <_SatelliteFiles Include="$(_BatOutputDir)subst.exe" Condition="Exists('$(_BatOutputDir)subst.exe')" />
+      <_SatelliteFiles Include="$(_BatOutputDir)xcopy.exe" Condition="Exists('$(_BatOutputDir)xcopy.exe')" />
+      <_SatelliteFiles Include="$(_BatOutputDir)tree.com" Condition="Exists('$(_BatOutputDir)tree.com')" />
+      <_SatelliteFiles Include="$(_BatOutputDir)cmd.exe" Condition="Exists('$(_BatOutputDir)cmd.exe')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SatelliteFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
+
+
+

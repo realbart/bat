@@ -20,34 +20,70 @@
 12. UxFileSystem / UxContext
 13. Platform-specifieke compilatie
 
-**Al geïmplementeerde commands:** ECHO, REM, CLS, EXIT, CALL, SHIFT, SET, GOTO, CD/CHDIR, DIR, SETLOCAL, ENDLOCAL, PAUSE, TITLE, SUBST (extern), TREE (extern, voorlopig)
+**Al geïmplementeerde commands:** ECHO, REM, CLS, EXIT, CALL, SHIFT, SET, GOTO, CD/CHDIR, DIR, SETLOCAL, ENDLOCAL, PAUSE, TITLE, START, SUBST (extern), XCOPY (extern), DOSKEY (extern), TREE (extern)
 
 ### Bugs & tests
-- 🔴 TODO Variable expansion in intereactieve modus gedraagt zicht verkeerd: ECHO %HOMEPATH% 
-- 🔴 TODO Enumereer de batchbestanden in de map exaples, en voer ze met en zonder Bat uit
-- 🔴 TODO Output rediretion afmaken: echo 1 > file.txt geeft een objectdisposed-exception
+- 🔴 TODO Variable expansion in interactieve modus gedraagt zich verkeerd: ECHO %HOMEPATH%
+- 🔴 TODO Output redirection afmaken: echo 1 > file.txt geeft een objectdisposed-exception
 
 ### Infrastructuurstappen in uitvoering
 
 | Stap | Status | Beschrijving | Instructiebestand |
 |---|---|---|---|
-| 16 | 🔴 TODO | Daemon-architectuur (optioneel) | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
-| 34 | 🔴 TODO | START / Daemon / CMD — groep | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
-| 43 | 🔴 TODO | CMD | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+| 16 | 🟢 DONE | Daemon-architectuur | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+| 34 | 🟢 DONE | START / Daemon / CMD — groep | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
+| 43 | 🟢 DONE | CMD | [STEP_16_DAEMON_START_CMD.md](steps/STEP_16_DAEMON_START_CMD.md) |
 
 Implementatievolgorde binnen deze groep: `34a → 34b → 16a → 16b → 16c → 16d → 34c → 34d → 43`
 
 | Substap | Status | Beschrijving |
 |---------|--------|--------------|
-| 34a | 🔴 TODO | START — native process spawnen, flags |
-| 34b | 🔴 TODO | START — nieuw venster (naïef, zonder daemon) |
-| 16a | 🔴 TODO | IPC protocol (named pipe, unit-testbaar) |
-| 16b | 🔴 TODO | Daemon server |
-| 16c | 🔴 TODO | bat-client.exe (met fallback naar in-process) |
-| 16d | 🔴 TODO | bat.exe launcher → daemon → client |
-| 34c | 🔴 TODO | START — cross-platform terminal detectie (Linux) |
-| 34d | 🔴 TODO | START CMD/BAT via daemon |
-| 43  | 🔴 TODO | CMD executable (wrapper rond bat-client) |
+| 34a | 🟢 DONE | START — native process spawnen, flags |
+| 34b | 🟢 DONE | START — nieuw venster (naïef, zonder daemon) |
+| 16a | 🟢 DONE | IPC protocol (named pipe, unit-testbaar) |
+| 16b | 🟢 DONE | Daemon server (batd) |
+| 16c | 🟢 DONE | Daemon client (DaemonClient + DaemonLauncher) |
+| 16d | 🟢 DONE | bat.exe launcher → daemon → client |
+| 34c | 🟢 DONE | START — cross-platform terminal detectie (Linux) |
+| 34d | 🟢 DONE | START CMD/BAT via daemon (SyncSubstsToDaemonAsync) |
+| 43  | 🟢 DONE | CMD executable (Bat.Cmd, /C /K /Q /?) |
+
+### Testen op Linux (WSL + gnome-terminal)
+
+```bash
+# 1. Build voor Linux
+dotnet publish Bat.Daemon/Bat.Daemon.csproj -c Release -r linux-x64 -o publish/linux-x64
+
+# 2. Kopieer publish map naar WSL (of gebruik /mnt/c/...)
+#    Vanuit WSL:
+export PATH="/mnt/c/Users/kempsb/source/repos/bat/publish/linux-x64:$PATH"
+chmod +x /mnt/c/Users/kempsb/source/repos/bat/publish/linux-x64/bat
+chmod +x /mnt/c/Users/kempsb/source/repos/bat/publish/linux-x64/batd
+chmod +x /mnt/c/Users/kempsb/source/repos/bat/publish/linux-x64/cmd.exe
+
+# 3. Test daemon lifecycle
+bat                          # Start daemon + shell
+# in de bat shell:
+echo %COMPUTERNAME%          # env var test
+subst Q: /tmp                # drive mapping
+start cmd                   # opent nieuw gnome-terminal venster met cmd.exe
+# in het nieuwe venster:
+Q:                           # drive switching via daemon
+dir                          # Q:\ = /tmp
+
+# 4. Test terminal detectie (gnome-terminal in WSLg)
+#    Vereist: WSLg of X11-forwarding
+export DISPLAY=:0            # als WSLg niet automatisch werkt
+bat -c "start cmd /K echo hello from new window"
+
+# 5. Test daemon shared state
+#    Venster 1: subst X: /home
+#    Venster 2: X: → moet werken (gedeelde mapping via daemon)
+
+# 6. Test cmd.exe standalone (moet falen zonder daemon)
+pkill batd                   # stop daemon
+cmd.exe                      # → "This program requires Bat"
+```
 
 | Substap | Status | Beschrijving |
 |---------|--------|--------------|

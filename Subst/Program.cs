@@ -21,7 +21,7 @@ public static class Program
         """;
 
     public static Task<int> Main(IContext context, IArgumentSet args) =>
-        Main(context, args, Console.Out);
+        Main(context, args, context.Console.Out);
 
     public static async Task<int> Main(IContext context, IArgumentSet args, TextWriter output)
     {

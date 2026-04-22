@@ -31,6 +31,7 @@ The project is divided into several layers: FileSystem, Console, Context, BatchC
 - **Naming**: Follow ReactOS CMD naming conventions (e.g., `BATCH_CONTEXT`, `BatchExecute`) where appropriate to maintain conceptual alignment.
 - **IFileSystem**: Use `IFileSystem` as the primary abstraction for all file operations.
 - **Formatting**: Never use alignment spacing (extra spaces to vertically align code). Use 4-space indentation.
+- **Comments**: No letterboxing or decorative lines (e.g., `// ── Section ────────────`). Keep comments short and functional. Method-level summary comments are sufficient in most cases.
 - **Method Return Patterns**: Use the Try/TryAsync pattern for optional results instead of nullable returns. 
   - Synchronous: `(bool Found, Foo Item) TryGetFoo(Bar bar)`
   - Asynchronous: `Task<(bool Found, Foo Item)> TryGetFooAsync(Bar bar)`

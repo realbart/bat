@@ -1,4 +1,4 @@
-﻿namespace Context;
+namespace Context;
 
 public interface IFileSystem
 {
@@ -40,4 +40,8 @@ public interface IFileSystem
     Task<long> GetFreeBytesAsync(char drive, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken cancellationToken = default);
+
+    char NativeDirectorySeparator { get; }
+    char NativePathSeparator { get; }
+    bool TryGetNativePath(char drive, string[] path, out string nativePath);
 }

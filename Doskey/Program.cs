@@ -38,7 +38,7 @@ public static class Program
         """;
 
     public static Task<int> Main(IContext context, IArgumentSet args) =>
-        Main(context, args, Console.Out);
+        Main(context, args, context.Console.Out);
 
     public static async Task<int> Main(IContext context, IArgumentSet args, TextWriter output)
     {
@@ -83,6 +83,13 @@ public static class Program
                 listSizeStr = flag["LISTSIZE=".Length..];
             else if (flag.StartsWith("MACROFILE="))
                 macroFile = word[("/MACROFILE=".Length)..];
+            else if (flag is "REINSTALL" or "INSERT" or "OVERSTRIKE")
+            { }
+            else
+            {
+                await output.WriteLineAsync("Invalid macro definition.");
+                return 1;
+            }
         }
 
         if (listSizeStr != null)

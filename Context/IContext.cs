@@ -1,4 +1,4 @@
-﻿namespace Context;
+namespace Context;
 
 public interface IContext
 {
