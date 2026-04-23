@@ -165,6 +165,16 @@ internal sealed partial class PosixPty : IPseudoTerminal
         }, ct);
     }
 
+    /// <summary>
+    /// Closes the master file descriptor to signal EOF to the output reader.
+    /// On POSIX this is handled in Dispose; this method exists for API compatibility with Windows.
+    /// </summary>
+    public void ClosePseudoConsoleHandle()
+    {
+        // On POSIX, closing the master fd signals EOF. We do this in Dispose.
+        // This is a no-op here to match the Windows API pattern.
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

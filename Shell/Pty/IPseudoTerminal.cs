@@ -37,6 +37,11 @@ internal interface IPseudoTerminal : IDisposable
     Task<int> WaitForExitAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Closes the pseudoconsole handle to signal EOF on the output pipe.
+    /// </summary>
+    void ClosePseudoConsoleHandle();
+
+    /// <summary>
     /// Gets the process ID of the spawned process.
     /// </summary>
     int ProcessId { get; }

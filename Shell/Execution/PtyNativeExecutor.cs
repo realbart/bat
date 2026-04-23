@@ -42,6 +42,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         using var pty = CreatePty();
 
         pty.Start(executable, arguments, workingDir, environment: null);
+        pty.Resize(context.Console.WindowWidth, context.Console.WindowHeight);
 
         using var cts = new CancellationTokenSource();
 
@@ -82,8 +83,9 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
 
         try
         {
-            // Wait for process exit, then drain remaining output
+            // Wait for process exit, close the PTY handle to unblock the output reader, then drain
             var exitCode = await pty.WaitForExitAsync();
+            pty.ClosePseudoConsoleHandle();
             try { await outputTask; } catch { }
             context.ErrorCode = exitCode;
             return exitCode;
@@ -107,7 +109,11 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     private static byte[] KeyToBytes(ConsoleKeyInfo key) => key.Key switch
     {
         ConsoleKey.Enter => "\r"u8.ToArray(),
-        ConsoleKey.Backspace => "\x7f"u8.ToArray(),
+        #if WINDOWS
+                ConsoleKey.Backspace => "\x08"u8.ToArray(),
+        #else
+                ConsoleKey.Backspace => "\x7f"u8.ToArray(),
+        #endif
         ConsoleKey.Tab => "\t"u8.ToArray(),
         ConsoleKey.Escape => "\x1b"u8.ToArray(),
         ConsoleKey.UpArrow => "\x1b[A"u8.ToArray(),

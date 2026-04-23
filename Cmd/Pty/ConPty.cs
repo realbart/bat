@@ -38,7 +38,7 @@ internal sealed class ConPty : IPseudoTerminal
         if (hr != 0)
             Marshal.ThrowExceptionForHR(hr);
 
-        // PTY owns these ends now
+        // PTY owns these ends now — it duplicates the handles internally
         inputRead.Dispose();
         outputWrite.Dispose();
 
@@ -74,8 +74,8 @@ internal sealed class ConPty : IPseudoTerminal
             _processId = pi.dwProcessId;
             CloseHandle(pi.hThread);
 
-            _inputStream = new FileStream(_inputWriteHandle, FileAccess.Write, 256, isAsync: false);
-            _outputStream = new FileStream(_outputReadHandle, FileAccess.Read, 256, isAsync: false);
+            _inputStream = null; // Using direct ReadFile/WriteFile P/Invoke instead
+            _outputStream = null;
         }
         finally
         {
@@ -85,19 +85,39 @@ internal sealed class ConPty : IPseudoTerminal
 
     public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed || _inputStream == null, this);
-        var s = _inputStream;
-        await Task.Run(() => { s.Write(data.Span); s.Flush(); }, ct);
+        ObjectDisposedException.ThrowIf(_disposed || _inputWriteHandle == null, this);
+        var h = _inputWriteHandle.DangerousGetHandle();
+        await Task.Run(() =>
+        {
+            unsafe
+            {
+                fixed (byte* p = data.Span)
+                {
+                    WriteFile(h, p, (uint)data.Length, out _, nint.Zero);
+                }
+            }
+        }, ct);
     }
 
     public async Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed || _outputStream == null, this);
-        var s = _outputStream;
+        ObjectDisposedException.ThrowIf(_disposed || _outputReadHandle == null, this);
+        var h = _outputReadHandle.DangerousGetHandle();
         return await Task.Run(() =>
         {
-            try { return s.Read(buffer.Span); }
-            catch (IOException) { return 0; }
+            try
+            {
+                unsafe
+                {
+                    fixed (byte* p = buffer.Span)
+                    {
+                        if (ReadFile(h, p, (uint)buffer.Length, out var bytesRead, nint.Zero))
+                            return (int)bytesRead;
+                        return 0;
+                    }
+                }
+            }
+            catch { return 0; }
         }, ct);
     }
 
@@ -116,6 +136,16 @@ internal sealed class ConPty : IPseudoTerminal
         return (int)code;
     }
 
+    /// <summary>
+    /// Closes the pseudoconsole handle, which signals EOF on the output pipe
+    /// so the reader can drain remaining bytes and finish.
+    /// Must be called after the child process exits but before awaiting the output reader.
+    /// </summary>
+    public void ClosePseudoConsoleHandle()
+    {
+        if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -125,7 +155,7 @@ internal sealed class ConPty : IPseudoTerminal
         _inputWriteHandle?.Dispose();
         _outputReadHandle?.Dispose();
         _processHandle?.Dispose();
-        if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
+        ClosePseudoConsoleHandle();
     }
 
     private static void CreatePipePair(out SafeFileHandle read, out SafeFileHandle write)
@@ -164,6 +194,7 @@ internal sealed class ConPty : IPseudoTerminal
 
     // Constants
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
+    private const uint CREATE_NO_WINDOW = 0x08000000;
     private static readonly nint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
 
     // Structs
@@ -211,6 +242,14 @@ internal sealed class ConPty : IPseudoTerminal
     [DllImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(nint h);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool ReadFile(nint hFile, byte* lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, nint lpOverlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool WriteFile(nint hFile, byte* lpBuffer, uint nNumberOfBytesToWrite, out uint lpNumberOfBytesWritten, nint lpOverlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

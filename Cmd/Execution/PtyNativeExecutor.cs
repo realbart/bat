@@ -42,6 +42,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         using var pty = CreatePty();
 
         pty.Start(executable, arguments, workingDir, environment: null);
+        pty.Resize(context.Console.WindowWidth, context.Console.WindowHeight);
 
         using var cts = new CancellationTokenSource();
 
@@ -80,10 +81,11 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         void onResize(int w, int h) => pty.Resize(w, h);
         context.Console.Resized += onResize;
 
+
         try
         {
-            // Wait for process exit, then drain remaining output
             var exitCode = await pty.WaitForExitAsync();
+            pty.ClosePseudoConsoleHandle();
             try { await outputTask; } catch { }
             context.ErrorCode = exitCode;
             return exitCode;
@@ -107,7 +109,11 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     private static byte[] KeyToBytes(ConsoleKeyInfo key) => key.Key switch
     {
         ConsoleKey.Enter => "\r"u8.ToArray(),
-        ConsoleKey.Backspace => "\x7f"u8.ToArray(),
+        #if WINDOWS
+                ConsoleKey.Backspace => "\x08"u8.ToArray(),
+        #else
+                ConsoleKey.Backspace => "\x7f"u8.ToArray(),
+        #endif
         ConsoleKey.Tab => "\t"u8.ToArray(),
         ConsoleKey.Escape => "\x1b"u8.ToArray(),
         ConsoleKey.UpArrow => "\x1b[A"u8.ToArray(),
@@ -125,12 +131,14 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
 
     private async Task<int> ExecuteWithProcessAsync(string executable, string arguments, string workingDir, global::Context.IContext context, bool hasRedirections)
     {
+        var useShell = isGuiApp && !hasRedirections;
         var psi = new ProcessStartInfo(executable, arguments)
         {
             WorkingDirectory = workingDir,
-            UseShellExecute = isGuiApp && !hasRedirections,
-            RedirectStandardOutput = hasRedirections,
-            RedirectStandardError = hasRedirections
+            UseShellExecute = useShell,
+            RedirectStandardOutput = !useShell,
+            RedirectStandardError = !useShell,
+            RedirectStandardInput = !useShell
         };
         if (!psi.UseShellExecute)
         {
@@ -141,8 +149,53 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         var process = Process.Start(psi);
         if (process == null) return 1;
         if (!waitForExit) return 0;
-        await process.WaitForExitAsync();
+
+        if (!useShell)
+        {
+            // Forward stdout and stderr to the context console
+            var outTask = ForwardStreamAsync(process.StandardOutput, context.Console.Out);
+            var errTask = ForwardStreamAsync(process.StandardError, context.Console.Error);
+            
+            // Forward console input to process stdin
+            using var cts = new CancellationTokenSource();
+            _ = ForwardInputAsync(context.Console, process.StandardInput, cts.Token);
+            
+            await Task.WhenAll(outTask, errTask);
+            await process.WaitForExitAsync();
+            await cts.CancelAsync();
+        }
+        else
+        {
+            await process.WaitForExitAsync();
+        }
+        
         context.ErrorCode = process.ExitCode;
         return process.ExitCode;
+    }
+
+    private static async Task ForwardInputAsync(global::Context.IConsole console, StreamWriter stdin, CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var key = await console.ReadKeyAsync(true, ct);
+                if (key.KeyChar != '\0')
+                    await stdin.WriteAsync(key.KeyChar);
+                if (key.Key == ConsoleKey.Enter)
+                    await stdin.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    private static async Task ForwardStreamAsync(StreamReader source, TextWriter dest)
+    {
+        var buffer = new char[4096];
+        int read;
+        while ((read = await source.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            await dest.WriteAsync(buffer, 0, read);
     }
 }

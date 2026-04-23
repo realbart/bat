@@ -15,6 +15,7 @@ internal sealed class SocketConsole : IConsole, IDisposable
     private readonly SocketTextWriter _out;
     private readonly SocketTextWriter _err;
     private readonly SocketTextReader _in;
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
     private int _windowWidth;
     private int _windowHeight;
 
@@ -26,8 +27,8 @@ internal sealed class SocketConsole : IConsole, IDisposable
         _windowWidth = windowWidth;
         _windowHeight = windowHeight;
         IsInteractive = isInteractive;
-        _out = new SocketTextWriter(stream, TerminalMessageType.Out);
-        _err = new SocketTextWriter(stream, TerminalMessageType.Err);
+        _out = new SocketTextWriter(stream, TerminalMessageType.Out, _writeLock);
+        _err = new SocketTextWriter(stream, TerminalMessageType.Err, _writeLock);
         _in = new SocketTextReader(this);
     }
 
@@ -48,7 +49,9 @@ internal sealed class SocketConsole : IConsole, IDisposable
             // Send ANSI escape: move cursor to column (1-based)
             var ansi = $"\x1b[{value + 1}G";
             var bytes = System.Text.Encoding.UTF8.GetBytes(ansi);
-            TerminalProtocol.WriteAsync(_stream, TerminalMessageType.Out, bytes).GetAwaiter().GetResult();
+            _writeLock.Wait();
+            try { TerminalProtocol.WriteAsync(_stream, TerminalMessageType.Out, bytes).GetAwaiter().GetResult(); }
+            finally { _writeLock.Release(); }
         }
     }
 
@@ -86,11 +89,12 @@ internal sealed class SocketConsole : IConsole, IDisposable
         _out.Dispose();
         _err.Dispose();
         _in.Dispose();
+        _writeLock.Dispose();
     }
 }
 
 /// <summary>TextWriter that sends bytes to the socket as Out or Err frames.</summary>
-internal sealed class SocketTextWriter(Stream stream, TerminalMessageType type) : TextWriter
+internal sealed class SocketTextWriter(Stream stream, TerminalMessageType type, SemaphoreSlim writeLock) : TextWriter
 {
     public override Encoding Encoding => Encoding.UTF8;
 
@@ -100,14 +104,18 @@ internal sealed class SocketTextWriter(Stream stream, TerminalMessageType type) 
     {
         if (value == null) return;
         var bytes = Encoding.UTF8.GetBytes(value);
-        TerminalProtocol.WriteAsync(stream, type, bytes).GetAwaiter().GetResult();
+        writeLock.Wait();
+        try { TerminalProtocol.WriteAsync(stream, type, bytes).GetAwaiter().GetResult(); }
+        finally { writeLock.Release(); }
     }
 
     public override async Task WriteAsync(string? value)
     {
         if (value == null) return;
         var bytes = Encoding.UTF8.GetBytes(value);
-        await TerminalProtocol.WriteAsync(stream, type, bytes);
+        await writeLock.WaitAsync();
+        try { await TerminalProtocol.WriteAsync(stream, type, bytes); }
+        finally { writeLock.Release(); }
     }
 
     public override async Task WriteLineAsync(string? value)
@@ -116,10 +124,12 @@ internal sealed class SocketTextWriter(Stream stream, TerminalMessageType type) 
         await WriteAsync(Environment.NewLine);
     }
 
-    public override Task WriteAsync(ReadOnlyMemory<char> buffer, CancellationToken ct = default)
+    public override async Task WriteAsync(ReadOnlyMemory<char> buffer, CancellationToken ct = default)
     {
         var bytes = Encoding.UTF8.GetBytes(buffer.Span.ToArray());
-        return TerminalProtocol.WriteAsync(stream, type, bytes, ct);
+        await writeLock.WaitAsync(ct);
+        try { await TerminalProtocol.WriteAsync(stream, type, bytes, ct); }
+        finally { writeLock.Release(); }
     }
 
     public override void Flush() { }

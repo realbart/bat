@@ -165,6 +165,11 @@ internal sealed partial class PosixPty : IPseudoTerminal
         }, ct);
     }
 
+    public void ClosePseudoConsoleHandle()
+    {
+        // On POSIX, closing the master fd signals EOF; handled in Dispose.
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

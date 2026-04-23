@@ -18,9 +18,12 @@ internal static class Program
 
     static async Task<int> Main(string[] args)
     {
-        // Enable UTF-8 and ANSI escape processing
+        // Enable UTF-8 and ANSI/VT escape processing
         Console.OutputEncoding = Encoding.UTF8;
         Console.InputEncoding = Encoding.UTF8;
+#if WINDOWS
+        EnableVirtualTerminalProcessing();
+#endif
 
         // bat only handles /? and /N locally. Everything else goes to batd verbatim.
         var showHelp = false;
@@ -129,15 +132,125 @@ internal static class Program
     {
         try
         {
+#if WINDOWS
+            var hIn = GetStdHandle(STD_INPUT_HANDLE);
+            GetConsoleMode(hIn, out var savedMode);
+            // Disable echo and line input ONCE to avoid per-key mode flipping
+            // that conflicts with Console.Out.Write on the output thread.
+            SetConsoleMode(hIn, (savedMode & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT)) | ENABLE_WINDOW_INPUT);
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    var key = await Task.Run(() => ReadKeyFromConsole(hIn), ct);
+                    if (key.HasValue)
+                        await TerminalProtocol.WriteKeyAsync(stream, key.Value, ct);
+                }
+            }
+            finally
+            {
+                SetConsoleMode(hIn, savedMode);
+            }
+#else
             while (!ct.IsCancellationRequested)
             {
                 var key = Console.ReadKey(true);
                 await TerminalProtocol.WriteKeyAsync(stream, key, ct);
             }
+#endif
         }
         catch (OperationCanceledException) { }
         catch (IOException) { }
     }
+
+#if WINDOWS
+    private const int STD_INPUT_HANDLE = -10;
+    private const uint ENABLE_ECHO_INPUT = 0x0004;
+    private const uint ENABLE_LINE_INPUT = 0x0002;
+    private const uint ENABLE_WINDOW_INPUT = 0x0008;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern nint GetStdHandle(int nStdHandle);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetConsoleMode(nint h, out uint mode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SetConsoleMode(nint h, uint mode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool ReadConsoleInputW(nint hConsoleInput, out INPUT_RECORD lpBuffer, uint nLength, out uint lpNumberOfEventsRead);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+    private struct INPUT_RECORD
+    {
+        [System.Runtime.InteropServices.FieldOffset(0)] public ushort EventType;
+        [System.Runtime.InteropServices.FieldOffset(4)] public KEY_EVENT_RECORD KeyEvent;
+        [System.Runtime.InteropServices.FieldOffset(4)] public WINDOW_BUFFER_SIZE_RECORD WindowBufferSizeEvent;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct KEY_EVENT_RECORD
+    {
+        public int bKeyDown;
+        public ushort wRepeatCount;
+        public ushort wVirtualKeyCode;
+        public ushort wVirtualScanCode;
+        public char UnicodeChar;
+        public uint dwControlKeyState;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct WINDOW_BUFFER_SIZE_RECORD
+    {
+        public short X, Y;
+    }
+
+    private const ushort KEY_EVENT = 0x0001;
+    private const ushort WINDOW_BUFFER_SIZE_EVENT = 0x0004;
+    private const uint SHIFT_PRESSED = 0x0010;
+    private const uint LEFT_ALT_PRESSED = 0x0002;
+    private const uint RIGHT_ALT_PRESSED = 0x0001;
+    private const uint LEFT_CTRL_PRESSED = 0x0008;
+    private const uint RIGHT_CTRL_PRESSED = 0x0004;
+
+    /// <summary>
+    /// Reads a key event from the console input handle without changing console mode.
+    /// Returns null for non-key events (like resize — those are handled separately).
+    /// </summary>
+    private static ConsoleKeyInfo? ReadKeyFromConsole(nint hIn)
+    {
+        while (true)
+        {
+            if (!ReadConsoleInputW(hIn, out var rec, 1, out _))
+                return null;
+
+            if (rec.EventType == KEY_EVENT && rec.KeyEvent.bKeyDown != 0)
+            {
+                var state = rec.KeyEvent.dwControlKeyState;
+                return new ConsoleKeyInfo(
+                    rec.KeyEvent.UnicodeChar,
+                    (ConsoleKey)rec.KeyEvent.wVirtualKeyCode,
+                    (state & SHIFT_PRESSED) != 0,
+                    (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0,
+                    (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0);
+            }
+            // Skip key-up events, mouse events, etc.
+        }
+    }
+
+    private static void EnableVirtualTerminalProcessing()
+    {
+        const int STD_OUTPUT_HANDLE = -11;
+        const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+        var hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (GetConsoleMode(hOut, out var mode))
+            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+#endif
 
     private static async Task ForwardStdinAsync(Stream stream, CancellationToken ct)
     {

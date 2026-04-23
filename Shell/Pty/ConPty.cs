@@ -116,6 +116,16 @@ internal sealed class ConPty : IPseudoTerminal
         return (int)code;
     }
 
+    /// <summary>
+    /// Closes the pseudoconsole handle, which signals EOF on the output pipe
+    /// so the reader can drain remaining bytes and finish.
+    /// Must be called after the child process exits but before awaiting the output reader.
+    /// </summary>
+    public void ClosePseudoConsoleHandle()
+    {
+        if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -125,7 +135,7 @@ internal sealed class ConPty : IPseudoTerminal
         _inputWriteHandle?.Dispose();
         _outputReadHandle?.Dispose();
         _processHandle?.Dispose();
-        if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
+        ClosePseudoConsoleHandle();
     }
 
     private static void CreatePipePair(out SafeFileHandle read, out SafeFileHandle write)

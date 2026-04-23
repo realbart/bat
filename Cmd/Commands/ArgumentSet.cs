@@ -172,7 +172,7 @@ internal sealed class ArgumentSet : IArgumentSet
                     else if (switchName.Length == 1)
                     {
                         if (spec.Flags.Count == 0 && spec.Options.Count == 0)
-                            flags.Add(switchName);
+                            positionals.Add(word);
                         else
                             return new(
                                 fullArgument,

@@ -8,7 +8,7 @@ namespace Cmd;
 public static class Program
 {
     private static string BannerText =>
-        $"🦇Cmd [Version {typeof(Program).Assembly.GetName().Version}]\r\n(c) Bart Kemps. Released under GPLv3+.\r\n";
+        $"🦇Bat [Version {typeof(Program).Assembly.GetName().Version}]\r\n(c) Bart Kemps. Released under GPLv3+.\r\n";
 
     internal const string HelpText =
         """
