@@ -69,7 +69,7 @@ using var stream = new NetworkStream(clientSocket, ownsSocket: false);
 
 // Start cmd.exe inside a ConPTY
 using var pty = new ConPty();
-pty.Start(@"c:\windows\system32\cmd.exe", "", Environment.CurrentDirectory, cols, rows);
+pty.Start(@"C:\Program Files\PowerShell\7\pwsh.exe", "", Environment.CurrentDirectory, cols, rows);
 Console.Error.WriteLine($"[PtyServer] cmd.exe started (PID {pty.ProcessId})");
 
 using var cts = new CancellationTokenSource();
