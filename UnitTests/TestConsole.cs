@@ -17,6 +17,7 @@ internal class TestConsole(string input = "") : IConsole
     public int WindowHeight { get; set; } = 24;
     public int CursorLeft { get; set; }
     public bool IsInteractive { get; set; } = true; // default: interactive mode voor tests
+    public bool IsNative => false;
     public event Action<int, int>? Resized;
 
     public void EnqueueKey(ConsoleKeyInfo key) => _keys.Enqueue(key);
@@ -31,6 +32,9 @@ internal class TestConsole(string input = "") : IConsole
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);
     public IConsole WithInput(TextReader newIn) => new RedirectedConsole(this, null, null, newIn);
+    public Task EnterRawModeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task LeaveRawModeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<int> ReadRawAsync(Memory<byte> buffer, CancellationToken ct = default) => Task.FromResult(0);
 
     public string OutText => _outWriter.ToString();
     public string ErrText => _errWriter.ToString();

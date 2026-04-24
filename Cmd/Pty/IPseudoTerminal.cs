@@ -13,7 +13,7 @@ internal interface IPseudoTerminal : IDisposable
     /// <param name="arguments">Command line arguments</param>
     /// <param name="workingDirectory">Working directory for the process</param>
     /// <param name="environment">Environment variables (null = inherit)</param>
-    void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment);
+    void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment, int columns, int rows);
 
     /// <summary>
     /// Writes input to the PTY (keystrokes from the user).

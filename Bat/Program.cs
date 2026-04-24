@@ -81,25 +81,181 @@ internal static class Program
 
         // Proxy loop: read keys → send to daemon, receive output → write to console
         using var cts = new CancellationTokenSource();
-        var outputTask = ReadOutputLoopAsync(stream, cts.Token);
+        var inputMode = new InputModeSwitch(stream, interactive, cts.Token);
+        var outputTask = ReadOutputLoopAsync(stream, inputMode, cts.Token);
+        inputMode.Start();
 
-        if (interactive)
+        var exitCode = await outputTask;
+        await cts.CancelAsync();
+        inputMode.Dispose();
+        return exitCode;
+    }
+
+    /// <summary>
+    /// Manages switching between structured Key input and raw byte input.
+    /// Uses a SINGLE input loop to avoid race conditions between concurrent console readers.
+    /// When batd sends RawModeOn, switches console to VT raw mode within the same loop.
+    /// </summary>
+    private sealed class InputModeSwitch : IDisposable
+    {
+        private readonly Stream _stream;
+        private readonly bool _interactive;
+        private readonly CancellationToken _ct;
+        private CancellationTokenSource? _loopCts;
+        private volatile bool _rawMode;
+
+        public InputModeSwitch(Stream stream, bool interactive, CancellationToken ct)
         {
-            _ = WriteKeyLoopAsync(stream, cts.Token);
-            var exitCode = await outputTask;
-            await cts.CancelAsync();
-            return exitCode;
+            _stream = stream;
+            _interactive = interactive;
+            _ct = ct;
         }
-        else
+
+        public void Start()
         {
-            _ = ForwardStdinAsync(stream, cts.Token);
-            var exitCode = await outputTask;
-            await cts.CancelAsync();
-            return exitCode;
+            _loopCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+            if (_interactive)
+            {
+#if WINDOWS
+                _ = WindowsInputLoopAsync(_stream, _loopCts.Token);
+#else
+                _ = UnixInputLoopAsync(_stream, _loopCts.Token);
+#endif
+            }
+            else
+            {
+                _ = ForwardStdinAsync(_stream, _loopCts.Token);
+            }
+        }
+
+        public void EnterRawMode() => _rawMode = true;
+        public void LeaveRawMode() => _rawMode = false;
+
+#if WINDOWS
+        /// <summary>
+        /// Single input loop for Windows. Polls console input with short sleeps.
+        /// In key mode: reads ConsoleKeyInfo via ReadConsoleInputW, sends Key messages.
+        /// In raw mode: switches console to VT input, reads stdin as raw bytes, sends RawInput.
+        /// Modeled after PtyClient's proven approach.
+        /// </summary>
+        private async Task WindowsInputLoopAsync(Stream stream, CancellationToken ct)
+        {
+            var hIn = GetStdHandle(STD_INPUT_HANDLE);
+            GetConsoleMode(hIn, out var originalMode);
+
+            // Key mode: no echo, no line input, but structured key events
+            var keyMode = (originalMode & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT)) | ENABLE_WINDOW_INPUT;
+
+            // Raw mode: VT input sequences as raw bytes on stdin (exactly like PtyClient)
+            const uint ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200;
+            const uint ENABLE_PROCESSED_INPUT = 0x0001;
+            var rawModeFlags = (originalMode & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT))
+                               | ENABLE_VIRTUAL_TERMINAL_INPUT;
+
+            SetConsoleMode(hIn, keyMode);
+            var currentlyRaw = false;
+
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    // Mode switch check
+                    if (_rawMode && !currentlyRaw)
+                    {
+                        FlushConsoleInputBuffer(hIn);
+                        SetConsoleMode(hIn, rawModeFlags);
+                        currentlyRaw = true;
+                    }
+                    else if (!_rawMode && currentlyRaw)
+                    {
+                        SetConsoleMode(hIn, keyMode);
+                        currentlyRaw = false;
+                    }
+
+                    if (currentlyRaw)
+                    {
+                        // Raw mode: read stdin bytes (like PtyClient), one chunk at a time
+                        // then return to top of loop to check mode flag
+                        using var stdinStream = Console.OpenStandardInput();
+                        var buf = new byte[256];
+                        while (_rawMode && !ct.IsCancellationRequested)
+                        {
+                            var n = await stdinStream.ReadAsync(buf, ct);
+                            if (n <= 0) break;
+                            await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
+                        }
+                    }
+                    else
+                    {
+                        // Key mode: poll for input events without blocking
+                        if (!GetNumberOfConsoleInputEvents(hIn, out var count) || count == 0)
+                        {
+                            await Task.Delay(10, ct);
+                            continue;
+                        }
+
+                        if (!ReadConsoleInputW(hIn, out var rec, 1, out _))
+                            continue;
+
+                        if (rec.EventType == KEY_EVENT && rec.KeyEvent.bKeyDown != 0)
+                        {
+                            var state = rec.KeyEvent.dwControlKeyState;
+                            var key = new ConsoleKeyInfo(
+                                rec.KeyEvent.UnicodeChar,
+                                (ConsoleKey)rec.KeyEvent.wVirtualKeyCode,
+                                (state & SHIFT_PRESSED) != 0,
+                                (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0,
+                                (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0);
+                            await TerminalProtocol.WriteKeyAsync(stream, key, ct);
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (IOException) { }
+            finally
+            {
+                SetConsoleMode(hIn, originalMode);
+            }
+        }
+#endif
+
+#if !WINDOWS
+        private async Task UnixInputLoopAsync(Stream stream, CancellationToken ct)
+        {
+            try
+            {
+                var stdinStream = Console.OpenStandardInput();
+                var buf = new byte[256];
+                while (!ct.IsCancellationRequested)
+                {
+                    var n = await stdinStream.ReadAsync(buf, ct);
+                    if (n <= 0) break;
+
+                    if (_rawMode)
+                        await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
+                    else
+                    {
+                        // On Unix in key mode, use Console.ReadKey for structured key info
+                        // (stdin is already being consumed above, so just send as key)
+                        var key = Console.ReadKey(true);
+                        await TerminalProtocol.WriteKeyAsync(stream, key, ct);
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (IOException) { }
+        }
+#endif
+
+        public void Dispose()
+        {
+            _loopCts?.Cancel();
+            _loopCts?.Dispose();
         }
     }
 
-    private static async Task<int> ReadOutputLoopAsync(Stream stream, CancellationToken ct)
+    private static async Task<int> ReadOutputLoopAsync(Stream stream, InputModeSwitch inputMode, CancellationToken ct)
     {
         try
         {
@@ -112,9 +268,17 @@ internal static class Program
                 {
                     case TerminalMessageType.Out:
                         await Console.Out.WriteAsync(Encoding.UTF8.GetString(msg.Value.Payload));
+                        await Console.Out.FlushAsync();
                         break;
                     case TerminalMessageType.Err:
                         await Console.Error.WriteAsync(Encoding.UTF8.GetString(msg.Value.Payload));
+                        await Console.Error.FlushAsync();
+                        break;
+                    case TerminalMessageType.RawModeOn:
+                        inputMode.EnterRawMode();
+                        break;
+                    case TerminalMessageType.RawModeOff:
+                        inputMode.LeaveRawMode();
                         break;
                     case TerminalMessageType.Exit:
                         return TerminalProtocol.ParseExitCode(msg.Value.Payload);
@@ -128,40 +292,7 @@ internal static class Program
         return 1;
     }
 
-    private static async Task WriteKeyLoopAsync(Stream stream, CancellationToken ct)
-    {
-        try
-        {
-#if WINDOWS
-            var hIn = GetStdHandle(STD_INPUT_HANDLE);
-            GetConsoleMode(hIn, out var savedMode);
-            // Disable echo and line input ONCE to avoid per-key mode flipping
-            // that conflicts with Console.Out.Write on the output thread.
-            SetConsoleMode(hIn, (savedMode & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT)) | ENABLE_WINDOW_INPUT);
-            try
-            {
-                while (!ct.IsCancellationRequested)
-                {
-                    var key = await Task.Run(() => ReadKeyFromConsole(hIn), ct);
-                    if (key.HasValue)
-                        await TerminalProtocol.WriteKeyAsync(stream, key.Value, ct);
-                }
-            }
-            finally
-            {
-                SetConsoleMode(hIn, savedMode);
-            }
-#else
-            while (!ct.IsCancellationRequested)
-            {
-                var key = Console.ReadKey(true);
-                await TerminalProtocol.WriteKeyAsync(stream, key, ct);
-            }
-#endif
-        }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-    }
+    // WriteKeyLoopAsync removed — input is now handled by InputModeSwitch.WindowsInputLoopAsync
 
 #if WINDOWS
     private const int STD_INPUT_HANDLE = -10;
@@ -183,6 +314,14 @@ internal static class Program
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static extern bool ReadConsoleInputW(nint hConsoleInput, out INPUT_RECORD lpBuffer, uint nLength, out uint lpNumberOfEventsRead);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool FlushConsoleInputBuffer(nint hConsoleInput);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetNumberOfConsoleInputEvents(nint hConsoleInput, out uint lpcNumberOfEvents);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
     private struct INPUT_RECORD
@@ -217,31 +356,6 @@ internal static class Program
     private const uint LEFT_CTRL_PRESSED = 0x0008;
     private const uint RIGHT_CTRL_PRESSED = 0x0004;
 
-    /// <summary>
-    /// Reads a key event from the console input handle without changing console mode.
-    /// Returns null for non-key events (like resize — those are handled separately).
-    /// </summary>
-    private static ConsoleKeyInfo? ReadKeyFromConsole(nint hIn)
-    {
-        while (true)
-        {
-            if (!ReadConsoleInputW(hIn, out var rec, 1, out _))
-                return null;
-
-            if (rec.EventType == KEY_EVENT && rec.KeyEvent.bKeyDown != 0)
-            {
-                var state = rec.KeyEvent.dwControlKeyState;
-                return new ConsoleKeyInfo(
-                    rec.KeyEvent.UnicodeChar,
-                    (ConsoleKey)rec.KeyEvent.wVirtualKeyCode,
-                    (state & SHIFT_PRESSED) != 0,
-                    (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0,
-                    (state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0);
-            }
-            // Skip key-up events, mouse events, etc.
-        }
-    }
-
     private static void EnableVirtualTerminalProcessing()
     {
         const int STD_OUTPUT_HANDLE = -11;
@@ -256,11 +370,14 @@ internal static class Program
     {
         try
         {
+            var stdinStream = Console.OpenStandardInput();
+            var buf = new byte[256];
             while (!ct.IsCancellationRequested)
             {
-                var ch = Console.In.Read();
-                if (ch < 0) break;
-                await TerminalProtocol.WriteKeyAsync(stream, new ConsoleKeyInfo((char)ch, 0, false, false, false), ct);
+                var n = await stdinStream.ReadAsync(buf, ct);
+                if (n <= 0) break;
+                // Non-interactive: always send as raw input (no structured key info available)
+                await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
             }
         }
         catch (OperationCanceledException) { }
@@ -282,13 +399,12 @@ internal static class Program
 
         try
         {
+            // batd is a WinExe (no console), so we don't redirect streams.
+            // Redirecting streams can interfere with ConPTY child processes.
             Process.Start(new ProcessStartInfo(daemonPath)
             {
                 UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                CreateNoWindow = true
             });
         }
         catch { return null; }

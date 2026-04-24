@@ -1,20 +1,17 @@
-#if WINDOWS
+// ConPty: Windows ConPTY implementation.
+// Self-contained – no dependency on the rest of the Bat solution.
+// Based on https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
+
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace Bat.Pty;
+#pragma warning disable CA1416 // Windows-only
 
-/// <summary>
-/// Windows ConPTY implementation.
-/// Based on https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
-/// </summary>
-internal sealed class ConPty : IPseudoTerminal
+internal sealed class ConPty : IDisposable
 {
     private SafeFileHandle? _inputWriteHandle;
     private SafeFileHandle? _outputReadHandle;
-    private FileStream? _inputStream;
-    private FileStream? _outputStream;
     private nint _hPC;
     private SafeProcessHandle? _processHandle;
     private int _processId;
@@ -23,7 +20,7 @@ internal sealed class ConPty : IPseudoTerminal
     public int ProcessId => _processId;
     public bool HasExited => _processHandle != null && WaitForSingleObject(_processHandle.DangerousGetHandle(), 0) == 0;
 
-    public void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment, int columns, int rows)
+    public void Start(string executable, string arguments, string workingDirectory, int columns, int rows)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -34,13 +31,13 @@ internal sealed class ConPty : IPseudoTerminal
         _outputReadHandle = outputRead;
 
         columns = Math.Max(1, columns);
-        rows = Math.Max(1, rows);
+        rows    = Math.Max(1, rows);
         var size = new COORD { X = (short)columns, Y = (short)rows };
         var hr = CreatePseudoConsole(size, inputRead.DangerousGetHandle(), outputWrite.DangerousGetHandle(), 0, out _hPC);
         if (hr != 0)
             Marshal.ThrowExceptionForHR(hr);
 
-        // PTY owns these ends now — it duplicates the handles internally
+        // The PTY owns these ends now
         inputRead.Dispose();
         outputWrite.Dispose();
 
@@ -55,19 +52,13 @@ internal sealed class ConPty : IPseudoTerminal
                 ? $"\"{executable}\""
                 : $"\"{executable}\" {arguments}";
 
-            // Inherit parent environment — no custom block needed for correctness.
-            // Bat-specific vars are set by the shell, not by native process spawning.
             if (!CreateProcessW(
-                null,
-                cmdLine,
-                nint.Zero,
-                nint.Zero,
-                false,
-                EXTENDED_STARTUPINFO_PRESENT,
-                nint.Zero,
-                workingDirectory,
-                ref siEx,
-                out var pi))
+                    null, cmdLine,
+                    nint.Zero, nint.Zero,
+                    false,
+                    EXTENDED_STARTUPINFO_PRESENT,
+                    nint.Zero, workingDirectory,
+                    ref siEx, out var pi))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
@@ -75,9 +66,6 @@ internal sealed class ConPty : IPseudoTerminal
             _processHandle = new SafeProcessHandle(pi.hProcess, true);
             _processId = pi.dwProcessId;
             CloseHandle(pi.hThread);
-
-            _inputStream = null; // Using direct ReadFile/WriteFile P/Invoke instead
-            _outputStream = null;
         }
         finally
         {
@@ -85,27 +73,25 @@ internal sealed class ConPty : IPseudoTerminal
         }
     }
 
-    public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
+    public Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed || _inputWriteHandle == null, this);
         var h = _inputWriteHandle.DangerousGetHandle();
-        await Task.Run(() =>
+        return Task.Run(() =>
         {
             unsafe
             {
                 fixed (byte* p = data.Span)
-                {
                     WriteFile(h, p, (uint)data.Length, out _, nint.Zero);
-                }
             }
         }, ct);
     }
 
-    public async Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+    public Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed || _outputReadHandle == null, this);
         var h = _outputReadHandle.DangerousGetHandle();
-        return await Task.Run(() =>
+        return Task.Run(() =>
         {
             try
             {
@@ -127,7 +113,7 @@ internal sealed class ConPty : IPseudoTerminal
     {
         if (_disposed || _hPC == nint.Zero) return;
         columns = Math.Max(1, columns);
-        rows = Math.Max(1, rows);
+        rows    = Math.Max(1, rows);
         ResizePseudoConsole(_hPC, new COORD { X = (short)columns, Y = (short)rows });
     }
 
@@ -141,9 +127,8 @@ internal sealed class ConPty : IPseudoTerminal
     }
 
     /// <summary>
-    /// Closes the pseudoconsole handle, which signals EOF on the output pipe
-    /// so the reader can drain remaining bytes and finish.
-    /// Must be called after the child process exits but before awaiting the output reader.
+    /// Closes the pseudoconsole handle to signal EOF on the output pipe.
+    /// Call this after the child process exits, before draining remaining output.
     /// </summary>
     public void ClosePseudoConsoleHandle()
     {
@@ -154,19 +139,19 @@ internal sealed class ConPty : IPseudoTerminal
     {
         if (_disposed) return;
         _disposed = true;
-        _inputStream?.Dispose();
-        _outputStream?.Dispose();
         _inputWriteHandle?.Dispose();
         _outputReadHandle?.Dispose();
         _processHandle?.Dispose();
         ClosePseudoConsoleHandle();
     }
 
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
     private static void CreatePipePair(out SafeFileHandle read, out SafeFileHandle write)
     {
         if (!CreatePipe(out var r, out var w, nint.Zero, 0))
             throw new Win32Exception(Marshal.GetLastWin32Error());
-        read = new SafeFileHandle(r, true);
+        read  = new SafeFileHandle(r, true);
         write = new SafeFileHandle(w, true);
     }
 
@@ -181,7 +166,7 @@ internal sealed class ConPty : IPseudoTerminal
             throw new Win32Exception(Marshal.GetLastWin32Error());
         }
         if (!UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-            _hPC, (nint)nint.Size, nint.Zero, nint.Zero))
+                _hPC, (nint)nint.Size, nint.Zero, nint.Zero))
         {
             DeleteProcThreadAttributeList(list);
             Marshal.FreeHGlobal(list);
@@ -196,14 +181,12 @@ internal sealed class ConPty : IPseudoTerminal
         Marshal.FreeHGlobal(list);
     }
 
-    // Constants
+    // ── Constants / Structs / P/Invokes ─────────────────────────────────────
+
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
-    private const uint CREATE_NO_WINDOW = 0x08000000;
     private static readonly nint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
 
-    // Structs
-    [StructLayout(LayoutKind.Sequential)]
-    private struct COORD { public short X, Y; }
+    [StructLayout(LayoutKind.Sequential)] private struct COORD { public short X, Y; }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct STARTUPINFOEXW
@@ -229,7 +212,6 @@ internal sealed class ConPty : IPseudoTerminal
         public int dwProcessId, dwThreadId;
     }
 
-    // P/Invoke
     [DllImport("kernel32.dll")]
     private static extern int CreatePseudoConsole(COORD size, nint hInput, nint hOutput, uint flags, out nint phPC);
 
@@ -249,11 +231,11 @@ internal sealed class ConPty : IPseudoTerminal
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern unsafe bool ReadFile(nint hFile, byte* lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, nint lpOverlapped);
+    private static extern unsafe bool ReadFile(nint hFile, byte* lpBuffer, uint nToRead, out uint nRead, nint overlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern unsafe bool WriteFile(nint hFile, byte* lpBuffer, uint nNumberOfBytesToWrite, out uint lpNumberOfBytesWritten, nint lpOverlapped);
+    private static extern unsafe bool WriteFile(nint hFile, byte* lpBuffer, uint nToWrite, out uint nWritten, nint overlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -270,7 +252,8 @@ internal sealed class ConPty : IPseudoTerminal
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateProcessW(
         string? app, string cmdLine, nint procAttr, nint threadAttr,
-        [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags, nint env, string cwd,
+        [MarshalAs(UnmanagedType.Bool)] bool inheritHandles,
+        uint flags, nint env, string cwd,
         ref STARTUPINFOEXW si, out PROCESS_INFORMATION pi);
 
     [DllImport("kernel32.dll")]
@@ -280,4 +263,3 @@ internal sealed class ConPty : IPseudoTerminal
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetExitCodeProcess(nint h, out uint code);
 }
-#endif

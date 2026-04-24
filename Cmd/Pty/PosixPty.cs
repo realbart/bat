@@ -18,11 +18,13 @@ internal sealed partial class PosixPty : IPseudoTerminal
     public int ProcessId => _childPid;
     public bool HasExited => _childPid > 0 && Waitpid(_childPid, out _, WNOHANG) != 0;
 
-    public void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment)
+    public void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment, int columns, int rows)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        var winSize = new WinSize { ws_col = 120, ws_row = 30, ws_xpixel = 0, ws_ypixel = 0 };
+        columns = Math.Max(1, columns);
+        rows = Math.Max(1, rows);
+        var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows, ws_xpixel = 0, ws_ypixel = 0 };
 
         // forkpty creates master/slave PTY pair and forks
         var pid = ForkPty(out _masterFd, nint.Zero, nint.Zero, ref winSize);

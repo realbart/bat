@@ -18,6 +18,9 @@ internal sealed class SocketConsole : IConsole, IDisposable
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private int _windowWidth;
     private int _windowHeight;
+    private bool _rawMode;
+    private readonly Queue<byte[]> _rawQueue = new();
+    private readonly SemaphoreSlim _rawReady = new(0);
 
     public event Action<int, int>? Resized;
 
@@ -38,6 +41,7 @@ internal sealed class SocketConsole : IConsole, IDisposable
     public int WindowWidth => _windowWidth;
     public int WindowHeight => _windowHeight;
     public bool IsInteractive { get; }
+    public bool IsNative => false;
 
     private int _cursorLeft;
     public int CursorLeft
@@ -67,17 +71,94 @@ internal sealed class SocketConsole : IConsole, IDisposable
                 case TerminalMessageType.Key:
                     return TerminalProtocol.ParseKey(msg.Value.Payload);
 
+                case TerminalMessageType.RawInput:
+                    // Raw bytes arrived while not in raw mode — queue for ReadRawAsync
+                    _rawQueue.Enqueue(msg.Value.Payload);
+                    _rawReady.Release();
+                    continue;
+
                 case TerminalMessageType.Resize:
                     var (w, h) = TerminalProtocol.ParseResize(msg.Value.Payload);
                     _windowWidth = w;
                     _windowHeight = h;
                     Resized?.Invoke(w, h);
-                    continue; // Keep reading for the next Key
+                    continue;
 
                 default:
-                    continue; // Ignore unexpected messages
+                    continue;
             }
         }
+    }
+
+    public async Task EnterRawModeAsync(CancellationToken ct = default)
+    {
+        _rawMode = true;
+        await _writeLock.WaitAsync(ct);
+        try { await TerminalProtocol.WriteAsync(_stream, TerminalMessageType.RawModeOn, ReadOnlyMemory<byte>.Empty, ct); }
+        finally { _writeLock.Release(); }
+    }
+
+    public async Task LeaveRawModeAsync(CancellationToken ct = default)
+    {
+        _rawMode = false;
+        await _writeLock.WaitAsync(ct);
+        try { await TerminalProtocol.WriteAsync(_stream, TerminalMessageType.RawModeOff, ReadOnlyMemory<byte>.Empty, ct); }
+        finally { _writeLock.Release(); }
+    }
+
+    public async Task<int> ReadRawAsync(Memory<byte> buffer, CancellationToken ct = default)
+    {
+        // If there are queued raw chunks, return the first one
+        if (_rawQueue.Count > 0)
+            return DequeueRaw(buffer);
+
+        // Read from the stream until we get a RawInput message
+        while (true)
+        {
+            var msg = await TerminalProtocol.ReadAsync(_stream, ct);
+            if (msg == null) return 0;
+
+            switch (msg.Value.Type)
+            {
+                case TerminalMessageType.RawInput:
+                    var payload = msg.Value.Payload;
+                    var n = Math.Min(payload.Length, buffer.Length);
+                    payload.AsMemory(0, n).CopyTo(buffer);
+                    if (n < payload.Length)
+                    {
+                        _rawQueue.Enqueue(payload[n..]);
+                        _rawReady.Release();
+                    }
+                    return n;
+
+                case TerminalMessageType.Resize:
+                    var (w, h) = TerminalProtocol.ParseResize(msg.Value.Payload);
+                    _windowWidth = w;
+                    _windowHeight = h;
+                    Resized?.Invoke(w, h);
+                    continue;
+
+                case TerminalMessageType.Key:
+                    // Client sent a key while we expect raw — raw mode transition in flight, ignore
+                    continue;
+
+                default:
+                    continue;
+            }
+        }
+    }
+
+    private int DequeueRaw(Memory<byte> buffer)
+    {
+        var chunk = _rawQueue.Dequeue();
+        var n = Math.Min(chunk.Length, buffer.Length);
+        chunk.AsMemory(0, n).CopyTo(buffer);
+        if (n < chunk.Length)
+        {
+            _rawQueue.Enqueue(chunk[n..]);
+            _rawReady.Release();
+        }
+        return n;
     }
 
     public IConsole WithOutput(TextWriter newOut) => new RedirectedSocketConsole(this, newOut, Error, In);
@@ -156,9 +237,13 @@ internal sealed class RedirectedSocketConsole(SocketConsole inner, TextWriter ou
     public int WindowHeight => inner.WindowHeight;
     public int CursorLeft { get => inner.CursorLeft; set => inner.CursorLeft = value; }
     public bool IsInteractive => inner.IsInteractive;
+    public bool IsNative => inner.IsNative;
     public event Action<int, int>? Resized { add => inner.Resized += value; remove => inner.Resized -= value; }
     public Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
         => inner.ReadKeyAsync(intercept, cancellationToken);
+    public Task EnterRawModeAsync(CancellationToken ct = default) => inner.EnterRawModeAsync(ct);
+    public Task LeaveRawModeAsync(CancellationToken ct = default) => inner.LeaveRawModeAsync(ct);
+    public Task<int> ReadRawAsync(Memory<byte> buffer, CancellationToken ct = default) => inner.ReadRawAsync(buffer, ct);
     public IConsole WithOutput(TextWriter newOut) => new RedirectedSocketConsole(inner, newOut, Error, In);
     public IConsole WithError(TextWriter newError) => new RedirectedSocketConsole(inner, Out, newError, In);
     public IConsole WithInput(TextReader newIn) => new RedirectedSocketConsole(inner, Out, Error, newIn);

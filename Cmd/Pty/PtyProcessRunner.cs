@@ -35,8 +35,7 @@ internal sealed class PtyProcessRunner : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _pty.Resize(columns, rows);
-        _pty.Start(executable, arguments, workingDirectory, environment);
+        _pty.Start(executable, arguments, workingDirectory, environment, columns, rows);
 
         // Start output forwarding task
         _outputTask = ForwardOutputAsync(_cts.Token);

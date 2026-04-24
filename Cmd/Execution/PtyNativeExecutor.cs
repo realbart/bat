@@ -18,7 +18,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         var hostExecutablePath = PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
         var hasRedirections = redirections.Count > 0;
 
-        var usePty = !isGuiApp && !hasRedirections && waitForExit && context.Console.IsInteractive;
+        var usePty = !isGuiApp && !hasRedirections && waitForExit && context.Console.IsInteractive && !context.Console.IsNative;
 
         if (usePty)
         {
@@ -41,12 +41,14 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     {
         using var pty = CreatePty();
 
-        pty.Start(executable, arguments, workingDir, environment: null);
-        pty.Resize(context.Console.WindowWidth, context.Console.WindowHeight);
+        pty.Start(executable, arguments, workingDir, environment: null, context.Console.WindowWidth, context.Console.WindowHeight);
+
+        // Signal the terminal client to switch to raw byte mode
+        await context.Console.EnterRawModeAsync();
 
         using var cts = new CancellationTokenSource();
 
-        // Output: PTY → console (must drain fully before returning)
+        // Output: PTY → console (raw bytes, includes ANSI escapes)
         var outputTask = Task.Run(async () =>
         {
             var buf = new byte[4096];
@@ -59,17 +61,17 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             }
         });
 
-        // Input: console → PTY (fire-and-forget, cancelled when process exits)
+        // Input: console raw bytes → PTY (direct pipe, no KeyToBytes conversion)
         _ = Task.Run(async () =>
         {
+            var buf = new byte[256];
             try
             {
                 while (!cts.Token.IsCancellationRequested)
                 {
-                    var key = await context.Console.ReadKeyAsync(true, cts.Token);
-                    var bytes = KeyToBytes(key);
-                    if (bytes.Length > 0)
-                        await pty.WriteAsync(bytes, cts.Token);
+                    var n = await context.Console.ReadRawAsync(buf, cts.Token);
+                    if (n <= 0) break;
+                    await pty.WriteAsync(buf.AsMemory(0, n), cts.Token);
                 }
             }
             catch (OperationCanceledException) { }
@@ -80,7 +82,6 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         // Resize forwarding
         void onResize(int w, int h) => pty.Resize(w, h);
         context.Console.Resized += onResize;
-
 
         try
         {
@@ -94,6 +95,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         {
             context.Console.Resized -= onResize;
             await cts.CancelAsync();
+            await context.Console.LeaveRawModeAsync();
         }
     }
 
@@ -106,39 +108,18 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
 #endif
     }
 
-    private static byte[] KeyToBytes(ConsoleKeyInfo key) => key.Key switch
-    {
-        ConsoleKey.Enter => "\r"u8.ToArray(),
-        #if WINDOWS
-                ConsoleKey.Backspace => "\x08"u8.ToArray(),
-        #else
-                ConsoleKey.Backspace => "\x7f"u8.ToArray(),
-        #endif
-        ConsoleKey.Tab => "\t"u8.ToArray(),
-        ConsoleKey.Escape => "\x1b"u8.ToArray(),
-        ConsoleKey.UpArrow => "\x1b[A"u8.ToArray(),
-        ConsoleKey.DownArrow => "\x1b[B"u8.ToArray(),
-        ConsoleKey.RightArrow => "\x1b[C"u8.ToArray(),
-        ConsoleKey.LeftArrow => "\x1b[D"u8.ToArray(),
-        ConsoleKey.Home => "\x1b[H"u8.ToArray(),
-        ConsoleKey.End => "\x1b[F"u8.ToArray(),
-        ConsoleKey.Delete => "\x1b[3~"u8.ToArray(),
-        ConsoleKey.PageUp => "\x1b[5~"u8.ToArray(),
-        ConsoleKey.PageDown => "\x1b[6~"u8.ToArray(),
-        _ when key.KeyChar != '\0' => System.Text.Encoding.UTF8.GetBytes([key.KeyChar]),
-        _ => []
-    };
-
     private async Task<int> ExecuteWithProcessAsync(string executable, string arguments, string workingDir, global::Context.IContext context, bool hasRedirections)
     {
         var useShell = isGuiApp && !hasRedirections;
+        var redirectStreams = !useShell && !(context.Console.IsNative && !hasRedirections);
+
         var psi = new ProcessStartInfo(executable, arguments)
         {
             WorkingDirectory = workingDir,
             UseShellExecute = useShell,
-            RedirectStandardOutput = !useShell,
-            RedirectStandardError = !useShell,
-            RedirectStandardInput = !useShell
+            RedirectStandardOutput = redirectStreams,
+            RedirectStandardError = redirectStreams,
+            RedirectStandardInput = redirectStreams
         };
         if (!psi.UseShellExecute)
         {
@@ -150,16 +131,16 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         if (process == null) return 1;
         if (!waitForExit) return 0;
 
-        if (!useShell)
+        if (redirectStreams)
         {
             // Forward stdout and stderr to the context console
             var outTask = ForwardStreamAsync(process.StandardOutput, context.Console.Out);
             var errTask = ForwardStreamAsync(process.StandardError, context.Console.Error);
-            
+
             // Forward console input to process stdin
             using var cts = new CancellationTokenSource();
             _ = ForwardInputAsync(context.Console, process.StandardInput, cts.Token);
-            
+
             await Task.WhenAll(outTask, errTask);
             await process.WaitForExitAsync();
             await cts.CancelAsync();
@@ -168,7 +149,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         {
             await process.WaitForExitAsync();
         }
-        
+
         context.ErrorCode = process.ExitCode;
         return process.ExitCode;
     }

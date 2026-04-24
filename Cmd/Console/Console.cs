@@ -23,6 +23,7 @@ internal class Console : IConsole
     public int WindowHeight => SC.WindowHeight;
     public int CursorLeft { get => SC.CursorLeft; set => SC.CursorLeft = value; }
     public bool IsInteractive => !SC.IsInputRedirected;
+    public bool IsNative => true;
     public event Action<int, int>? Resized;
     public async Task<ConsoleKeyInfo> ReadKeyAsync(bool intercept, CancellationToken cancellationToken = default)
     {
@@ -33,5 +34,8 @@ internal class Console : IConsole
     public IConsole WithOutput(TextWriter newOut) => new RedirectedConsole(this, newOut, null, null);
     public IConsole WithError(TextWriter newError) => new RedirectedConsole(this, null, newError, null);
     public IConsole WithInput(TextReader newIn) => new RedirectedConsole(this, null, null, newIn);
+    public Task EnterRawModeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task LeaveRawModeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<int> ReadRawAsync(Memory<byte> buffer, CancellationToken ct = default) => Task.FromResult(0);
 }
 

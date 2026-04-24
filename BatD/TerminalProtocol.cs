@@ -13,11 +13,14 @@ public enum TerminalMessageType : byte
     Init = 0x01,
     Key = 0x02,
     Resize = 0x03,
+    RawInput = 0x04,
 
     // Downstream (batd → bat)
     Out = 0x81,
     Err = 0x82,
     Exit = 0x83,
+    RawModeOn = 0x84,
+    RawModeOff = 0x85,
 }
 
 /// <summary>

@@ -23,7 +23,7 @@ public class ConPtyDiagnosticTests
     {
         using var pty = new ConPty();
         var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        pty.Start(cmd, "/c echo hello", Environment.CurrentDirectory, null);
+        pty.Start(cmd, "/c echo hello", Environment.CurrentDirectory, null, 80, 24);
 
         var output = await ReadAllOutputAsync(pty, TimeSpan.FromSeconds(5));
         pty.ClosePseudoConsoleHandle();
@@ -45,7 +45,7 @@ public class ConPtyDiagnosticTests
     {
         using var pty = new ConPty();
         var tasklist = Path.Combine(Environment.SystemDirectory, "tasklist.exe");
-        pty.Start(tasklist, "", Environment.CurrentDirectory, null);
+        pty.Start(tasklist, "", Environment.CurrentDirectory, null, 80, 24);
 
         // Read concurrently DURING execution — don't wait for exit
         var sb = new StringBuilder();
@@ -102,14 +102,14 @@ public class ConPtyDiagnosticTests
     {
         using var pty = new ConPty();
         var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        pty.Start(cmd, "", Environment.CurrentDirectory, null);
+        pty.Start(cmd, "", Environment.CurrentDirectory, null, 80, 24);
 
         // Wait for cmd.exe to show its prompt
         var initial = await ReadOutputUntilAsync(pty, ">", TimeSpan.FromSeconds(5));
         System.Diagnostics.Debug.WriteLine($"[ConPty interactive] Initial ({initial.Length} chars): [{Escape(initial[..Math.Min(200, initial.Length)])}]");
         SC.WriteLine($"[ConPty interactive] Initial ({initial.Length} chars): [{Escape(initial[..Math.Min(200, initial.Length)])}]");
 
-        Assert.IsTrue(initial.Contains(">"),
+        Assert.IsTrue(StripVt(initial).Contains(">"),
             $"Expected cmd.exe prompt '>' but got: [{Escape(initial)}]");
 
         // Send "echo test123\r" — the \r is Enter
@@ -139,7 +139,7 @@ public class ConPtyDiagnosticTests
     {
         using var pty = new ConPty();
         var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        pty.Start(cmd, "", Environment.CurrentDirectory, null);
+        pty.Start(cmd, "", Environment.CurrentDirectory, null, 80, 24);
 
         // Wait for prompt
         await ReadOutputUntilAsync(pty, ">", TimeSpan.FromSeconds(5));
@@ -182,7 +182,7 @@ public class ConPtyDiagnosticTests
         }
 
         using var pty = new ConPty();
-        pty.Start(pwsh, "-NoProfile -NoLogo", Environment.CurrentDirectory, null);
+        pty.Start(pwsh, "-NoProfile -NoLogo", Environment.CurrentDirectory, null, 80, 24);
 
         // Read everything that comes through the pipe for up to 10 seconds
         var allOutput = new StringBuilder();
@@ -292,6 +292,9 @@ public class ConPtyDiagnosticTests
         if (await Task.WhenAny(exitTask, Task.Delay(timeout)) == exitTask)
             await exitTask;
 
+        // Give ConPTY time to flush its internal render buffer to the output pipe
+        await Task.Delay(500);
+
         // Close pseudoconsole to signal EOF on the output pipe
         pty.ClosePseudoConsoleHandle();
 
@@ -325,7 +328,7 @@ public class ConPtyDiagnosticTests
             if (n == 0) break;
             sb.Append(Encoding.UTF8.GetString(buf, 0, n));
 
-            if (sb.ToString().Contains(marker, StringComparison.OrdinalIgnoreCase))
+            if (StripVt(sb.ToString()).Contains(marker, StringComparison.OrdinalIgnoreCase))
                 break;
         }
         return sb.ToString();
