@@ -3,6 +3,7 @@ using Context;
 
 namespace Subst;
 
+[Command(Flags = "D")]
 public static class Program
 {
     private const string HelpText =

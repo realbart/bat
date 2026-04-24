@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Reflection;
 using Bat.Context;
 using Bat.Nodes;
@@ -39,7 +40,8 @@ internal class DotNetLibraryExecutor(PtyNativeExecutor nativeFallback, bool isPr
             if (entryPoint == null) return await nativeFallback.ExecuteAsync(executablePath, arguments, batchContext, redirections);
 
             var tokens = ParseArgumentsAsTokens(arguments);
-            var args = Commands.ArgumentSet.Parse(tokens, Commands.ArgumentSpec.Empty);
+            var spec = BuildSpecFromAttribute(entryPoint.Value.Method.DeclaringType!);
+            var args = Commands.ArgumentSet.Parse(tokens, spec);
             object? secondArg = entryPoint.Value.UsesArgumentSet
                 ? args
                 : args.Positionals.ToArray();
@@ -82,5 +84,25 @@ internal class DotNetLibraryExecutor(PtyNativeExecutor nativeFallback, bool isPr
             tokens.Add(Tokens.Token.Text(parts[i]));
         }
         return tokens;
+    }
+
+    private static Commands.ArgumentSpec BuildSpecFromAttribute(Type declaringType)
+    {
+        var attr = declaringType.GetCustomAttributes(false)
+            .FirstOrDefault(a => a.GetType().Name == "CommandAttribute");
+        if (attr == null) return Commands.ArgumentSpec.Empty;
+
+        var flagsProp = attr.GetType().GetProperty("Flags");
+        var optionsProp = attr.GetType().GetProperty("Options");
+        var flagsStr = flagsProp?.GetValue(attr) as string ?? "";
+        var optionsStr = optionsProp?.GetValue(attr) as string ?? "";
+
+        var flags = flagsStr.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(f => f.ToUpperInvariant())
+            .ToHashSet();
+        var options = optionsStr.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(o => o.ToUpperInvariant())
+            .ToHashSet();
+        return new Commands.ArgumentSpec(flags.ToFrozenSet(), options.ToFrozenSet());
     }
 }

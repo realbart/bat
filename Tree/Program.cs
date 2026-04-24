@@ -3,6 +3,7 @@ using Context;
 
 namespace Tree;
 
+[Command(Flags = "A D E F")]
 public static class Program
 {
     private const string HelpText =
