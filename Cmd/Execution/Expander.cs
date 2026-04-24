@@ -49,11 +49,15 @@ internal static class Expander
             return false;
         }
 
+        // %~modifiers<digit> — tilde parameter expansion (e.g. %~dp0, %~nx1, %~f0)
+        if (line[i + 1] == '~')
+            return TryExpandTildeParameter(line, ref i, bc, result);
+
         if (char.IsDigit(line[i + 1]))
         {
             var parameterIndex = (line[i + 1] - '0');
             var adjustedIndex = parameterIndex == 0 ? 0 : parameterIndex + bc.ShiftOffset;
-            
+
             if (adjustedIndex >= 0 && adjustedIndex < bc.Parameters.Length)
             {
                 // null parameter expands to empty string (CMD behaviour)
@@ -78,6 +82,115 @@ internal static class Expander
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Expands %~modifiers&lt;digit&gt; syntax. Modifiers: f=full path, d=drive, p=path,
+    /// n=name, x=extension, s=short name, a=attributes, t=timestamp, z=size.
+    /// Multiple modifiers can be combined: %~dp0 = drive+path of %0.
+    /// </summary>
+    private static bool TryExpandTildeParameter(string line, ref int i, BatchContext bc, StringBuilder result)
+    {
+        // Parse modifiers between ~ and the digit
+        var pos = i + 2; // skip % and ~
+        var modifiers = new StringBuilder();
+        while (pos < line.Length && !char.IsDigit(line[pos]))
+        {
+            var ch = char.ToLowerInvariant(line[pos]);
+            if ("fdpnxsatz".Contains(ch))
+            {
+                modifiers.Append(ch);
+                pos++;
+            }
+            else
+            {
+                // '$ENV:' prefix not supported yet — bail out
+                return false;
+            }
+        }
+
+        if (pos >= line.Length || !char.IsDigit(line[pos]))
+            return false;
+
+        var paramIndex = line[pos] - '0';
+        var adjustedIndex = paramIndex == 0 ? 0 : paramIndex + bc.ShiftOffset;
+
+        string? rawValue = null;
+        if (adjustedIndex >= 0 && adjustedIndex < bc.Parameters.Length)
+            rawValue = bc.Parameters[adjustedIndex];
+
+        // No modifiers → %~0 strips surrounding quotes
+        var mods = modifiers.ToString();
+        if (mods.Length == 0)
+        {
+            if (rawValue != null && rawValue.Length >= 2 && rawValue[0] == '"' && rawValue[^1] == '"')
+                result.Append(rawValue[1..^1]);
+            else
+                result.Append(rawValue ?? "");
+            i = pos + 1;
+            return true;
+        }
+
+        // Resolve to a full path for modifier expansion
+        var fullPath = rawValue ?? "";
+        if (mods.Contains('f') || mods.Contains('d') || mods.Contains('p') ||
+            mods.Contains('n') || mods.Contains('x'))
+        {
+            // Strip quotes if present
+            if (fullPath.Length >= 2 && fullPath[0] == '"' && fullPath[^1] == '"')
+                fullPath = fullPath[1..^1];
+            // Make absolute if relative
+            if (!Path.IsPathRooted(fullPath) && bc.Context.FileSystem != null)
+            {
+                var cwd = bc.Context.FileSystem.GetNativePath(bc.Context.CurrentDrive, bc.Context.CurrentPath);
+                fullPath = Path.GetFullPath(Path.Combine(cwd, fullPath));
+            }
+        }
+
+        var expanded = new StringBuilder();
+        foreach (var mod in mods)
+        {
+            switch (mod)
+            {
+                case 'f': // full path
+                    expanded.Clear();
+                    expanded.Append(fullPath);
+                    break;
+                case 'd': // drive letter + colon
+                    if (fullPath.Length >= 2 && fullPath[1] == ':')
+                        expanded.Append(fullPath[..2]);
+                    break;
+                case 'p': // path (after drive, with trailing \)
+                    var dir = Path.GetDirectoryName(fullPath);
+                    if (dir != null)
+                    {
+                        var pathPart = dir.Length >= 2 && dir[1] == ':' ? dir[2..] : dir;
+                        if (pathPart.Length > 0 && pathPart[^1] != '\\')
+                            pathPart += "\\";
+                        expanded.Append(pathPart);
+                    }
+                    break;
+                case 'n': // filename without extension
+                    expanded.Append(Path.GetFileNameWithoutExtension(fullPath));
+                    break;
+                case 'x': // extension (including dot)
+                    expanded.Append(Path.GetExtension(fullPath));
+                    break;
+                case 'z': // file size
+                    try
+                    {
+                        var fi = new FileInfo(fullPath);
+                        if (fi.Exists) expanded.Append(fi.Length);
+                    }
+                    catch { }
+                    break;
+                // s, a, t — not yet implemented, silently ignored
+            }
+        }
+
+        result.Append(expanded);
+        i = pos + 1;
+        return true;
     }
 
     /// <summary>

@@ -1,0 +1,58 @@
+
+{dir}>cd ..
+
+c:\users\kempsb\source\repos\bat\unittests\bin\debug\net10.0>cd .
+
+c:\users\kempsb\source\repos\bat\unittests\bin\debug\net10.0>cd /
+
+c:\>cd program files
+
+c:\program files>cd \users\kempsb
+
+c:\users\kempsb>cd $homepath
+
+c:\users\kempsb>cd c:\users\kempsb
+
+c:\users\kempsb>cd \program files
+
+c:\program files>cd \
+
+c:\>cd /?
+displays the name of or changes the current directory.
+
+chdir [/d] [drive:][path]
+chdir [..]
+cd [/d] [drive:][path]
+cd [..]
+
+  ..   specifies that you want to change to the parent directory.
+
+type cd drive: to display the current directory in the specified drive.
+type cd without parameters to display the current drive and directory.
+
+use the /d switch to change current drive in addition to changing current
+directory for a drive.
+
+if command extensions are enabled chdir changes as follows:
+
+the current directory string is converted to use the same case as
+the on disk names.  so cd c:\temp would actually set the current
+directory to c:\temp if that is the case on disk.
+
+chdir command does not treat spaces as delimiters, so it is possible to
+cd into a subdirectory name that contains a space without surrounding
+the name with quotes.  for example:
+
+    cd \winnt\profiles\username\programs\start menu
+
+is the same as:
+
+    cd "\winnt\profiles\username\programs\start menu"
+
+which is what you would have to type if extensions were disabled.
+
+c:\>cd /program files
+
+c:\program files>cd ..
+
+c:\>cd "c:\program files"

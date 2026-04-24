@@ -1,0 +1,12 @@
+
+{dir}>tree.exe ..\..
+
+{dir}>tree.exe /a ..\..
+
+{dir}>tree.exe /f ..\..
+
+{dir}>tree.exe /f /a ..\..
+
+{dir}>tree.exe ..\.. /a /f
+
+{dir}>tree.exe /x

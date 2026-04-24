@@ -18,8 +18,14 @@ public static class NormalizedFileCulture
             datePattern = datePattern.Replace("M", "MM");
         dateTimeFormat.ShortDatePattern = datePattern;
 
-        // 2. Normaliseer tijd: Altijd HH:mm (24-uurs met voorloopnullen) voor consistente lengte
-        dateTimeFormat.ShortTimePattern = "HH:mm";
+        // 2. Normaliseer tijd: behoud locale-formaat (incl. AM/PM), maar voorloopnullen toevoegen
+        //    h:mm tt → hh:mm tt, H:mm → HH:mm, etc.
+        var timePattern = dateTimeFormat.ShortTimePattern;
+        if (timePattern.Contains('h') && !timePattern.Contains("hh"))
+            timePattern = timePattern.Replace("h", "hh");
+        if (timePattern.Contains('H') && !timePattern.Contains("HH"))
+            timePattern = timePattern.Replace("H", "HH");
+        dateTimeFormat.ShortTimePattern = timePattern;
         
         return culture;
     }

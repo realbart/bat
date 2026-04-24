@@ -1,0 +1,5 @@
+
+{dir}>doskey.exe /history
+
+{dir}>doskey.exe /x
+invalid macro definition.

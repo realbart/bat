@@ -25,9 +25,14 @@ Inside Bat, files carry the same names as their DOS/Windows counterparts:
 
 No files other than these are required at runtime.
 
-`cmd.exe`, `xcopy.exe`, `tree.com` and similar files are .NET assemblies (DLLs) with a small native stub prepended. 
-The stub exists solely to display a user-friendly error message when someone tries to run the file directly on 
-Windows — these executables are not meant to be launched directly and will not function without `batd`.
+`cmd.exe`, `xcopy.exe`, `tree.com` and similar files are .NET assemblies (DLLs) with a 2 KB polyglot launcher stub prepended.
+The stub is a carefully crafted binary that runs natively on Win16, Win32, Win64, Linux, and macOS (as a shell script).
+When executed directly, it displays a user-friendly error message explaining that the file must be run through `batd`.
+Because the satellite assemblies are standard .NET IL, they are inherently cross-platform — there is no emulation layer.
+This is one of the key reasons for choosing .NET: a single binary works on every supported OS without recompilation.
+
+> **Note**: the stub is currently 2 KB. It could theoretically be reduced to 1 KB, but this requires
+> additional expertise in PE/ELF/Mach-O polyglot construction that has not yet been applied.
 
 ## Why `bat` and not `cmd.exe` as the entry point
 

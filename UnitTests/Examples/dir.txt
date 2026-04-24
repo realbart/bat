@@ -1,0 +1,110 @@
+ volume in drive c has no label.
+ volume serial number is 0c45-e5c9
+
+ directory of {dir}
+
+2026.04.24  12:00 ?    <dir>          .
+2026.04.24  12:09 ?    <dir>          ..
+2026.04.15  12:06 ?               151 call.bat
+2026.04.07  10:59 ?               174 cd.bat
+2026.04.24  11:49 ?               313 dir.bat
+2026.04.14  06:37 ?                34 doskey.bat
+2026.04.10  07:59 ?               738 echo.bat
+2026.04.15  12:06 ?               162 exit.bat
+2026.04.24  11:44 ?               604 for.bat
+2026.04.15  11:53 ?               121 goto.bat
+2026.04.24  11:44 ?             1,058 if.bat
+2026.04.15  12:06 ?                53 pause.bat
+2026.04.24  11:44 ?               409 redirect.bat
+2026.04.16  07:55 ?                 0 rem.bat
+2026.04.15  12:06 ?                89 remark.bat
+2026.04.15  12:06 ?               240 set.bat
+2026.04.20  10:08 ?               383 setlocal.bat
+2026.04.15  12:06 ?               227 shift.bat
+2026.04.24  11:44 ?               347 special.bat
+2026.04.14  06:36 ?               130 tree.bat
+              18 file(s)          5,233 bytes
+               2 dir(s)  690,510,610,432 bytes free
+call.bat
+cd.bat
+dir.bat
+doskey.bat
+echo.bat
+exit.bat
+for.bat
+goto.bat
+if.bat
+pause.bat
+redirect.bat
+rem.bat
+remark.bat
+set.bat
+setlocal.bat
+shift.bat
+special.bat
+tree.bat
+call.bat
+cd.bat
+dir.bat
+doskey.bat
+echo.bat
+exit.bat
+for.bat
+goto.bat
+if.bat
+pause.bat
+redirect.bat
+rem.bat
+remark.bat
+set.bat
+setlocal.bat
+shift.bat
+special.bat
+tree.bat
+call.bat
+cd.bat
+dir.bat
+doskey.bat
+echo.bat
+exit.bat
+for.bat
+goto.bat
+if.bat
+pause.bat
+redirect.bat
+rem.bat
+remark.bat
+set.bat
+setlocal.bat
+shift.bat
+special.bat
+tree.bat
+call.bat
+cd.bat
+dir.bat
+doskey.bat
+echo.bat
+exit.bat
+for.bat
+goto.bat
+if.bat
+pause.bat
+redirect.bat
+rem.bat
+remark.bat
+set.bat
+setlocal.bat
+shift.bat
+special.bat
+tree.bat
+ volume in drive c has no label.
+ volume serial number is 0c45-e5c9
+
+ directory of {dir}
+
+[.]            [..]           call.bat       cd.bat         dir.bat
+doskey.bat     echo.bat       exit.bat       for.bat        goto.bat
+if.bat         pause.bat      redirect.bat   rem.bat        remark.bat
+set.bat        setlocal.bat   shift.bat      special.bat    tree.bat
+              18 file(s)          5,233 bytes
+               2 dir(s)  690,510,610,432 bytes free

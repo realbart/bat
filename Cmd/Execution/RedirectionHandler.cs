@@ -90,6 +90,10 @@ internal sealed class RedirectionHandler : IDisposable
 
     private static (char Drive, string[] Path) ResolvePath(IContext ctx, string filePath)
     {
+        // Strip surrounding quotes — cmd.exe does this for redirect targets
+        if (filePath.Length >= 2 && filePath[0] == '"' && filePath[^1] == '"')
+            filePath = filePath[1..^1];
+
         var drive = ctx.CurrentDrive;
         var pathPart = filePath;
 
@@ -123,6 +127,9 @@ internal sealed class RedirectionHandler : IDisposable
     public void Dispose()
     {
         for (var i = _streams.Count - 1; i >= 0; i--)
-            _streams[i].Dispose();
+        {
+            try { _streams[i].Dispose(); }
+            catch (ObjectDisposedException) { }
+        }
     }
 }

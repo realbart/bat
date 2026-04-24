@@ -25,7 +25,7 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
     public bool DelayedExpansion { get; set; }
     public bool ExtensionsEnabled { get; set; } = true;
     public string PromptFormat { get; set; } = "$P$G";
-    public System.Globalization.CultureInfo FileCulture { get; set; } = System.Globalization.CultureInfo.CurrentCulture;
+    public System.Globalization.CultureInfo FileCulture { get; set; } = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture);
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
     public void SetPath(char drive, string[] path) => _paths[drive] = path;
     public void SetCurrentDrive(char drive) => CurrentDrive = drive;

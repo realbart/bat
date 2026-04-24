@@ -1,0 +1,9 @@
+myvar=hello
+myvar=hello
+myvar2=world
+result=42
+x=31
+y=8
+z=1
+myvar2=world
+errorlevel=0

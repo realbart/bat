@@ -1,0 +1,18 @@
+item: alpha
+item: beta
+item: gamma
+count: 1
+count: 2
+count: 3
+count: 4
+count: 5
+down: 3
+down: 2
+down: 1
+file: for.bat
+a=one b=two c=three
+cmd: hello from command
+a1
+a2
+b1
+b2

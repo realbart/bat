@@ -41,11 +41,11 @@ internal static class LiteralTokenizer
     public static IToken? TokenizeEscape(ref Scanner scanner)
     {
         if (scanner.Ch1 is '\r' or '\n') return TokenizerHelpers.Yield(ref scanner, 1, Token.Escape);
-        var start = scanner.Position;
+        scanner.Advance(); // skip ^
+        if (scanner.IsAtEnd) return Token.Escape;
+        var escapedChar = scanner.Ch0;
         scanner.Advance();
-        if (scanner.IsAtEnd) return TokenizerHelpers.Yield(ref scanner, 0, Token.Escape);
-        scanner.Advance();
-        return Token.Text(scanner.Substring(start));
+        return Token.Text(escapedChar.ToString());
     }
 
     /// <summary>

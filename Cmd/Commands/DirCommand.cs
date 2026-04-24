@@ -318,14 +318,12 @@ internal class DirCommand : ICommand
 
     private static string FormatDate(DateTime dt, System.Globalization.CultureInfo culture)
     {
-        if (dt == DateTime.MinValue) return "                  ";
-        
-        // De culture (NormalizedFileCulture) regelt nu zowel de datum als de tijd opmaak
-        // met voorloopnullen en consistente lengte.
+        if (dt == DateTime.MinValue) return new string(' ', 20);
+
         var dateStr = dt.ToString("d", culture);
         var timeStr = dt.ToString("t", culture);
-        
-        return $"{dateStr}  {timeStr}".PadRight(18);
+
+        return $"{dateStr}  {timeStr}";
     }
 
     private static bool IsExplicit(IArgumentSet args, string name)
