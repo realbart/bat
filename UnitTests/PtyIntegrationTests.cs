@@ -1,7 +1,6 @@
 #if WINDOWS
 using System.Text;
 using Bat.Pty;
-using Context;
 using Bat.Daemon;
 using Ipc;
 

@@ -1,6 +1,5 @@
 #pragma warning disable CS8892, IDE0060
 using Bat.Console;
-using Bat.Execution;
 using Context;
 
 namespace Cmd;

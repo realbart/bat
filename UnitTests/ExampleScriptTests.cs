@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
-using Bat.Console;
 using Bat.Context.Dos;
 using Bat.Execution;
 

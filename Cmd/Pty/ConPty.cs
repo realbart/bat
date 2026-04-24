@@ -36,7 +36,7 @@ internal sealed class ConPty : IPseudoTerminal
         columns = Math.Max(1, columns);
         rows = Math.Max(1, rows);
         var size = new COORD { X = (short)columns, Y = (short)rows };
-        var hr = CreatePseudoConsole(size, inputRead.DangerousGetHandle(), outputWrite.DangerousGetHandle(), 0, out _hPC);
+        var hr = CreatePseudoConsole(size, inputRead.DangerousGetHandle(), outputWrite.DangerousGetHandle(), PSEUDOCONSOLE_INHERIT_CURSOR, out _hPC);
         if (hr != 0)
             Marshal.ThrowExceptionForHR(hr);
 
@@ -55,29 +55,54 @@ internal sealed class ConPty : IPseudoTerminal
                 ? $"\"{executable}\""
                 : $"\"{executable}\" {arguments}";
 
-            // Inherit parent environment — no custom block needed for correctness.
-            // Bat-specific vars are set by the shell, not by native process spawning.
-            if (!CreateProcessW(
-                null,
-                cmdLine,
-                nint.Zero,
-                nint.Zero,
-                false,
-                EXTENDED_STARTUPINFO_PRESENT,
-                nint.Zero,
-                workingDirectory,
-                ref siEx,
-                out var pi))
+            // Build environment block if custom environment is provided
+            // Otherwise pass nint.Zero to inherit parent environment
+            nint envBlock = nint.Zero;
+            SafeHandle? envBlockHandle = null;
+
+            if (environment != null)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+                var envStrings = new List<string>();
+                foreach (var kvp in environment)
+                    envStrings.Add($"{kvp.Key}={kvp.Value}");
+                envStrings.Add(""); // Null terminator
+
+                var envString = string.Join("\0", envStrings);
+                var envBytes = System.Text.Encoding.Unicode.GetBytes(envString + "\0");
+
+                envBlock = Marshal.AllocHGlobal(envBytes.Length);
+                envBlockHandle = new SafeHGlobalHandle(envBlock);
+                Marshal.Copy(envBytes, 0, envBlock, envBytes.Length);
             }
 
-            _processHandle = new SafeProcessHandle(pi.hProcess, true);
-            _processId = pi.dwProcessId;
-            CloseHandle(pi.hThread);
+            try
+            {
+                if (!CreateProcessW(
+                    null,
+                    cmdLine,
+                    nint.Zero,
+                    nint.Zero,
+                    false,
+                    EXTENDED_STARTUPINFO_PRESENT | (envBlock != nint.Zero ? CREATE_UNICODE_ENVIRONMENT : 0),
+                    envBlock,
+                    workingDirectory,
+                    ref siEx,
+                    out var pi))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
 
-            _inputStream = null; // Using direct ReadFile/WriteFile P/Invoke instead
-            _outputStream = null;
+                _processHandle = new SafeProcessHandle(pi.hProcess, true);
+                _processId = pi.dwProcessId;
+                CloseHandle(pi.hThread);
+
+                _inputStream = null; // Using direct ReadFile/WriteFile P/Invoke instead
+                _outputStream = null;
+            }
+            finally
+            {
+                envBlockHandle?.Dispose();
+            }
         }
         finally
         {
@@ -199,7 +224,27 @@ internal sealed class ConPty : IPseudoTerminal
     // Constants
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     private const uint CREATE_NO_WINDOW = 0x08000000;
+    private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    private const uint PSEUDOCONSOLE_INHERIT_CURSOR = 0x00000001;
     private static readonly nint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
+
+    // Helper for managing unmanaged memory
+    private sealed class SafeHGlobalHandle : SafeHandle
+    {
+        public SafeHGlobalHandle(nint handle) : base(nint.Zero, true)
+        {
+            SetHandle(handle);
+        }
+
+        public override bool IsInvalid => handle == nint.Zero;
+
+        protected override bool ReleaseHandle()
+        {
+            if (!IsInvalid)
+                Marshal.FreeHGlobal(handle);
+            return true;
+        }
+    }
 
     // Structs
     [StructLayout(LayoutKind.Sequential)]

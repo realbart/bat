@@ -30,10 +30,7 @@
     <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
   </Folder>
-  <Folder Name="/PtyDemo/">
-    <Project Path="PtyDemo/PtyServer/PtyServer.csproj" />
-    <Project Path="PtyDemo/PtyClient/PtyClient.csproj" />
-  </Folder>
+  <Folder Name="/PtyDemo/" />
   <Project Path="Bat/Bat.csproj" Id="0e00064d-4755-493e-ac6b-e890775da22b" />
   <Project Path="BatD/BatD.csproj" />
   <Project Path="Context/Context.csproj" />

@@ -18,7 +18,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         var hostExecutablePath = PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
         var hasRedirections = redirections.Count > 0;
 
-        var usePty = !isGuiApp && !hasRedirections && waitForExit && context.Console.IsInteractive && !context.Console.IsNative;
+        var usePty = !hasRedirections && waitForExit && context.Console.IsInteractive && !context.Console.IsNative;
 
         if (usePty)
         {
@@ -41,14 +41,18 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     {
         using var pty = CreatePty();
 
-        pty.Start(executable, arguments, workingDir, environment: null, context.Console.WindowWidth, context.Console.WindowHeight);
+        var hostEnv = PathTranslator.TranslateBatEnvironmentToHost(
+            (IReadOnlyDictionary<string, string>)context.EnvironmentVariables,
+            context.FileSystem);
+
+        pty.Start(executable, arguments, workingDir, hostEnv, context.Console.WindowWidth, context.Console.WindowHeight);
 
         // Signal the terminal client to switch to raw byte mode
         await context.Console.EnterRawModeAsync();
 
         using var cts = new CancellationTokenSource();
 
-        // Output: PTY → console (raw bytes, includes ANSI escapes)
+        // Output: PTY → console (raw bytes, NO string conversion to preserve ANSI sequences)
         var outputTask = Task.Run(async () =>
         {
             var buf = new byte[4096];
@@ -56,8 +60,10 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             {
                 var n = await pty.ReadAsync(buf, cts.Token);
                 if (n == 0) break;
-                await context.Console.Out.WriteAsync(
-                    System.Text.Encoding.UTF8.GetString(buf, 0, n));
+
+                // Write raw bytes directly to console (for SocketConsole this goes to the socket)
+                await context.Console.Out.WriteAsync(System.Text.Encoding.UTF8.GetString(buf, 0, n));
+                await context.Console.Out.FlushAsync();  // ← ADD EXPLICIT FLUSH!
             }
         });
 
@@ -87,6 +93,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         {
             var exitCode = await pty.WaitForExitAsync();
             pty.ClosePseudoConsoleHandle();
+            await cts.CancelAsync();
             try { await outputTask; } catch { }
             context.ErrorCode = exitCode;
             return exitCode;
@@ -94,7 +101,6 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         finally
         {
             context.Console.Resized -= onResize;
-            await cts.CancelAsync();
             await context.Console.LeaveRawModeAsync();
         }
     }
@@ -180,3 +186,5 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             await dest.WriteAsync(buffer, 0, read);
     }
 }
+
+

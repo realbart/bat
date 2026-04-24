@@ -6,11 +6,11 @@ namespace Bat.Execution;
 
 /// <summary>
 /// Executes .NET assemblies (.dll, .exe) that have a Main(IContext, IArgumentSet) entry point.
-/// Falls back to NativeExecutor if no IContext signature is found.
+/// Falls back to PtyNativeExecutor if no IContext signature is found.
 /// When <paramref name="isPrefixed"/> is true the file starts with a 2 KB launcher stub;
 /// the embedded assembly is read from byte offset 2048.
 /// </summary>
-internal class DotNetLibraryExecutor(NativeExecutor nativeFallback, bool isPrefixed = false) : IExecutor
+internal class DotNetLibraryExecutor(PtyNativeExecutor nativeFallback, bool isPrefixed = false) : IExecutor
 {
     private const int PrefixLength = 2048;
 
