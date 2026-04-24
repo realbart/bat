@@ -118,6 +118,8 @@ internal class DirCommand : ICommand
         {
             if (!entry.IsDirectory || entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 continue;
+            if (entry.Name is "." or "..")
+                continue;
 
             await ListDirectoryAsync(console, context, drive, [.. path, entry.Name], opts, pattern, recurse: true);
         }
@@ -142,12 +144,11 @@ internal class DirCommand : ICommand
     private static async Task WriteDirectorySummaryAsync(IConsole console, IContext context, char drive, int fileCount, int dirCount, long totalSize, DirOptions opts)
     {
         var totalStr = opts.ThousandSeparator ? $"{totalSize,15:N0}" : $"{totalSize,15}";
-        await console.Out.WriteLineAsync($"              {fileCount,4} File(s) {totalStr} bytes");
+        await console.Out.WriteLineAsync($"{fileCount,16} File(s){totalStr} bytes");
 
         var freeBytes = await context.FileSystem.GetFreeBytesAsync(drive);
         var freeStr = opts.ThousandSeparator ? $"{freeBytes,15:N0}" : $"{freeBytes,15}";
-        await console.Out.WriteLineAsync($"              {dirCount,4} Dir(s)  {freeStr} bytes free");
-        await console.Out.WriteLineAsync();
+        await console.Out.WriteLineAsync($"{dirCount,16} Dir(s)  {freeStr} bytes free");
     }
 
     private static async Task<(bool Found, List<DosFileEntry> Entries)> TryGetFilteredEntriesAsync(IContext context, char drive, string[] path, string pattern, DirOptions opts)
@@ -182,6 +183,7 @@ internal class DirCommand : ICommand
 
             if (opts.BareNames)
             {
+                if (entry.Name is "." or "..") continue;
                 await console.Out.WriteLineAsync(displayName);
                 if (entry.IsDirectory) dirCount++;
                 else
@@ -228,17 +230,26 @@ internal class DirCommand : ICommand
         if (cells.Count == 0) return;
 
         var maxWidth = cells.Max(c => c.Length);
-        var numCols = Math.Max(1, console.WindowWidth / maxWidth);
-        var colWidth = console.WindowWidth / numCols;
+        var colWidth = maxWidth + 2;
+        var numCols = Math.Max(1, console.WindowWidth / colWidth);
 
         var col = 0;
         foreach (var cell in cells)
         {
-            await console.Out.WriteAsync(cell.PadRight(colWidth));
-            if (++col == numCols)
+            if (col == numCols - 1)
             {
+                await console.Out.WriteAsync(cell);
                 await console.Out.WriteLineAsync();
                 col = 0;
+            }
+            else
+            {
+                await console.Out.WriteAsync(cell.PadRight(colWidth));
+                if (++col == numCols)
+                {
+                    await console.Out.WriteLineAsync();
+                    col = 0;
+                }
             }
         }
         if (col > 0) await console.Out.WriteLineAsync();
@@ -318,14 +329,12 @@ internal class DirCommand : ICommand
 
     private static string FormatDate(DateTime dt, System.Globalization.CultureInfo culture)
     {
-        if (dt == DateTime.MinValue) return "                  ";
-        
-        // De culture (NormalizedFileCulture) regelt nu zowel de datum als de tijd opmaak
-        // met voorloopnullen en consistente lengte.
+        if (dt == DateTime.MinValue) return new string(' ', 20);
+
         var dateStr = dt.ToString("d", culture);
         var timeStr = dt.ToString("t", culture);
-        
-        return $"{dateStr}  {timeStr}".PadRight(18);
+
+        return $"{dateStr}  {timeStr}";
     }
 
     private static bool IsExplicit(IArgumentSet args, string name)

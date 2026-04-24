@@ -138,23 +138,20 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
             do
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (data.cFileName != "." && data.cFileName != "..")
-                {
-                    var isDir = (data.dwFileAttributes & 0x10) != 0;
-                    var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
-                    var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
-                    var fullPath = Path.Combine(dirPath, data.cFileName);
-                    var owner = GetFileOwner(fullPath);
+                var isDir = (data.dwFileAttributes & 0x10) != 0;
+                var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+                var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
+                var fullPath = Path.Combine(dirPath, data.cFileName);
+                var owner = (data.cFileName == "." || data.cFileName == "..") ? "" : GetFileOwner(fullPath);
 
-                    yield return new(
-                        data.cFileName,
-                        isDir,
-                        data.cAlternateFileName ?? "",
-                        size,
-                        lastWrite,
-                        (FileAttributes)data.dwFileAttributes,
-                        owner);
-                }
+                yield return new(
+                    data.cFileName,
+                    isDir,
+                    data.cAlternateFileName ?? "",
+                    size,
+                    lastWrite,
+                    (FileAttributes)data.dwFileAttributes,
+                    owner);
             }
             while (FindNextFileW(handle, out data));
         }

@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- WinExe is intentional: on Windows it hides the console window so batd runs headless.
+         On Linux/macOS, .NET treats WinExe identically to Exe — no conditional logic needed. -->
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -35,4 +37,12 @@
   <ItemGroup>
     <Folder Include="Pty\" />
   </ItemGroup>
+
+  <!-- Kill any running batd before build — it locks the output binary -->
+  <Target Name="KillBatd" BeforeTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="taskkill /im batd.exe /f 2&gt;nul" IgnoreExitCode="true" />
+  </Target>
+  <Target Name="KillBatdUnix" BeforeTargets="Build" Condition="'$(OS)' != 'Windows_NT'">
+    <Exec Command="pkill -f batd || true" IgnoreExitCode="true" />
+  </Target>
 </Project>

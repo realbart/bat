@@ -1,0 +1,20 @@
+
+{dir}>echo 1
+1
+
+{dir}>goto bar
+
+{dir}>echo 2
+2
+
+{dir}>goto foo
+
+{dir}>echo 3
+3
+
+{dir}>goto baz
+
+{dir}>echo 4
+4
+
+{dir}>goto eof

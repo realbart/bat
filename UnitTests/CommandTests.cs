@@ -314,7 +314,7 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         CurrentPath.Length == 0 ? $"{CurrentDrive}:\\" : $"{CurrentDrive}:\\{string.Join("\\", CurrentPath)}";
     public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public IDictionary<string, string> Macros { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    public System.Globalization.CultureInfo FileCulture { get; } = System.Globalization.CultureInfo.InvariantCulture;
+    public System.Globalization.CultureInfo FileCulture { get; set; } = NormalizedFileCulture.Create(System.Globalization.CultureInfo.InvariantCulture);
     public List<string> CommandHistory { get; } = [];
     public int HistorySize { get; set; } = 50;
     public int ErrorCode { get; set; }
@@ -368,6 +368,7 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
             DelayedExpansion = this.DelayedExpansion,
             ExtensionsEnabled = this.ExtensionsEnabled,
             PromptFormat = this.PromptFormat,
+            FileCulture = this.FileCulture,
             HistorySize = this.HistorySize,
             CurrentBatch = this.CurrentBatch
         };

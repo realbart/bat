@@ -1,0 +1,22 @@
+
+{dir}>echo /?
+displays messages, or turns command-echoing on or off.
+
+  echo [on | off]
+  echo [message]
+
+type echo without parameters to display the current echo setting.
+
+{dir}>echo
+echo is on.
+
+{dir}>echo hallo
+hallo
+hello
+
+echo is off.
+hallo
+dit bestand heet {dir}echo.bat
+computernaam is bvm-pf5y3vg2
+
+{dir}>echo on

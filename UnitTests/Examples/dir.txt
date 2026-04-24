@@ -1,0 +1,199 @@
+ volume in drive c has no label.
+ volume serial number is {serial}
+
+ directory of {dir}
+
+{entry}          .
+{entry}          ..
+{entry} call.bat
+{entry} call.txt
+{entry} cd.bat
+{entry} cd.err.txt
+{entry} cd.txt
+{entry} dir.bat
+{entry} dir.txt
+{entry} doskey.bat
+{entry} doskey.txt
+{entry} echo.bat
+{entry} echo.txt
+{entry} exit.bat
+{entry} exit.txt
+{entry} for.bat
+{entry} for.txt
+{entry} goto.bat
+{entry} goto.err.txt
+{entry} goto.txt
+{entry} if.bat
+{entry} if.txt
+{entry} pause.bat
+{entry} pause.txt
+{entry} redirect.bat
+{entry} rem.bat
+{entry} rem.txt
+{entry} remark.bat
+{entry} remark.txt
+{entry} set.bat
+{entry} set.txt
+{entry} setlocal.bat
+{entry} setlocal.txt
+{entry} shift.bat
+{entry} shift.txt
+{entry} special.bat
+{entry} special.txt
+{entry} tree.bat
+{entry} tree.err.txt
+{entry} tree.txt
+              {files}
+               {dirs}
+call.bat
+call.txt
+cd.bat
+cd.err.txt
+cd.txt
+dir.bat
+dir.txt
+doskey.bat
+doskey.txt
+echo.bat
+echo.txt
+exit.bat
+exit.txt
+for.bat
+for.txt
+goto.bat
+goto.err.txt
+goto.txt
+if.bat
+if.txt
+pause.bat
+pause.txt
+redirect.bat
+rem.bat
+rem.txt
+remark.bat
+remark.txt
+set.bat
+set.txt
+setlocal.bat
+setlocal.txt
+shift.bat
+shift.txt
+special.bat
+special.txt
+tree.bat
+tree.err.txt
+tree.txt
+call.bat
+call.txt
+cd.bat
+cd.err.txt
+cd.txt
+dir.bat
+dir.txt
+doskey.bat
+doskey.txt
+echo.bat
+echo.txt
+exit.bat
+exit.txt
+for.bat
+for.txt
+goto.bat
+goto.err.txt
+goto.txt
+if.bat
+if.txt
+pause.bat
+pause.txt
+redirect.bat
+rem.bat
+rem.txt
+remark.bat
+remark.txt
+set.bat
+set.txt
+setlocal.bat
+setlocal.txt
+shift.bat
+shift.txt
+special.bat
+special.txt
+tree.bat
+tree.err.txt
+tree.txt
+call.bat
+call.txt
+cd.bat
+cd.err.txt
+cd.txt
+dir.bat
+dir.txt
+doskey.bat
+doskey.txt
+echo.bat
+echo.txt
+exit.bat
+exit.txt
+for.bat
+for.txt
+goto.bat
+goto.err.txt
+goto.txt
+if.bat
+if.txt
+pause.bat
+pause.txt
+redirect.bat
+rem.bat
+rem.txt
+remark.bat
+remark.txt
+set.bat
+set.txt
+setlocal.bat
+setlocal.txt
+shift.bat
+shift.txt
+special.bat
+special.txt
+tree.bat
+tree.err.txt
+tree.txt
+call.bat
+call.txt
+cd.bat
+cd.err.txt
+cd.txt
+dir.bat
+dir.txt
+doskey.bat
+doskey.txt
+echo.bat
+echo.txt
+exit.bat
+exit.txt
+for.bat
+for.txt
+goto.bat
+goto.err.txt
+goto.txt
+if.bat
+if.txt
+pause.bat
+pause.txt
+redirect.bat
+rem.bat
+rem.txt
+remark.bat
+remark.txt
+set.bat
+set.txt
+setlocal.bat
+setlocal.txt
+shift.bat
+shift.txt
+special.bat
+special.txt
+tree.bat
+tree.err.txt
+tree.txt

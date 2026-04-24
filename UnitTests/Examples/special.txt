@@ -1,0 +1,9 @@
+"hello world"
+hello&world
+hello|world
+hello>world
+hello^caret
+percent: 100%
+empty: done
+(parentheses)
+hello!world

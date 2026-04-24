@@ -1,0 +1,3 @@
+before call inner
+in inner
+after call inner, errorlevel=42

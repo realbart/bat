@@ -1,0 +1,5 @@
+before call
+sub arg1=hello arg2=world
+after call
+sub arg1=again arg2=
+done

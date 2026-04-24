@@ -1,0 +1,18 @@
+equal strings: yes
+unequal strings: correct
+case insensitive: yes
+not equal: correct
+defined: yes
+not defined: correct
+file exists: yes
+file not exists: correct
+errorlevel 0: correct
+errorlevel 5: yes
+errorlevel not 6: correct
+nested: yes
+equ: yes
+neq: yes
+lss: yes
+leq: yes
+gtr: yes
+geq: yes

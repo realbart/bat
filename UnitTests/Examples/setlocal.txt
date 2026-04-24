@@ -1,0 +1,7 @@
+outer=before
+inner=inside
+immediate: second
+delayed: second
+after inner endlocal: inner=inside
+after outer endlocal: outer=before
+inner in outer scope:
