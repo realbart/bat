@@ -72,9 +72,32 @@ internal sealed class SocketConsole : IConsole, IDisposable
                     return TerminalProtocol.ParseKey(msg.Value.Payload);
 
                 case TerminalMessageType.RawInput:
-                    // Raw bytes arrived while not in raw mode — queue for ReadRawAsync
-                    _rawQueue.Enqueue(msg.Value.Payload);
-                    _rawReady.Release();
+                    if (_rawMode)
+                    {
+                        // Raw bytes arrived while in raw mode — queue for ReadRawAsync
+                        _rawQueue.Enqueue(msg.Value.Payload);
+                        _rawReady.Release();
+                    }
+                    else if (msg.Value.Payload.Length > 0)
+                    {
+                        // Stale raw bytes after leaving raw mode — convert to key event
+                        // This happens when the bat-side stdin read was pending during the mode switch
+                        var rawByte = msg.Value.Payload[0];
+                        var ch = (char)rawByte;
+                        ConsoleKey consoleKey = ch switch
+                        {
+                            '\r' or '\n' => ConsoleKey.Enter,
+                            '\t' => ConsoleKey.Tab,
+                            '\x1b' => ConsoleKey.Escape,
+                            '\b' or '\x7f' => ConsoleKey.Backspace,
+                            ' ' => ConsoleKey.Spacebar,
+                            _ when ch >= 'a' && ch <= 'z' => (ConsoleKey)(ch - 32),
+                            _ when ch >= 'A' && ch <= 'Z' => (ConsoleKey)ch,
+                            _ when ch >= '0' && ch <= '9' => (ConsoleKey)ch,
+                            _ => 0
+                        };
+                        return new ConsoleKeyInfo(ch, consoleKey, false, false, false);
+                    }
                     continue;
 
                 case TerminalMessageType.Resize:

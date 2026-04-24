@@ -168,6 +168,7 @@ internal static class Program
                     }
                     else if (!_rawMode && currentlyRaw)
                     {
+                        FlushConsoleInputBuffer(hIn);
                         SetConsoleMode(hIn, keyMode);
                         currentlyRaw = false;
                     }
