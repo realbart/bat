@@ -42,8 +42,9 @@ internal enum IfOperator
 internal record IfCommandNode(
     IfFlags Flags,
     IfOperator Operator,
-    IReadOnlyList<IToken> LeftArg,    // null-or-empty for unary operators
-    IReadOnlyList<IToken> RightArg,   // the argument / right side
+    IReadOnlyList<IToken> LeftArg,       // value tokens only (no operator/whitespace)
+    IReadOnlyList<IToken> OperatorTokens, // operator + surrounding whitespace (for round-trip)
+    IReadOnlyList<IToken> RightArg,      // the argument / right side
     ICommandNode ThenBranch,
     ICommandNode? ElseBranch,
     IReadOnlyList<Redirection> Redirections) : ICommandNode
@@ -51,6 +52,7 @@ internal record IfCommandNode(
     public IEnumerable<IToken> GetTokens()
     {
         foreach (var t in LeftArg) yield return t;
+        foreach (var t in OperatorTokens) yield return t;
         foreach (var t in RightArg) yield return t;
         foreach (var t in ThenBranch.GetTokens()) yield return t;
         if (ElseBranch != null)

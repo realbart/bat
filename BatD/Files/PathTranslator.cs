@@ -42,7 +42,11 @@ public static class PathTranslator
         return fileSystem.GetNativePath(drive, segments);
     }
 
-    private static string? TranslateHostPathEntryToBat(string hostEntry, IFileSystem fileSystem)
+    /// <summary>
+    /// Translates a single host path to a Bat virtual path.
+    /// Returns null if the path doesn't fall under any mapped drive.
+    /// </summary>
+    public static string? TranslateHostPathEntryToBat(string hostEntry, IFileSystem fileSystem)
     {
         var sep = fileSystem.NativeDirectorySeparator;
         var entryNorm = hostEntry.TrimEnd(sep);

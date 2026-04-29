@@ -58,7 +58,7 @@ public abstract class Context : IContext
     public string PromptFormat { get; set; } = "$P$G"; // Default: C:\path>
 
     public System.Globalization.CultureInfo FileCulture { get; } =
-        NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture);
+        System.Globalization.CultureInfo.CurrentCulture.Create();
 
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
@@ -115,6 +115,12 @@ public abstract class Context : IContext
 
         PostProcessEnvironmentVariables();
         InitializeCurrentDirectory();
+
+        // Point ComSpec at bat's own cmd.exe (like cmd.exe points at itself)
+        var cmdExePath = Path.Combine(AppContext.BaseDirectory, "cmd.exe");
+        var virtualCmdPath = PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
+        if (virtualCmdPath != null)
+            EnvironmentVariables["ComSpec"] = virtualCmdPath;
     }
 
     /// <summary>

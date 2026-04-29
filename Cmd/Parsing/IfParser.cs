@@ -63,6 +63,7 @@ internal static class IfParser
 
         IfOperator op;
         List<IToken> leftArg = [];
+        List<IToken> operatorTokens = [];
         List<IToken> rightArg;
 
         var unary = UnaryOperator(reader.CurrentText);
@@ -83,9 +84,9 @@ internal static class IfParser
             { reader.ParseError ??= $"IF: unknown operator '{reader.CurrentText}'."; return null; }
 
             op = binaryOp.Value;
-            leftArg.AddRange(wsBeforeOp);
-            leftArg.Add(reader.Consume());
-            leftArg.AddRange(reader.ConsumeWhitespace());
+            operatorTokens.AddRange(wsBeforeOp);
+            operatorTokens.Add(reader.Consume());
+            operatorTokens.AddRange(reader.ConsumeWhitespace());
             rightArg = [..reader.ConsumeOneWord()];
         }
 
@@ -111,6 +112,6 @@ internal static class IfParser
             reader.Pos -= wsAfterThen.Count;
         }
 
-        return new(flags, op, leftArg, rightArg, thenBranch, elseBranch, outerRedirs);
+        return new(flags, op, leftArg, operatorTokens, rightArg, thenBranch, elseBranch, outerRedirs);
     }
 }

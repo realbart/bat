@@ -1080,7 +1080,7 @@ public class DirCommandTests
         Assert.IsTrue(entryLine.Contains("gamma.txt"));
     }
 
-    // Column width = floor(WindowWidth / numCols) where numCols = floor(WindowWidth / maxNameWidth).
+    // Column width = maxNameWidth + 2; numCols = floor(WindowWidth / colWidth).
     [TestMethod]
     public async Task Dir_WideFormat_ColWidthDerivedFromWidestNameAndWindowWidth()
     {
@@ -1091,12 +1091,14 @@ public class DirCommandTests
         fs.AddEntry('C', [], "longggggg.txt", false);  // 13 chars — widest
         var (cmd, console, bc) = Setup(fs, 'C', []);
         console.WindowWidth = 40;
-        // maxWidth=13, numCols=floor(40/13)=3, colWidth=floor(40/3)=13
+        // maxWidth=13, colWidth=13+2=15, numCols=floor(40/15)=2
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(Token.Text("/W")), bc, []);
         var contentLine = console.OutLines.Single(l => l.Contains("a.txt"));
-        Assert.AreEqual("a.txt".PadRight(13), contentLine[..13]);
-        Assert.AreEqual("b.txt".PadRight(13), contentLine[13..26]);
-        Assert.AreEqual("longggggg.txt", contentLine[26..39]);
+        // Two columns: a.txt padded to 15, b.txt (last col) not padded
+        Assert.AreEqual("a.txt".PadRight(15), contentLine[..15]);
+        Assert.AreEqual("b.txt", contentLine[15..]);
+        // longggggg.txt wraps to the next line
+        Assert.IsTrue(console.OutLines.Any(l => l.TrimEnd() == "longggggg.txt"));
     }
 
     // Real CMD: after deleting the subst for the current drive while in a subdirectory,

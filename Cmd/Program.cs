@@ -32,6 +32,10 @@ public static class Program
 
     private static async Task<int> RunAsync(IContext context, string full)
     {
+        // Set window title to ComSpec (like cmd.exe does)
+        if (context.EnvironmentVariables.TryGetValue("ComSpec", out var comSpec))
+            await context.Console.Out.WriteAsync($"\x1b]0;{comSpec}\x07");
+
         var repl = new Repl(new Dispatcher());
 
         string? command = null;

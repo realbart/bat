@@ -65,7 +65,7 @@ internal ref struct ParseReader(TokenSet tokens)
             or BlockStartToken or BlockEndToken
             or OutputRedirectionToken or AppendRedirectionToken
             or InputRedirectionToken or StdErrRedirectionToken
-            or AppendStdErrRedirectionToken))
+            or AppendStdErrRedirectionToken or ComparisonOperatorToken))
         {
             word.Add(Consume());
         }
