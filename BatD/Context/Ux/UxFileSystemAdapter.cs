@@ -28,10 +28,10 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
     public override char NativeDirectorySeparator => '/';
     public override char NativePathSeparator => ':';
 
-    public override Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
 #pragma warning disable CA1416 // File.GetUnixFileMode is supported on Unix
-        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var native = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         if (!File.Exists(native)) return Task.FromResult(false);
         var mode = File.GetUnixFileMode(native);
         return Task.FromResult((mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
@@ -87,41 +87,41 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
 
     // ── Async implementations ──────────────────────────────────────────────────
 
-    public override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var native = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         return Task.FromResult(File.Exists(native));
     }
 
-    public override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var native = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         return Task.FromResult(Directory.Exists(native));
     }
 
-    public override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(GetNativePath(drive, path));
+        Directory.CreateDirectory(GetNativePath(new BatPath(drive, path)));
         return Task.CompletedTask;
     }
 
-    public override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
+    protected override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
     {
-        Directory.Delete(ResolveCaseInsensitive(GetNativePath(drive, path)), recursive);
+        Directory.Delete(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path))), recursive);
         return Task.CompletedTask;
     }
 
-    public override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        File.Delete(ResolveCaseInsensitive(GetNativePath(drive, path)));
+        File.Delete(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path))));
         return Task.CompletedTask;
     }
 
-    public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
+    protected override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
         char drive, string[] path, string pattern,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var native = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         if (!Directory.Exists(native)) yield break;
 
         EnsureShortNamesForDirectory(native);
@@ -209,46 +209,46 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
         return false;
     }
 
-    public override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult<Stream>(File.OpenRead(ResolveCaseInsensitive(GetNativePath(drive, path))));
+    protected override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(File.OpenRead(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)))));
 
-    public override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default)
+    protected override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default)
     {
-        var native = GetNativePath(drive, path);
+        var native = GetNativePath(new BatPath(drive, path));
         return Task.FromResult<Stream>(append
             ? new FileStream(native, FileMode.Append, FileAccess.Write)
             : File.OpenWrite(native));
     }
 
-    public override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        await File.ReadAllTextAsync(ResolveCaseInsensitive(GetNativePath(drive, path)), cancellationToken);
+    protected override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        await File.ReadAllTextAsync(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path))), cancellationToken);
 
-    public override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
-        await File.WriteAllTextAsync(GetNativePath(drive, path), content, cancellationToken);
+    protected override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(GetNativePath(new BatPath(drive, path)), content, cancellationToken);
 
-    public override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
+    protected override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
     {
-        File.Copy(ResolveCaseInsensitive(GetNativePath(srcDrive, srcPath)), GetNativePath(dstDrive, dstPath), overwrite);
+        File.Copy(ResolveCaseInsensitive(GetNativePath(new BatPath(srcDrive, srcPath))), GetNativePath(new BatPath(dstDrive, dstPath)), overwrite);
         return Task.CompletedTask;
     }
 
-    public override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
+    protected override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
     {
-        File.Move(ResolveCaseInsensitive(GetNativePath(srcDrive, srcPath)), GetNativePath(dstDrive, dstPath));
+        File.Move(ResolveCaseInsensitive(GetNativePath(new BatPath(srcDrive, srcPath))), GetNativePath(new BatPath(dstDrive, dstPath)));
         return Task.CompletedTask;
     }
 
-    public override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
+    protected override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
     {
-        var src = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var src = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
         File.Move(src, dst);
         return Task.CompletedTask;
     }
 
-    public override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        var native = ResolveCaseInsensitive(GetNativePath(drive, path));
+        var native = ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)));
         var linfo = new FileInfo(native);
         var attributes = linfo.Attributes;
 
@@ -263,17 +263,17 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
         return Task.FromResult(attributes);
     }
 
-    public override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
+    protected override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
     {
-        File.SetAttributes(ResolveCaseInsensitive(GetNativePath(drive, path)), attributes);
+        File.SetAttributes(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path))), attributes);
         return Task.CompletedTask;
     }
 
-    public override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new FileInfo(ResolveCaseInsensitive(GetNativePath(drive, path))).Length);
+    protected override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new FileInfo(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)))).Length);
 
-    public override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.GetLastWriteTime(ResolveCaseInsensitive(GetNativePath(drive, path))));
+    protected override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetLastWriteTime(ResolveCaseInsensitive(GetNativePath(new BatPath(drive, path)))));
 
     protected override uint GetVolumeSerialNumber(string nativeRoot)
     {
@@ -468,3 +468,4 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
         return ext.Length > 3 ? ext[..3] : ext;
     }
 }
+

@@ -4,8 +4,8 @@
 
     public readonly struct BatPath(char drive, string[] segments)
     {
-        char Drive { get; } = drive;
-        string[] Segments { get; } = segments;
+        public char Drive { get; } = drive;
+        public string[] Segments { get; } = segments;
 
         public static BatPath Parse(string path)
         {

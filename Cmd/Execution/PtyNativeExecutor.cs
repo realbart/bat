@@ -3,6 +3,7 @@ using Bat.Context;
 using Bat.Nodes;
 using Bat.Pty;
 using BatD.Files;
+using Context;
 
 namespace Bat.Execution;
 
@@ -15,7 +16,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     public async Task<int> ExecuteAsync(string executablePath, string arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         var context = batchContext.Context;
-        var workingDir = context.FileSystem.GetNativePath(context.CurrentDrive, context.CurrentPath);
+        var workingDir = context.FileSystem.GetNativePath(new BatPath(context.CurrentDrive, context.CurrentPath));
         var hostExecutablePath = PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
         var hasRedirections = redirections.Count > 0;
 

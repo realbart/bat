@@ -151,9 +151,9 @@ internal static class CommandTokenizer
     {
         if (TokenizerHelpers.IsInIfCondition(ref scanner) && IsComparisonOperator(text))
         {
-            if (scanner.ContextStack.Count > 0 && scanner.ContextStack.Peek() == BlockContext.If)
-                scanner.ContextStack.Pop();
-            scanner.Expected = ExpectedTokenTypes.StartOfCommand;
+            scanner.Expected = IsUnaryOperator(text)
+                ? ExpectedTokenTypes.IfCondition | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace
+                : ExpectedTokenTypes.StartOfCommand;
             scanner.HasCommand = false;
             return Token.ComparisonOperator(text);
         }
@@ -176,7 +176,11 @@ internal static class CommandTokenizer
         }
         if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfCondition))
         {
-            scanner.Expected = ExpectedAfterIfWord(text);
+            var expected = ExpectedAfterIfWord(text);
+            // After unary operator argument, allow blocks for THEN branch
+            if (expected == (ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace))
+                expected |= ExpectedTokenTypes.Command;
+            scanner.Expected = expected;
             return;
         }
         if (!scanner.Expected.HasFlag(ExpectedTokenTypes.Text) && !scanner.Expected.HasFlag(ExpectedTokenTypes.Command))
@@ -205,4 +209,10 @@ internal static class CommandTokenizer
     /// </summary>
     private static bool IsComparisonOperator(string text)
         => text.ToUpper() is "EQU" or "NEQ" or "LSS" or "LEQ" or "GTR" or "GEQ" or "EXIST" or "DEFINED" or "ERRORLEVEL" or "NOT";
+
+    /// <summary>
+    /// Checks if a comparison operator is unary (expects one argument) vs binary (expects left op right).
+    /// </summary>
+    private static bool IsUnaryOperator(string text)
+        => text.ToUpper() is "EXIST" or "DEFINED" or "ERRORLEVEL";
 }

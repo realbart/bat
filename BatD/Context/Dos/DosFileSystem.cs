@@ -104,30 +104,30 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
 
     // ── Async implementations ──────────────────────────────────────────────────
 
-    public override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.Exists(GetNativePath(drive, path)));
+    protected override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.Exists(GetNativePath(new BatPath(drive, path))));
 
-    public override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Directory.Exists(GetNativePath(drive, path)));
+    protected override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Directory.Exists(GetNativePath(new BatPath(drive, path))));
 
-    public override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(GetNativePath(drive, path));
+        Directory.CreateDirectory(GetNativePath(new BatPath(drive, path)));
         return Task.CompletedTask;
     }
 
-    public override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
+    protected override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
     {
-        Directory.Delete(GetNativePath(drive, path), recursive);
+        Directory.Delete(GetNativePath(new BatPath(drive, path)), recursive);
         return Task.CompletedTask;
     }
 
-    public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
+    protected override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
         char drive, string[] path, string pattern,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var searchPath = Path.Combine(GetNativePath(drive, path), pattern);
-        var dirPath = GetNativePath(drive, path);
+        var searchPath = Path.Combine(GetNativePath(new BatPath(drive, path)), pattern);
+        var dirPath = GetNativePath(new BatPath(drive, path));
         var handle = FindFirstFileW(searchPath, out var data);
 
         if (handle == new IntPtr(-1))
@@ -183,60 +183,60 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
         }
     }
 
-    public override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
+    protected override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
     {
-        File.Delete(GetNativePath(drive, path));
+        File.Delete(GetNativePath(new BatPath(drive, path)));
         return Task.CompletedTask;
     }
 
-    public override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
+    protected override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
     {
-        File.Copy(GetNativePath(srcDrive, srcPath), GetNativePath(dstDrive, dstPath), overwrite);
+        File.Copy(GetNativePath(new BatPath(srcDrive, srcPath)), GetNativePath(new BatPath(dstDrive, dstPath)), overwrite);
         return Task.CompletedTask;
     }
 
-    public override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
+    protected override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
     {
-        File.Move(GetNativePath(srcDrive, srcPath), GetNativePath(dstDrive, dstPath));
+        File.Move(GetNativePath(new BatPath(srcDrive, srcPath)), GetNativePath(new BatPath(dstDrive, dstPath)));
         return Task.CompletedTask;
     }
 
-    public override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
+    protected override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
     {
-        var src = GetNativePath(drive, path);
+        var src = GetNativePath(new BatPath(drive, path));
         var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
         File.Move(src, dst);
         return Task.CompletedTask;
     }
 
-    public override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult<Stream>(File.OpenRead(GetNativePath(drive, path)));
+    protected override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(File.OpenRead(GetNativePath(new BatPath(drive, path))));
 
-    public override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default) =>
+    protected override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default) =>
         Task.FromResult<Stream>(append
-            ? new FileStream(GetNativePath(drive, path), FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(GetNativePath(drive, path)));
+            ? new FileStream(GetNativePath(new BatPath(drive, path)), FileMode.Append, FileAccess.Write)
+            : File.OpenWrite(GetNativePath(new BatPath(drive, path))));
 
-    public override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        await File.ReadAllTextAsync(GetNativePath(drive, path), cancellationToken);
+    protected override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        await File.ReadAllTextAsync(GetNativePath(new BatPath(drive, path)), cancellationToken);
 
-    public override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
-        await File.WriteAllTextAsync(GetNativePath(drive, path), content, cancellationToken);
+    protected override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(GetNativePath(new BatPath(drive, path)), content, cancellationToken);
 
-    public override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.GetAttributes(GetNativePath(drive, path)));
+    protected override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetAttributes(GetNativePath(new BatPath(drive, path))));
 
-    public override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
+    protected override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
     {
-        File.SetAttributes(GetNativePath(drive, path), attributes);
+        File.SetAttributes(GetNativePath(new BatPath(drive, path)), attributes);
         return Task.CompletedTask;
     }
 
-    public override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new FileInfo(GetNativePath(drive, path)).Length);
+    protected override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new FileInfo(GetNativePath(new BatPath(drive, path))).Length);
 
-    public override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.GetLastWriteTime(GetNativePath(drive, path)));
+    protected override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetLastWriteTime(GetNativePath(new BatPath(drive, path))));
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct WIN32_FIND_DATA
@@ -264,3 +264,4 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool FindClose(IntPtr hFindFile);
 }
+

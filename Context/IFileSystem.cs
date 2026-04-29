@@ -2,9 +2,9 @@ namespace Context;
 
 public interface IFileSystem
 {
-    string GetFullPathDisplayName(char drive, string[] path);
+    string GetFullPathDisplayName(BatPath path);
     string GetDisplayName(string segment);
-    string GetNativePath(char drive, string[] path);
+    string GetNativePath(BatPath path);
 
     IReadOnlyDictionary<char, string> GetSubsts();
     void AddSubst(char drive, string nativePath);
@@ -12,28 +12,28 @@ public interface IFileSystem
 
     // ── Async members ──────────────────────────────────────────────────────────
 
-    Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default);
+    Task<bool> FileExistsAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task<bool> DirectoryExistsAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task<bool> IsExecutableAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task CreateDirectoryAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task DeleteFileAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken cancellationToken = default);
 
-    IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(char drive, string[] path, string pattern, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, CancellationToken cancellationToken = default);
 
-    Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default);
-    Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default);
+    Task<Stream> OpenReadAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken cancellationToken = default);
+    Task<string> ReadAllTextAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task WriteAllTextAsync(BatPath path, string content, CancellationToken cancellationToken = default);
 
-    Task CopyFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, bool overwrite, CancellationToken cancellationToken = default);
-    Task MoveFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, CancellationToken cancellationToken = default);
-    Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default);
+    Task CopyFileAsync(BatPath source, BatPath dest, bool overwrite, CancellationToken cancellationToken = default);
+    Task MoveFileAsync(BatPath source, BatPath dest, CancellationToken cancellationToken = default);
+    Task RenameFileAsync(BatPath path, string newName, CancellationToken cancellationToken = default);
 
-    Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default);
-    Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default);
-    Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default);
+    Task<FileAttributes> GetAttributesAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task SetAttributesAsync(BatPath path, FileAttributes attributes, CancellationToken cancellationToken = default);
+    Task<long> GetFileSizeAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task<DateTime> GetLastWriteTimeAsync(BatPath path, CancellationToken cancellationToken = default);
 
     Task<uint> GetVolumeSerialNumberAsync(char drive, CancellationToken cancellationToken = default);
     Task<string> GetVolumeLabelAsync(char drive, CancellationToken cancellationToken = default);
@@ -43,5 +43,6 @@ public interface IFileSystem
 
     char NativeDirectorySeparator { get; }
     char NativePathSeparator { get; }
-    bool TryGetNativePath(char drive, string[] path, out string nativePath);
+
+    bool TryGetNativePath(BatPath path, out string nativePath);
 }

@@ -2,6 +2,7 @@ using Bat.Commands;
 using Bat.Console;
 using Bat.Nodes;
 using Bat.Parsing;
+using Context;
 
 namespace Bat.Execution;
 
@@ -17,7 +18,7 @@ internal class BatchExecutor : IExecutor
     {
         var context = batchContext.Context.StartNew();
         var (drive, path) = ParseNativePath(executablePath);
-        var content = await context.FileSystem.ReadAllTextAsync(drive, path);
+        var content = await context.FileSystem.ReadAllTextAsync(new BatPath(drive, path));
 
         var childContext = new BatchContext
         {
