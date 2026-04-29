@@ -76,7 +76,7 @@ internal static class IfParser
         }
         else
         {
-            leftArg = [..leadingWs, ..reader.ConsumeOneWord()];
+            leftArg = [..reader.ConsumeOneWord()];
             var wsBeforeOp = reader.ConsumeWhitespace();
 
             var binaryOp = BinaryOperator(reader.Current?.Raw);
@@ -90,7 +90,7 @@ internal static class IfParser
             rightArg = [..reader.ConsumeOneWord()];
         }
 
-        rightArg.AddRange(reader.ConsumeWhitespace());
+        var wsAfterRight = reader.ConsumeWhitespace();
 
         var thenBranch = SequenceParser.ParseCommandOp(ref reader);
         if (thenBranch == null || reader.ParseError != null)
@@ -112,6 +112,6 @@ internal static class IfParser
             reader.Pos -= wsAfterThen.Count;
         }
 
-        return new(flags, op, leftArg, operatorTokens, rightArg, thenBranch, elseBranch, outerRedirs);
+        return new(flags, op, leadingWs, leftArg, operatorTokens, rightArg, wsAfterRight, thenBranch, elseBranch, outerRedirs);
     }
 }

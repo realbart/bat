@@ -42,18 +42,22 @@ internal enum IfOperator
 internal record IfCommandNode(
     IfFlags Flags,
     IfOperator Operator,
-    IReadOnlyList<IToken> LeftArg,       // value tokens only (no operator/whitespace)
-    IReadOnlyList<IToken> OperatorTokens, // operator + surrounding whitespace (for round-trip)
-    IReadOnlyList<IToken> RightArg,      // the argument / right side
+    IReadOnlyList<IToken> LeadingWhitespace, // whitespace after IF keyword (for round-trip)
+    IReadOnlyList<IToken> LeftArg,           // value tokens only (no operator/whitespace)
+    IReadOnlyList<IToken> OperatorTokens,    // operator + surrounding whitespace (for round-trip)
+    IReadOnlyList<IToken> RightArg,          // the argument / right side
+    IReadOnlyList<IToken> WhitespaceBeforeThen, // whitespace between right arg and then-branch
     ICommandNode ThenBranch,
     ICommandNode? ElseBranch,
     IReadOnlyList<Redirection> Redirections) : ICommandNode
 {
     public IEnumerable<IToken> GetTokens()
     {
+        foreach (var t in LeadingWhitespace) yield return t;
         foreach (var t in LeftArg) yield return t;
         foreach (var t in OperatorTokens) yield return t;
         foreach (var t in RightArg) yield return t;
+        foreach (var t in WhitespaceBeforeThen) yield return t;
         foreach (var t in ThenBranch.GetTokens()) yield return t;
         if (ElseBranch != null)
             foreach (var t in ElseBranch.GetTokens()) yield return t;

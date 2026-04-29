@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Reflection;
 using Bat.Context;
 using Bat.Nodes;
+using BatD.Files;
 
 namespace Bat.Execution;
 

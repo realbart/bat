@@ -1,5 +1,7 @@
+using System.Reflection;
 using Bat.Commands;
 using Bat.Nodes;
+using Bat.Tokenizing;
 using Bat.Tokens;
 
 namespace Bat.Parsing;
@@ -15,12 +17,25 @@ internal static class CommandParser
 {
     /// <summary>
     /// Reads the command head token and dispatches to the appropriate handler.
+    /// If the head is a TextToken that matches a built-in command name, upgrade it.
     /// </summary>
     internal static ICommandNode? ParseCommandPart(ref ParseReader reader, List<Redirection> outerRedirs)
     {
         if (reader.Current is null or BlockEndToken or EndOfLineToken) return null;
 
         var headToken = reader.Consume();
+
+        // Upgrade TextToken to BuiltInCommandToken if it matches a known command
+        if (headToken is TextToken textToken)
+        {
+            var commandType = BuiltInCommandRegistry.GetCommandType(textToken.Raw.ToLowerInvariant());
+            if (commandType != null)
+            {
+                var factoryMethod = typeof(Token).GetMethod(nameof(Token.BuiltInCommand))!;
+                var genericFactory = factoryMethod.MakeGenericMethod(commandType);
+                headToken = (IToken)genericFactory.Invoke(null, [textToken.Raw])!;
+            }
+        }
 
         if (headToken is BuiltInCommandToken<ForCommand>)
         {

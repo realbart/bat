@@ -249,7 +249,7 @@ public class EnvironmentTranslationTests
     public void TranslateHostPathToBat_SingleAbsolutePath_Translated()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = PathTranslator.TranslateHostPathToBat(@"C:\Users\kempsb\AppData", fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Users\kempsb\AppData", fs);
         Assert.AreEqual(@"Z:\Users\kempsb\AppData", result);
     }
 
@@ -257,7 +257,7 @@ public class EnvironmentTranslationTests
     public void TranslateHostPathToBat_SemicolonSeparatedPaths_AllTranslated()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = PathTranslator.TranslateHostPathToBat(@"C:\Windows;C:\Users", fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;C:\Users", fs);
         Assert.AreEqual(@"Z:\Windows;Z:\Users", result);
     }
 
@@ -265,7 +265,7 @@ public class EnvironmentTranslationTests
     public void TranslateHostPathToBat_MixedInAndOutOfScope_OnlyInScopeKept()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = PathTranslator.TranslateHostPathToBat(@"C:\Windows;E:\External;C:\Users", fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;E:\External;C:\Users", fs);
         Assert.AreEqual(@"Z:\Windows;Z:\Users", result);
     }
 
@@ -273,7 +273,7 @@ public class EnvironmentTranslationTests
     public void TranslateHostPathToBat_AllOutOfScope_ReturnsEmpty()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = PathTranslator.TranslateHostPathToBat(@"E:\External;F:\Other", fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"E:\External;F:\Other", fs);
         Assert.AreEqual("", result);
     }
 }

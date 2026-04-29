@@ -1,3 +1,5 @@
+using BatD.Files;
+
 namespace Bat.Context.Dos;
 
 public class DosContext : Context
@@ -44,7 +46,7 @@ public class DosContext : Context
             if (!bareDrive && !absolutePath) continue;
 
             var toTranslate = bareDrive ? value + @"\" : value;
-            var translated = PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem);
+            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem);
             if (string.IsNullOrEmpty(translated))
                 EnvironmentVariables.Remove(key);
             else

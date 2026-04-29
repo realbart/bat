@@ -1,3 +1,4 @@
+using BatD.Files;
 using Context;
 
 namespace Bat.Context;
@@ -108,7 +109,7 @@ public abstract class Context : IContext
 
         if (EnvironmentVariables.TryGetValue("PATH", out var hostPath))
         {
-            EnvironmentVariables["PATH"] = PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
+            EnvironmentVariables["PATH"] = BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
         }
 
         if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
@@ -118,7 +119,7 @@ public abstract class Context : IContext
 
         // Point ComSpec at bat's own cmd.exe (like cmd.exe points at itself)
         var cmdExePath = Path.Combine(AppContext.BaseDirectory, "cmd.exe");
-        var virtualCmdPath = PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
+        var virtualCmdPath = BatD.Files.PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
         if (virtualCmdPath != null)
             EnvironmentVariables["ComSpec"] = virtualCmdPath;
     }

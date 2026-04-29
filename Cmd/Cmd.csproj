@@ -31,5 +31,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Context\Context.csproj" />
+    <ProjectReference Include="..\BatD\BatD.csproj" />
   </ItemGroup>
 </Project>

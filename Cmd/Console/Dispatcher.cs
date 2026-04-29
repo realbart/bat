@@ -1,9 +1,10 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Bat.Commands;
 using Bat.Execution;
 using Bat.Nodes;
 using Bat.Parsing;
 using Bat.Tokens;
+using BatD.Files;
 using Context;
 
 namespace Bat.Console;
@@ -96,11 +97,28 @@ internal class Dispatcher : IDispatcher
         return (bc.Context.CurrentDrive, [.. bc.Context.CurrentPath, .. path.Split('\\', StringSplitOptions.RemoveEmptyEntries)]);
     }
 
+    private static string ExtractValue(IReadOnlyList<IToken> tokens)
+    {
+        var result = new System.Text.StringBuilder();
+        foreach (var token in tokens)
+        {
+            if (token is QuotedTextToken qt)
+                result.Append(qt.Value);
+            else if (token is TextToken tt)
+                result.Append(tt.Value);
+            else
+                result.Append(token.Raw);
+        }
+        return result.ToString();
+    }
+
     private static async Task<int> ExecuteIfNodeAsync(BatchContext bc, IfCommandNode @if)
     {
         var conditionMet = false;
-        var left = BatchExecutor.Expand(string.Join("", @if.LeftArg.Select(t => t.Raw)), bc);
-        var right = BatchExecutor.Expand(string.Join("", @if.RightArg.Select(t => t.Raw)), bc);
+        var left = ExtractValue(@if.LeftArg);
+        var right = ExtractValue(@if.RightArg);
+        left = BatchExecutor.Expand(left, bc);
+        right = BatchExecutor.Expand(right, bc);
 
         var ignoreCase = (@if.Flags & IfFlags.IgnoreCase) != 0;
         var negate = (@if.Flags & IfFlags.Negate) != 0;
@@ -307,7 +325,7 @@ internal class Dispatcher : IDispatcher
         if (ext is ".bat" or ".cmd")
             return new BatchExecutor();
 
-        var hostPath = Context.PathTranslator.TranslateBatPathToHost(executablePath, fileSystem);
+        var hostPath = PathTranslator.TranslateBatPathToHost(executablePath, fileSystem);
         var peType = ExecutableTypeDetector.GetExecutableType(hostPath);
 
         return peType switch

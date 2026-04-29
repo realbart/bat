@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Bat.Context;
 using Bat.Nodes;
 using Bat.Pty;
+using BatD.Files;
 
 namespace Bat.Execution;
 

@@ -12,7 +12,7 @@ public class PathTranslatorTests
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         var hostPath = @"C:\Windows\System32;C:\Program Files";
-        var result = PathTranslator.TranslateHostPathToBat(hostPath, fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fs);
 
         Assert.AreEqual(@"Z:\Windows\System32;Z:\Program Files", result);
     }
@@ -27,7 +27,7 @@ public class PathTranslatorTests
         });
 
         var hostPath = @"C:\Windows;D:\Tools";
-        var result = PathTranslator.TranslateHostPathToBat(hostPath, fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fs);
 
         Assert.AreEqual(@"Y:\Windows;Z:\Tools", result);
     }
@@ -37,7 +37,7 @@ public class PathTranslatorTests
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         var hostPath = @"C:\Windows;E:\External";
-        var result = PathTranslator.TranslateHostPathToBat(hostPath, fs);
+        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fs);
 
         Assert.AreEqual(@"Z:\Windows", result);
     }
@@ -47,7 +47,7 @@ public class PathTranslatorTests
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         var batPath = @"Z:\Windows\System32\cmd.exe";
-        var result = PathTranslator.TranslateBatPathToHost(batPath, fs);
+        var result = BatD.Files.PathTranslator.TranslateBatPathToHost(batPath, fs);
 
         Assert.AreEqual(@"C:\Windows\System32\cmd.exe", result);
     }
@@ -57,7 +57,7 @@ public class PathTranslatorTests
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
         var batPath = @"Z:\";
-        var result = PathTranslator.TranslateBatPathToHost(batPath, fs);
+        var result = BatD.Files.PathTranslator.TranslateBatPathToHost(batPath, fs);
 
         Assert.AreEqual(@"C:\", result);
     }

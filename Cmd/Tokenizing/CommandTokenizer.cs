@@ -151,7 +151,10 @@ internal static class CommandTokenizer
     {
         if (TokenizerHelpers.IsInIfCondition(ref scanner) && IsComparisonOperator(text))
         {
-            scanner.Expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace | ExpectedTokenTypes.Command;
+            if (scanner.ContextStack.Count > 0 && scanner.ContextStack.Peek() == BlockContext.If)
+                scanner.ContextStack.Pop();
+            scanner.Expected = ExpectedTokenTypes.StartOfCommand;
+            scanner.HasCommand = false;
             return Token.ComparisonOperator(text);
         }
         UpdateExpectedAfterText(ref scanner, text);
