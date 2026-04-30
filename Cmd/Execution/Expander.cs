@@ -46,7 +46,9 @@ internal static class Expander
                 i += 2;
                 return true;
             }
-            // %%letter — FOR loop variable: expand directly to its value if set, else keep %%letter
+            // %%letter — FOR loop variable: expand directly to its value if set,
+            // else preserve as %%letter using sentinels so ExpandEnvironmentVariables
+            // doesn't eat the %%.
             if (i + 2 < line.Length && char.IsLetter(line[i + 2]))
             {
                 var varKey = line[i + 2].ToString();
@@ -56,25 +58,56 @@ internal static class Expander
                     i += 3;
                     return true;
                 }
+                // Variable not set yet (e.g. the FOR command line itself) — preserve as %%letter
+                result.Append(EscapedPercent);
+                result.Append(EscapedPercent);
+                result.Append(line[i + 2]);
+                i += 3;
+                return true;
             }
             // %%~modifiersletter — FOR loop variable tilde expansion (e.g. %%~nxf)
+            // The last letter is the variable; all preceding letters are modifiers.
             if (i + 2 < line.Length && line[i + 2] == '~')
             {
                 var pos2 = i + 3;
                 var mods2 = new StringBuilder();
                 while (pos2 < line.Length && "fdpnxsatz".Contains(char.ToLowerInvariant(line[pos2])))
                     mods2.Append(char.ToLowerInvariant(line[pos2++]));
+
+                // Determine variable key and modifiers:
+                // If a non-modifier letter follows → it's the variable (e.g. %%~nxi → mods=nx, var=i)
+                // If modifiers ended at EOW/space → the last modifier char is the variable (e.g. %%~nxf → mods=nx, var=f)
+                string varKey2;
+                string modsStr;
                 if (mods2.Length > 0 && pos2 < line.Length && char.IsLetter(line[pos2]))
                 {
-                    var varKey2 = line[pos2].ToString();
-                    if (bc.Context.EnvironmentVariables.TryGetValue(varKey2, out var rawVal))
-                    {
-                        result.Append(ApplyTildeMods(mods2.ToString(), rawVal ?? ""));
-                        i = pos2 + 1;
-                        return true;
-                    }
+                    varKey2 = line[pos2].ToString();
+                    modsStr = mods2.ToString();
+                    pos2++;
                 }
+                else if (mods2.Length > 0)
+                {
+                    varKey2 = mods2[^1].ToString();
+                    modsStr = mods2.Length > 1 ? mods2.ToString()[..^1] : "";
+                }
+                else goto afterTildeForVar;
+
+                if (bc.Context.EnvironmentVariables.TryGetValue(varKey2, out var rawVal))
+                {
+                    result.Append(modsStr.Length > 0 ? ApplyTildeMods(modsStr, rawVal ?? "") : rawVal ?? "");
+                    i = pos2;
+                    return true;
+                }
+                // Variable not set yet — preserve as %%~modsletter using sentinels
+                result.Append(EscapedPercent);
+                result.Append(EscapedPercent);
+                result.Append('~');
+                result.Append(modsStr);
+                result.Append(varKey2);
+                i = pos2;
+                return true;
             }
+            afterTildeForVar:
             return false;
         }
 
@@ -110,7 +143,20 @@ internal static class Expander
             return true;
         }
 
-        return false;
+        // %VAR% or lone % — skip over in this pass so ExpandEnvironmentVariables handles it intact.
+        // This prevents the closing % of a %VAR% reference (e.g. %homedrive%) from being
+        // misread as the start of a %%letter FOR-variable construct on the next character.
+        var closeIdx = line.IndexOf('%', i + 1);
+        if (closeIdx > i + 1) // found %VAR% with at least one char between the percents
+        {
+            result.Append(line, i, closeIdx - i + 1);
+            i = closeIdx + 1;
+            return true;
+        }
+        // Lone % — output as-is (env-var pass will strip it if needed)
+        result.Append('%');
+        i++;
+        return true;
     }
 
     /// <summary>

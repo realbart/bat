@@ -126,20 +126,25 @@ internal class Dispatcher : IDispatcher
             bc.Context.EnvironmentVariables[varName] = value;
             try
             {
-                // Re-expand and re-parse the body so that %%variable gets substituted
-                var bodyText = string.Concat(@for.Body.GetTokens().Select(t => t.Raw));
-                var expanded = BatchExecutor.Expand(bodyText, bc);
-                var parser = new Parser();
-                parser.Append(expanded);
-                var parsed = parser.ParseCommand();
-                if (parsed.HasError || parsed.Root is EmptyCommandNode) return 0;
-                return await ExecuteNodeAsync(bc, parsed.Root);
+                return await ExpandAndExecuteBody();
             }
             finally
             {
                 if (savedVar == null) bc.Context.EnvironmentVariables.Remove(varName);
                 else bc.Context.EnvironmentVariables[varName] = savedVar;
             }
+        }
+
+        // Re-expand and re-parse the body so that %%variable gets substituted
+        async Task<int> ExpandAndExecuteBody()
+        {
+            var bodyText = ReconstructCommandText(@for.Body);
+            var expanded = BatchExecutor.Expand(bodyText, bc);
+            var parser = new Parser();
+            parser.Append(expanded);
+            var parsed = parser.ParseCommand();
+            if (parsed.HasError || parsed.Root is EmptyCommandNode) return 0;
+            return await ExecuteNodeAsync(bc, parsed.Root);
         }
 
         // Expand the list items (env vars and batch params)
@@ -168,14 +173,17 @@ internal class Dispatcher : IDispatcher
         // ── /F file/string/command processing ─────────────────────────────────
         if (@for.Switches.HasFlag(ForSwitches.F))
         {
-            var paramsText = BatchExecutor.Expand(string.Concat(@for.Params.Select(t => t.Raw)), bc).Trim();
             var source = BatchExecutor.Expand(string.Concat(rawItems), bc).Trim();
 
-            // Parse /F options string (e.g. "tokens=1,2 delims=, skip=1")
+            // Extract /F options from the quoted token in Params (e.g. "tokens=1,2 delims=, skip=1")
             string? optionsStr = null;
-            if (paramsText.StartsWith('"') || paramsText.StartsWith('\''))
-                optionsStr = paramsText[1..Math.Max(1, paramsText.LastIndexOfAny(['"', '\'']))];
-
+            var quotedParam = @for.Params.OfType<QuotedTextToken>().FirstOrDefault();
+            if (quotedParam != null)
+            {
+                var raw = BatchExecutor.Expand(quotedParam.Raw, bc);
+                if (raw.Length >= 2 && (raw[0] == '"' || raw[0] == '\''))
+                    optionsStr = raw[1..Math.Max(1, raw.LastIndexOfAny(['"', '\'']))];
+            }
             var delims = " \t";
             var tokens = new[] { 1 };
             var skip = 0;
@@ -247,10 +255,28 @@ internal class Dispatcher : IDispatcher
                 foreach (var tokenIdx in tokens)
                 {
                     string value;
-                    if (tokenIdx == -1) // "*" = rest of line
+                    if (tokenIdx == -1) // "*" = rest of line from the current token position
                     {
-                        var firstDelim = line.IndexOfAny(delims.ToCharArray());
-                        value = firstDelim >= 0 ? line[(firstDelim + 1)..].TrimStart(delims.ToCharArray()) : line;
+                        // When tokens=* is the only spec, it means the entire line.
+                        // When combined (e.g. tokens=1,*), it means everything after the previous token.
+                        var tokensBefore = tokens.TakeWhile(t => t != -1).Count();
+                        if (tokensBefore == 0)
+                        {
+                            value = line;
+                        }
+                        else
+                        {
+                            // Skip past the first N delimited fields
+                            var remaining = line.AsSpan();
+                            for (var s = 0; s < tokensBefore; s++)
+                            {
+                                remaining = remaining.TrimStart(delims.ToCharArray());
+                                var nextDelim = remaining.IndexOfAny(delims.ToCharArray());
+                                if (nextDelim < 0) { remaining = []; break; }
+                                remaining = remaining[(nextDelim + 1)..];
+                            }
+                            value = remaining.TrimStart(delims.ToCharArray()).ToString();
+                        }
                     }
                     else
                     {
@@ -261,7 +287,7 @@ internal class Dispatcher : IDispatcher
                         varChar = (char)(varChar + 1);
                 }
 
-                await ExecuteNodeAsync(bc, @for.Body);
+                await ExpandAndExecuteBody();
             }
 
             bc.Context.EnvironmentVariables.Remove(varName);
@@ -388,6 +414,22 @@ internal class Dispatcher : IDispatcher
 
     /// <summary>Strips tilde-expansion directives if the value is a quoted path (for %%~nxf).</summary>
     private static string ApplyTildeExpansion(string value) => value;
+
+    /// <summary>
+    /// Reconstructs the full command text for a node, including structural elements
+    /// (like the FOR/IF keyword and parentheses) that GetTokens() omits.
+    /// </summary>
+    private static string ReconstructCommandText(ICommandNode node) => node switch
+    {
+        ForCommandNode f =>
+            "for " + string.Concat(f.Params.Select(t => t.Raw))
+            + "(" + string.Concat(f.List.TakeWhile(t => !(t is TextToken tt && tt.Value.Equals("do", StringComparison.OrdinalIgnoreCase))).Select(t => t.Raw))
+            + ") " + string.Concat(f.List.SkipWhile(t => !(t is TextToken tt && tt.Value.Equals("do", StringComparison.OrdinalIgnoreCase))).Select(t => t.Raw))
+            + ReconstructCommandText(f.Body),
+        IfCommandNode i =>
+            "if " + string.Concat(i.GetTokens().Select(t => t.Raw)),
+        _ => string.Concat(node.GetTokens().Select(t => t.Raw)),
+    };
 
     /// <summary>Runs a command string and captures its stdout output.</summary>
     private static async Task<string> RunCaptureAsync(string command, BatchContext bc)

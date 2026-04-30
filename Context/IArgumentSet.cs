@@ -55,7 +55,7 @@ public interface IArgumentSet
     /// </summary>
     string? GetValue(char name);
 
-        /// <summary>
+    /// <summary>
     /// Returns the single value supplied for this option name, or null when absent.
     /// Throws <see cref="InvalidOperationException"/> when more than one value was supplied.
     /// </summary>

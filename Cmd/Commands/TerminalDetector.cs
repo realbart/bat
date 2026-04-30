@@ -6,6 +6,8 @@ namespace Bat.Commands;
 /// Detects the current terminal emulator on Linux and provides launch templates
 /// for opening new terminal windows. Data-driven: no if-chains.
 /// </summary>
+// todo: this is not a command
+// also: this seems to be linux-specific. move it
 internal static class TerminalDetector
 {
     /// <summary>Known terminal emulators with their launch templates. {cmd} is replaced with the command to run.</summary>

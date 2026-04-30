@@ -62,7 +62,11 @@ internal static class OperatorTokenizer
     {
         if (scanner.ContextStack.Count == 0)
         {
-            return TokenizerHelpers.Yield(ref scanner, 1, new ErrorToken(") was unexpected at this time."))!;
+            if (TokenizerHelpers.IsExpectingCommand(ref scanner) && !scanner.HasCommand)
+                return TokenizerHelpers.Yield(ref scanner, 1, new ErrorToken(") was unexpected at this time."))!;
+
+            // Outside any block — treat ) as literal text (e.g. "echo (parentheses)")
+            return TokenizerHelpers.Yield(ref scanner, 1, Token.Text(")"))!;
         }
         var poppedContext = scanner.ContextStack.Pop();
 

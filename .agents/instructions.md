@@ -74,3 +74,9 @@ To prevent infinite loops (especially in recursive commands like `tree` or when 
 ## Reference Materials
 - ReactOS CMD source: https://doxygen.reactos.org/db/d4f/base_2shell_2cmd_2cmd_8c_source.html
 - Implementation Plan: `IMPLEMENTATION_PLAN.md`
+
+## Naming
+- Use the "Native" prefix for host/native code (e.g. NativePath)
+- Use the "Virtual" prefix for client/dos code (e.g. VirtualPath)
+- Use the "Windows" prefix for windows specific code (e.g. WindowsFileSystemAdapter)
+- Use the "Posix" prefix for unix-like specific code (e.g. PosixFileSystemAdapter)

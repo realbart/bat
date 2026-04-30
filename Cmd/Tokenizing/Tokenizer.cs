@@ -66,6 +66,16 @@ internal static class Tokenizer
                     break;
                 default:
                     tokenSet.Add(token);
+                    // Tokens produced outside CommandTokenizer (quoted strings, variables)
+                    // still need to update IF-condition state so that the parser knows
+                    // a command can follow after the unary argument.
+                    if (token is QuotedTextToken or TextToken && TokenizerHelpers.IsInIfCondition(ref scanner))
+                    {
+                        if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfUnaryArg))
+                            scanner.Expected = ExpectedTokenTypes.StartOfCommand;
+                        else if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfCondition))
+                            scanner.Expected = ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+                    }
                     break;
             }
         }

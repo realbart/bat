@@ -8,6 +8,8 @@ namespace BatD.Context;
 // todo: add flag that causes the inner context to be cloned only on write
 public abstract class Context : IContext
 {
+    public volatile int CloneCount = 0;
+
     public Context(IFileSystem fileSystem, IConsole console)
     {
         _environmentVariables = new(StringComparer.OrdinalIgnoreCase);
@@ -39,7 +41,7 @@ public abstract class Context : IContext
     private IFileSystem fileSystem;
     public IConsole Console { get; }
     public int ErrorCode { get; set; } = 0;
-
+    // todo: implement ClonableList
     private readonly ClonableDictionary<string, string> _environmentVariables;
     public IDictionary<string, string> EnvironmentVariables => _environmentVariables;
     private readonly ClonableDictionary<string, string> _macros;
@@ -117,7 +119,7 @@ public abstract class Context : IContext
         {
             EnvironmentVariables["PATH"] = await BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
         }
-
+        // todo: remove this code as the fallback prompt already is $P$G
         if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
 
         PostProcessEnvironmentVariables();
@@ -162,5 +164,36 @@ public abstract class Context : IContext
             newInstance.DirectoryStack.Push(item);
 
         return newInstance;
+    }
+}
+
+public sealed class Session: IDisposable
+{
+    private readonly Context context;
+
+    public Session(Context context)
+    {
+        this.context = context;
+        Interlocked.Increment(ref context.CloneCount);
+    }
+
+    // todo:
+    // - session implements IContext
+    // - all read operations delegate to context
+    // - when writing (modifying lists or dictionaries), Session checks if context.CloneCount > 1,
+    // and if so, clones the context and replaces it with the clone, then performs the write on the clone.
+    // (note: clones use ClonableDictionaries so deep copies are only ever made when needed)
+    // (the clone has clonecount = 1)
+    // - the context itself is no longer passed, only the session
+
+    /// <summary>
+    /// Always use "using var session = context.StartNew();" when starting a new command execution context.
+    /// </summary>
+    public Session StartNew() => new (context);
+
+
+    public void Dispose()
+    {
+        Interlocked.Decrement(ref context.CloneCount);
     }
 }

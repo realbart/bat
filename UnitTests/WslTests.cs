@@ -5,8 +5,9 @@ using System.Reflection;
 namespace Bat.UnitTests;
 
 /// <summary>
-/// Runs the real-filesystem test suite inside WSL (linux-x64) so that the
-/// UxFileSystemAdapter and UNIX code-paths are exercised for real.
+/// Runs the full test suite inside WSL (linux-x64) so that all UNIX code-paths
+/// are exercised for real. Tests guarded by #if WINDOWS are automatically
+/// excluded by the compiler when building with the linux-x64 RID.
 ///
 /// On Linux these tests don't run — the tests themselves cover that platform.
 /// The test is Inconclusive when WSL is not installed.
@@ -14,17 +15,6 @@ namespace Bat.UnitTests;
 [TestClass]
 public class WslTests
 {
-    /// <summary>
-    /// Filter that selects the test classes which exercise the real filesystem
-    /// and have UNIX-specific code paths.
-    /// </summary>
-    private const string Filter =
-        "FullyQualifiedName~UxFileSystemTests" +
-        "|FullyQualifiedName~DirVolumeTests" +
-        "|FullyQualifiedName~UnixPathMappingTests" +
-        "|FullyQualifiedName~UnixDirDisplayTests" +
-        "|FullyQualifiedName~ExampleScriptTests";
-
     [TestMethod]
     [Timeout(300_000)] // 5 min — includes restore + linux-x64 build
     public async Task RealFilesystemTests_PassUnderWsl()
@@ -62,7 +52,6 @@ public class WslTests
             $"cd '{wslProjectDir}' && " +
             $"NUGET_PACKAGES='{nugetCacheWsl}' " +
             $"dotnet test '{wslProjectFile}' -r linux-x64 -f net10.0 --no-restore " +
-            $"--filter \"{Filter}\" " +
             $"--logger \"console;verbosity=minimal\" 2>&1";
 
         var (output, exitCode) = await RunWslAsync($"bash -c \"{bashCommand.Replace("\"", "\\\"")}\"");

@@ -37,6 +37,10 @@ internal sealed class StartArguments
     public StartPriority Priority { get; set; } = StartPriority.Normal;
 }
 
+// todo: fix the problem that start \windows\system32\cmd.exe 
+// does not actually run the windows version cmd but just opens a prompt with bat
+// todo: don't do own argument parsing but rely on IArgumentSet
+// (we may need to fix aggumentset for this)
 [BuiltInCommand("start")]
 internal class StartCommand : ICommand
 {

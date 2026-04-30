@@ -169,6 +169,14 @@ internal static class CommandTokenizer
     private static void UpdateExpectedAfterText(ref Scanner scanner, string text)
     {
         var ctx = scanner.ContextStack.Count > 0 ? scanner.ContextStack.Peek() : BlockContext.None;
+        if (ctx == BlockContext.For)
+        {
+            // Inside a FOR context, text tokens are switches (/L, /D, /R, /F) or the
+            // loop variable. Preserve the ForInClause flag so that the IN keyword is
+            // still recognised after switches.
+            scanner.Expected = ExpectedTokenTypes.ForInClause | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace;
+            return;
+        }
         if (ctx != BlockContext.If)
         {
             scanner.Expected = ExpectedTokenTypes.AfterCommand;

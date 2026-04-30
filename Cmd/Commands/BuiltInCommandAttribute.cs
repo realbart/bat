@@ -1,5 +1,7 @@
 namespace Bat.Commands;
 
+// todo: make sure multu-char flags and arguments are also supported, 
+// e.g. START /B /WAIT /D:dir "My Program.exe" arg1 arg2
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 internal class BuiltInCommandAttribute(string name) : Attribute
 {
