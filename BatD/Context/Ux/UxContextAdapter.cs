@@ -1,14 +1,15 @@
+using BatD.Context;
 using BatD.Files;
 
-namespace Bat.Context.Ux;
+namespace BatD.Context.Ux;
 
-public class UxContextAdapter : Context
+public class UxContextAdapter : global::BatD.Context.Context
 {
     public UxContextAdapter(global::Context.IConsole console) : this(new(), console) { }
 
     public UxContextAdapter(UxFileSystemAdapter fs, global::Context.IConsole console) : base(fs, console)
     {
-        InitializeFromEnvironment();
+        InitializeFromEnvironmentAsync().GetAwaiter().GetResult();
     }
 
     private UxContextAdapter(UxFileSystemAdapter fs, global::Context.IConsole console, bool skipInit) : base(fs, console)
@@ -42,7 +43,7 @@ public class UxContextAdapter : Context
             var value = EnvironmentVariables[key];
             if (!value.StartsWith('/')) continue;
 
-            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(value, FileSystem);
+            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(value, FileSystem).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(translated))
                 EnvironmentVariables.Remove(key);
             else
@@ -56,10 +57,10 @@ public class UxContextAdapter : Context
     {
         var user = Environment.UserName;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var homeTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(home, FileSystem);
+        var homeTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(home, FileSystem).GetAwaiter().GetResult();
         var hostname = Environment.MachineName;
         var temp = Environment.GetEnvironmentVariable("TMPDIR") ?? "/tmp";
-        var tempTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(temp, FileSystem);
+        var tempTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(temp, FileSystem).GetAwaiter().GetResult();
 
         // Split translated home into HOMEDRIVE + HOMEPATH (e.g. Z:\Users\kempsb → Z: + \Users\kempsb)
         var homeDrive = "";

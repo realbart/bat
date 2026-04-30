@@ -1,33 +1,208 @@
+// todo: only compile in windos builds
+
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
-using Context;
+using BatD.Context;
+using global::Context;
 
-namespace Bat.Context.Dos;
+namespace BatD.Context.Dos;
 
 public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
 {
     private readonly Dictionary<char, string> _roots = new(roots);
 
+    // todo:
+    // determine the host drive(s) dynamicly
+    // - Always map the root of the drive %COMSPEC% is in
+    // - Always map the root of the current working directory
+    // - Always map %HOMEDRIVE%
+    // - Always map the folder the batd executable is in
     public DosFileSystem() : this(new() { ['Z'] = @"C:\" }) { }
 
-    protected override string GetNativePathCore(char drive, string[] path)
+    public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
+    public void AddRoot(char drive, string nativePath) => _roots[char.ToUpperInvariant(drive)] = nativePath;
+    public char FirstDrive() => _roots.Keys.First();
+    public IEnumerable<KeyValuePair<char, string>> GetRoots() => _roots;
+
+    private string ResolveNativePath(BatPath path)
     {
+        var drive = char.ToUpperInvariant(path.Drive);
+        var segments = path.Segments;
+        var depth = 0;
+        while (depth++ < 16 && Substs.TryGetValue(drive, out var subst))
+            (drive, segments) = (subst.Drive, [.. subst.Segments, .. segments]);
+
         if (!_roots.TryGetValue(drive, out var root))
             root = $@"{drive}:\does-not-exist";
-        return path.Length == 0 ? root : Path.Combine([root, .. path]);
+        return segments.Length == 0 ? root : Path.Combine([root, .. segments]);
     }
 
-    public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
+    public override Task<HostPath> GetNativePathAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new HostPath(ResolveNativePath(path)));
 
-    public void AddRoot(char drive, string nativePath) => _roots[char.ToUpperInvariant(drive)] = nativePath;
+    public override Task<BatPath> FromNativePathAsync(HostPath hostPath, CancellationToken cancellationToken = default)
+    {
+        var p = hostPath.Path;
+        if (string.IsNullOrEmpty(p) || p.Length < 2 || p[1] != ':')
+            throw new ArgumentException($"Invalid Windows path: {p}");
+        var drive = char.ToUpperInvariant(p[0]);
+        var rest = p.Length > 3 && p[2] == '\\' ? p[3..] : "";
+        var segments = string.IsNullOrEmpty(rest)
+            ? Array.Empty<string>()
+            : rest.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        return Task.FromResult(new BatPath(drive, segments));
+    }
 
-    public char FirstDrive() => _roots.Keys.First();
+    public override Task<(bool Success, HostPath Path)> TryGetNativePathAsync(BatPath path, CancellationToken cancellationToken = default)
+    {
+        var drive = char.ToUpperInvariant(path.Drive);
+        var depth = 0;
+        while (depth++ < 16 && Substs.TryGetValue(drive, out var subst))
+            drive = char.ToUpperInvariant(subst.Drive);
 
-    /// <summary>
-    /// Returns drive mappings in insertion order for CWD resolution.
-    /// </summary>
-    public IEnumerable<KeyValuePair<char, string>> GetRoots() => _roots;
+        if (!_roots.ContainsKey(drive))
+            return Task.FromResult((false, default(HostPath)));
+
+        return Task.FromResult((true, new HostPath(ResolveNativePath(path))));
+    }
+
+    public override Task<bool> FileExistsAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.Exists(ResolveNativePath(path)));
+
+    public override Task<bool> DirectoryExistsAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Directory.Exists(ResolveNativePath(path)));
+
+    public override Task CreateDirectoryAsync(BatPath path, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(ResolveNativePath(path));
+        return Task.CompletedTask;
+    }
+
+    public override Task DeleteFileAsync(BatPath path, CancellationToken cancellationToken = default)
+    {
+        File.Delete(ResolveNativePath(path));
+        return Task.CompletedTask;
+    }
+
+    public override Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken cancellationToken = default)
+    {
+        Directory.Delete(ResolveNativePath(path), recursive);
+        return Task.CompletedTask;
+    }
+
+    public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
+        BatPath path, string pattern,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var dirPath = ResolveNativePath(path);
+        var searchPath = Path.Combine(dirPath, pattern);
+        var handle = FindFirstFileW(searchPath, out var data);
+
+        if (handle == new IntPtr(-1))
+            yield break;
+
+        try
+        {
+            do
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var isDir = (data.dwFileAttributes & 0x10) != 0;
+                var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+                var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
+                var fullPath = Path.Combine(dirPath, data.cFileName);
+                var owner = (data.cFileName is "." or "..") ? "" : GetFileOwner(fullPath);
+
+                yield return new(
+                    data.cFileName,
+                    isDir,
+                    data.cAlternateFileName ?? "",
+                    size,
+                    lastWrite,
+                    (FileAttributes)data.dwFileAttributes,
+                    owner);
+            }
+            while (FindNextFileW(handle, out data));
+        }
+        finally
+        {
+            FindClose(handle);
+        }
+    }
+
+    public override Task<Stream> OpenReadAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(File.OpenRead(ResolveNativePath(path)));
+
+    public override Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Stream>(append
+            ? new FileStream(ResolveNativePath(path), FileMode.Append, FileAccess.Write)
+            : File.OpenWrite(ResolveNativePath(path)));
+
+    public override async Task<string> ReadAllTextAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        await File.ReadAllTextAsync(ResolveNativePath(path), cancellationToken);
+
+    public override async Task WriteAllTextAsync(BatPath path, string content, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(ResolveNativePath(path), content, cancellationToken);
+
+    public override Task CopyFileAsync(BatPath source, BatPath dest, bool overwrite, CancellationToken cancellationToken = default)
+    {
+        File.Copy(ResolveNativePath(source), ResolveNativePath(dest), overwrite);
+        return Task.CompletedTask;
+    }
+
+    public override Task MoveFileAsync(BatPath source, BatPath dest, CancellationToken cancellationToken = default)
+    {
+        File.Move(ResolveNativePath(source), ResolveNativePath(dest));
+        return Task.CompletedTask;
+    }
+
+    public override Task RenameFileAsync(BatPath path, string newName, CancellationToken cancellationToken = default)
+    {
+        var src = ResolveNativePath(path);
+        var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
+        File.Move(src, dst);
+        return Task.CompletedTask;
+    }
+
+    public override Task<FileAttributes> GetAttributesAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetAttributes(ResolveNativePath(path)));
+
+    public override Task SetAttributesAsync(BatPath path, FileAttributes attributes, CancellationToken cancellationToken = default)
+    {
+        File.SetAttributes(ResolveNativePath(path), attributes);
+        return Task.CompletedTask;
+    }
+
+    public override Task<long> GetFileSizeAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new FileInfo(ResolveNativePath(path)).Length);
+
+    public override Task<DateTime> GetLastWriteTimeAsync(BatPath path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(File.GetLastWriteTime(ResolveNativePath(path)));
+
+    public override Task<uint> GetVolumeSerialNumberAsync(char drive, CancellationToken cancellationToken = default)
+    {
+        var root = ResolveNativePath(new BatPath(char.ToUpperInvariant(drive), []));
+        var volumeName = new char[256];
+        GetVolumeInformationW(root, volumeName, volumeName.Length,
+            out var serial, out _, out _, null, 0);
+        return Task.FromResult(serial);
+    }
+
+    public override Task<string> GetVolumeLabelAsync(char drive, CancellationToken cancellationToken = default)
+    {
+        var root = ResolveNativePath(new BatPath(char.ToUpperInvariant(drive), []));
+        var volumeName = new char[256];
+        GetVolumeInformationW(root, volumeName, volumeName.Length,
+            out _, out _, out _, null, 0);
+        return Task.FromResult(new string(volumeName).TrimEnd('\0'));
+    }
+
+    public override Task<long> GetFreeBytesAsync(char drive, CancellationToken cancellationToken = default)
+    {
+        var root = ResolveNativePath(new BatPath(char.ToUpperInvariant(drive), []));
+        var driveInfo = new DriveInfo(root);
+        return Task.FromResult(driveInfo.AvailableFreeSpace);
+    }
 
     public override Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken cancellationToken = default)
     {
@@ -48,118 +223,7 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
         return Task.FromResult<IReadOnlyDictionary<string, string>>(assoc);
     }
 
-    protected override bool TryGetNativePathCore(char drive, string[] path, out string nativePath)
-    {
-        if (!_roots.TryGetValue(drive, out var root))
-        {
-            nativePath = "";
-            return false;
-        }
-        nativePath = path.Length == 0 ? root : Path.Combine([root, .. path]);
-        return true;
-    }
-
-    protected override uint GetVolumeSerialNumber(string nativeRoot)
-    {
-        var hash = GetVolumeInformationW(nativeRoot, null, 0, out var serial, out _, out _, null, 0)
-            ? serial : 0;
-
-        return nativeRoot.Length > 3
-            ? (uint)HashCode.Combine(hash, nativeRoot[3..])
-            : hash;
-    }
-
-    protected override string GetVolumeLabel(string nativeRoot)
-    {
-        var buffer = new char[261];
-        return GetVolumeInformationW(nativeRoot, buffer, buffer.Length, out _, out _, out _, null, 0)
-            ? new string(buffer).TrimEnd('\0') : "";
-    }
-
-    protected override long GetFreeBytes(string nativeRoot)
-    {
-        try
-        {
-            var drive = new DriveInfo(nativeRoot);
-            return drive.AvailableFreeSpace;
-        }
-        catch
-        {
-            return 1024 * 1024 * 1024; // 1 GB fallback
-        }
-    }
-
-    [LibraryImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", StringMarshalling = StringMarshalling.Utf16)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetVolumeInformationW(
-        string lpRootPathName,
-        char[]? lpVolumeNameBuffer,
-        int nVolumeNameSize,
-        out uint lpVolumeSerialNumber,
-        out uint lpMaximumComponentLength,
-        out uint lpFileSystemFlags,
-        char[]? lpFileSystemNameBuffer,
-        int nFileSystemNameSize);
-
-    // ── Async implementations ──────────────────────────────────────────────────
-
-    protected override Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.Exists(GetNativePath(new BatPath(drive, path))));
-
-    protected override Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Directory.Exists(GetNativePath(new BatPath(drive, path))));
-
-    protected override Task CreateDirectoryAsync(char drive, string[] path, CancellationToken cancellationToken = default)
-    {
-        Directory.CreateDirectory(GetNativePath(new BatPath(drive, path)));
-        return Task.CompletedTask;
-    }
-
-    protected override Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken cancellationToken = default)
-    {
-        Directory.Delete(GetNativePath(new BatPath(drive, path)), recursive);
-        return Task.CompletedTask;
-    }
-
-    protected override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
-        char drive, string[] path, string pattern,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var searchPath = Path.Combine(GetNativePath(new BatPath(drive, path)), pattern);
-        var dirPath = GetNativePath(new BatPath(drive, path));
-        var handle = FindFirstFileW(searchPath, out var data);
-
-        if (handle == new IntPtr(-1))
-            yield break;
-
-        try
-        {
-            do
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var isDir = (data.dwFileAttributes & 0x10) != 0;
-                var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
-                var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);
-                var fullPath = Path.Combine(dirPath, data.cFileName);
-                var owner = (data.cFileName == "." || data.cFileName == "..") ? "" : GetFileOwner(fullPath);
-
-                yield return new(
-                    data.cFileName,
-                    isDir,
-                    data.cAlternateFileName ?? "",
-                    size,
-                    lastWrite,
-                    (FileAttributes)data.dwFileAttributes,
-                    owner);
-            }
-            while (FindNextFileW(handle, out data));
-        }
-        finally
-        {
-            FindClose(handle);
-        }
-    }
+    // ── Private helpers ─────────────────────────────────────────────────────────
 
     private static DateTime FileTimeToDateTime(System.Runtime.InteropServices.ComTypes.FILETIME ft)
     {
@@ -177,66 +241,23 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
             var owner = fileSecurity.GetOwner(typeof(NTAccount));
             return owner?.Value ?? "";
         }
-        catch
-        {
-            return "";
-        }
+        catch { return ""; }
     }
 
-    protected override Task DeleteFileAsync(char drive, string[] path, CancellationToken cancellationToken = default)
-    {
-        File.Delete(GetNativePath(new BatPath(drive, path)));
-        return Task.CompletedTask;
-    }
+    // ── P/Invoke ────────────────────────────────────────────────────────────────
 
-    protected override Task CopyFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, bool overwrite, CancellationToken cancellationToken = default)
-    {
-        File.Copy(GetNativePath(new BatPath(srcDrive, srcPath)), GetNativePath(new BatPath(dstDrive, dstPath)), overwrite);
-        return Task.CompletedTask;
-    }
-
-    protected override Task MoveFileAsync(char srcDrive, string[] srcPath, char dstDrive, string[] dstPath, CancellationToken cancellationToken = default)
-    {
-        File.Move(GetNativePath(new BatPath(srcDrive, srcPath)), GetNativePath(new BatPath(dstDrive, dstPath)));
-        return Task.CompletedTask;
-    }
-
-    protected override Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken cancellationToken = default)
-    {
-        var src = GetNativePath(new BatPath(drive, path));
-        var dst = Path.Combine(Path.GetDirectoryName(src)!, newName);
-        File.Move(src, dst);
-        return Task.CompletedTask;
-    }
-
-    protected override Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult<Stream>(File.OpenRead(GetNativePath(new BatPath(drive, path))));
-
-    protected override Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken cancellationToken = default) =>
-        Task.FromResult<Stream>(append
-            ? new FileStream(GetNativePath(new BatPath(drive, path)), FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(GetNativePath(new BatPath(drive, path))));
-
-    protected override async Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        await File.ReadAllTextAsync(GetNativePath(new BatPath(drive, path)), cancellationToken);
-
-    protected override async Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken cancellationToken = default) =>
-        await File.WriteAllTextAsync(GetNativePath(new BatPath(drive, path)), content, cancellationToken);
-
-    protected override Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.GetAttributes(GetNativePath(new BatPath(drive, path))));
-
-    protected override Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken cancellationToken = default)
-    {
-        File.SetAttributes(GetNativePath(new BatPath(drive, path)), attributes);
-        return Task.CompletedTask;
-    }
-
-    protected override Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new FileInfo(GetNativePath(new BatPath(drive, path))).Length);
-
-    protected override Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken cancellationToken = default) =>
-        Task.FromResult(File.GetLastWriteTime(GetNativePath(new BatPath(drive, path))));
+    [LibraryImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetVolumeInformationW(
+        string lpRootPathName,
+        char[]? lpVolumeNameBuffer,
+        int nVolumeNameSize,
+        out uint lpVolumeSerialNumber,
+        out uint lpMaximumComponentLength,
+        out uint lpFileSystemFlags,
+        char[]? lpFileSystemNameBuffer,
+        int nFileSystemNameSize);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct WIN32_FIND_DATA
@@ -264,4 +285,3 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool FindClose(IntPtr hFindFile);
 }
-

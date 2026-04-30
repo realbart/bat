@@ -1,8 +1,11 @@
+using Bat.Context;
 using BatD.Files;
-using Context;
+using global::Context;
 
-namespace Bat.Context;
+namespace BatD.Context;
 
+// todo: rename context and icontext to session and isession
+// todo: add flag that causes the inner context to be cloned only on write
 public abstract class Context : IContext
 {
     public Context(IFileSystem fileSystem, IConsole console)
@@ -11,8 +14,10 @@ public abstract class Context : IContext
         _macros = new(StringComparer.OrdinalIgnoreCase);
         CommandHistory = [];
         HistorySize = 50;
+        // todo: no hard coded current drives, except in one place.
+        // todo: use currentBatPath instead of current drive + path.
         CurrentFolders = [];
-        CurrentDrive = 'C'; // todo
+        CurrentDrive = 'C';
         this.fileSystem = fileSystem;
         this.Console = console;
     }
@@ -46,7 +51,7 @@ public abstract class Context : IContext
     public char CurrentDrive { get; protected set; }
 
     public string[] CurrentPath => CurrentFolders.TryGetValue(CurrentDrive, out var path) ? path : [];
-    public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(CurrentDrive, CurrentPath);
+    public string CurrentPathDisplayName => fileSystem.GetFullPathDisplayName(new BatPath(CurrentDrive, CurrentPath));
     public IFileSystem FileSystem => fileSystem;
 
     // Batch execution state (null only at startup)
@@ -93,14 +98,15 @@ public abstract class Context : IContext
         }
     }
 
-    public (bool Found, string NativePath) TryGetCurrentFolder()
+    public async Task<(bool Found, string NativePath)> TryGetCurrentFolderAsync()
     {
-        if (!fileSystem.DirectoryExistsAsync(CurrentDrive, CurrentPath).GetAwaiter().GetResult())
+        if (!await fileSystem.DirectoryExistsAsync(new BatPath(CurrentDrive, CurrentPath)))
             return (false, "");
-        return (true, fileSystem.GetNativePath(CurrentDrive, CurrentPath));
+        var hostPath = await fileSystem.GetNativePathAsync(new BatPath(CurrentDrive, CurrentPath));
+        return (true, hostPath.Path);
     }
 
-    protected void InitializeFromEnvironment()
+    protected async Task InitializeFromEnvironmentAsync()
     {
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
@@ -109,7 +115,7 @@ public abstract class Context : IContext
 
         if (EnvironmentVariables.TryGetValue("PATH", out var hostPath))
         {
-            EnvironmentVariables["PATH"] = BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
+            EnvironmentVariables["PATH"] = await BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
         }
 
         if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
@@ -119,7 +125,7 @@ public abstract class Context : IContext
 
         // Point ComSpec at bat's own cmd.exe (like cmd.exe points at itself)
         var cmdExePath = Path.Combine(AppContext.BaseDirectory, "cmd.exe");
-        var virtualCmdPath = BatD.Files.PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
+        var virtualCmdPath = await BatD.Files.PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
         if (virtualCmdPath != null)
             EnvironmentVariables["ComSpec"] = virtualCmdPath;
     }

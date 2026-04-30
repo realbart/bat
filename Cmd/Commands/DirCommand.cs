@@ -1,6 +1,6 @@
-using Bat.Context;
 using Bat.Execution;
 using Bat.Nodes;
+using BatD.Files;
 using Context;
 
 namespace Bat.Commands;
@@ -89,45 +89,45 @@ internal class DirCommand : ICommand
 
         if (argPath.Length > 0) (drive, path, pattern) = DosPath.ParseArgPath(argPath, drive, path);
 
-        await ListDirectoryAsync(console, context, drive, path, opts, pattern, opts.Recursive);
+        await ListDirectoryAsync(console, context, new BatPath(drive, path), opts, pattern, opts.Recursive);
         return 0;
     }
 
-    private static async Task ListDirectoryAsync(IConsole console, IContext context, char drive, string[] path,
+    private static async Task ListDirectoryAsync(IConsole console, IContext context, BatPath dirPath,
         DirOptions opts, string pattern, bool recurse)
     {
-        var (found, entries) = await TryGetFilteredEntriesAsync(context, drive, path, pattern, opts);
+        var (found, entries) = await TryGetFilteredEntriesAsync(context, dirPath, pattern, opts);
         if (!found)
         {
             // Drive root unreachable (e.g. subst deleted): no header, specific message.
             // Drive reachable but subpath missing: header shown, "File Not Found".
-            var driveReachable = await context.FileSystem.DirectoryExistsAsync(drive, []);
-            if (!opts.BareNames && driveReachable) await WriteDirectoryHeaderAsync(console, context, drive, path);
+            var driveReachable = await context.FileSystem.DirectoryExistsAsync(new BatPath(dirPath.Drive, []));
+            if (!opts.BareNames && driveReachable) await WriteDirectoryHeaderAsync(console, context, dirPath.Drive, dirPath.Segments);
             await console.Out.WriteLineAsync(driveReachable ? "File Not Found" : "The system cannot find the path specified.");
             return;
         }
 
-        if (!opts.BareNames) await WriteDirectoryHeaderAsync(console, context, drive, path);
+        if (!opts.BareNames) await WriteDirectoryHeaderAsync(console, context, dirPath.Drive, dirPath.Segments);
 
         var (fileCount, dirCount, totalSize) = await WriteEntriesAsync(console, context, entries, opts);
 
-        if (!opts.BareNames) await WriteDirectorySummaryAsync(console, context, drive, fileCount, dirCount, totalSize, opts);
+        if (!opts.BareNames) await WriteDirectorySummaryAsync(console, context, dirPath.Drive, fileCount, dirCount, totalSize, opts);
 
         if (!recurse) return;
-        await foreach (var entry in context.FileSystem.EnumerateEntriesAsync(drive, path, "*"))
+        await foreach (var entry in context.FileSystem.EnumerateEntriesAsync(dirPath, "*"))
         {
             if (!entry.IsDirectory || entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 continue;
             if (entry.Name is "." or "..")
                 continue;
 
-            await ListDirectoryAsync(console, context, drive, [.. path, entry.Name], opts, pattern, recurse: true);
+            await ListDirectoryAsync(console, context, new BatPath(dirPath.Drive, [.. dirPath.Segments, entry.Name]), opts, pattern, recurse: true);
         }
     }
 
     private static async Task WriteDirectoryHeaderAsync(IConsole console, IContext context, char drive, string[] path)
     {
-        var displayPath = context.FileSystem.GetFullPathDisplayName(drive, path);
+        var displayPath = context.FileSystem.GetFullPathDisplayName(new BatPath(drive, path));
         var serial = await context.FileSystem.GetVolumeSerialNumberAsync(drive);
         var serialStr = $"{serial >> 16:X4}-{serial & 0xFFFF:X4}";
         var label = await context.FileSystem.GetVolumeLabelAsync(drive);
@@ -151,12 +151,12 @@ internal class DirCommand : ICommand
         await console.Out.WriteLineAsync($"{dirCount,16} Dir(s)  {freeStr} bytes free");
     }
 
-    private static async Task<(bool Found, List<DosFileEntry> Entries)> TryGetFilteredEntriesAsync(IContext context, char drive, string[] path, string pattern, DirOptions opts)
+    private static async Task<(bool Found, List<DosFileEntry> Entries)> TryGetFilteredEntriesAsync(IContext context, BatPath dirPath, string pattern, DirOptions opts)
     {
-        if (!await context.FileSystem.DirectoryExistsAsync(drive, path))
+        if (!await context.FileSystem.DirectoryExistsAsync(dirPath))
             return (false, []);
 
-        var entries = await context.FileSystem.EnumerateEntriesAsync(drive, path, pattern).ToListAsync();
+        var entries = await context.FileSystem.EnumerateEntriesAsync(dirPath, pattern).ToListAsync();
 
         IEnumerable<DosFileEntry> filtered = entries;
         if (opts.AttributeFilter.Length > 0) filtered = filtered.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));

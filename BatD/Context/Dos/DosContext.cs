@@ -1,13 +1,14 @@
+using BatD.Context;
 using BatD.Files;
-using Context;
+using global::Context;
 
-namespace Bat.Context.Dos;
+namespace BatD.Context.Dos;
 
-public class DosContext : Context
+public class DosContext : global::BatD.Context.Context
 {
     public DosContext(DosFileSystem fs, global::Context.IConsole console) : base(fs, console)
     {
-        InitializeFromEnvironment();
+        InitializeFromEnvironmentAsync().GetAwaiter().GetResult();
     }
 
     private DosContext(DosFileSystem fs, global::Context.IConsole console, DosContext inner) : base(fs, console, inner)
@@ -47,7 +48,7 @@ public class DosContext : Context
             if (!bareDrive && !absolutePath) continue;
 
             var toTranslate = bareDrive ? value + @"\" : value;
-            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem);
+            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(translated))
                 EnvironmentVariables.Remove(key);
             else

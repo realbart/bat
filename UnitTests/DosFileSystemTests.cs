@@ -1,5 +1,5 @@
 #if WINDOWS
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 using Context;
 
 namespace Bat.UnitTests;
@@ -7,22 +7,22 @@ namespace Bat.UnitTests;
 [TestClass]
 public class DosFileSystemTests : IDisposable
 {
-    private readonly string _testRoot;
+    private readonly HostPath _testRoot;
     private readonly DosFileSystem _fs;
     private bool _disposed;
 
     public DosFileSystemTests()
     {
-        _testRoot = Path.Combine(Path.GetTempPath(), $"BatTest_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_testRoot);
-        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot });
+        _testRoot = new HostPath(Path.Combine(Path.GetTempPath(), $"BatTest_{Guid.NewGuid():N}"));
+        Directory.CreateDirectory(_testRoot.Path);
+        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot.Path });
     }
 
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
-        if (disposing && Directory.Exists(_testRoot))
-            Directory.Delete(_testRoot, recursive: true);
+        if (disposing && Directory.Exists(_testRoot.Path))
+            Directory.Delete(_testRoot.Path, recursive: true);
         _disposed = true;
     }
 
@@ -35,23 +35,25 @@ public class DosFileSystemTests : IDisposable
     // ── GetNativePath ────────────────────────────────────────────────────────
 
     [TestMethod]
-    public void GetNativePath_RootPath_ReturnsRoot()
+    public async Task GetNativePath_RootPath_ReturnsRoot()
     {
-        Assert.AreEqual(_testRoot, _fs.GetNativePath('Z', []));
+        var result = await _fs.GetNativePathAsync(new BatPath('Z', []));
+        Assert.AreEqual(_testRoot.Path, result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_WithSegments_CombinesCorrectly()
+    public async Task GetNativePath_WithSegments_CombinesCorrectly()
     {
-        var expected = Path.Combine(_testRoot, "Users", "test.txt");
-        Assert.AreEqual(expected, _fs.GetNativePath('Z', ["Users", "test.txt"]));
+        var expected = Path.Combine(_testRoot.Path, "Users", "test.txt");
+        var result = await _fs.GetNativePathAsync(new BatPath('Z', ["Users", "test.txt"]));
+        Assert.AreEqual(expected, result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_UnmappedDrive_ReturnsNonExistentPath()
+    public async Task GetNativePath_UnmappedDrive_ReturnsNonExistentPath()
     {
-        var result = _fs.GetNativePath('X', []);
-        Assert.IsFalse(Directory.Exists(result), "Unmapped drive must not resolve to an existing directory");
+        var result = await _fs.GetNativePathAsync(new BatPath('X', []));
+        Assert.IsFalse(Directory.Exists(result.Path), "Unmapped drive must not resolve to an existing directory");
     }
 
     // ── FileExists / DirectoryExists ─────────────────────────────────────────
@@ -59,7 +61,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void FileExists_ExistingFile_ReturnsTrue()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "test.txt"), "content");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "test.txt"), "content");
         Assert.IsTrue(_fs.FileExists('Z', ["test.txt"]));
     }
 
@@ -72,7 +74,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void DirectoryExists_ExistingDir_ReturnsTrue()
     {
-        Directory.CreateDirectory(Path.Combine(_testRoot, "testdir"));
+        Directory.CreateDirectory(Path.Combine(_testRoot.Path, "testdir"));
         Assert.IsTrue(_fs.DirectoryExists('Z', ["testdir"]));
     }
 
@@ -88,20 +90,20 @@ public class DosFileSystemTests : IDisposable
     public void CreateDirectory_CreatesDirectory()
     {
         _fs.CreateDirectory('Z', ["newdir"]);
-        Assert.IsTrue(Directory.Exists(Path.Combine(_testRoot, "newdir")));
+        Assert.IsTrue(Directory.Exists(Path.Combine(_testRoot.Path, "newdir")));
     }
 
     [TestMethod]
     public void CreateDirectory_Nested_CreatesParents()
     {
         _fs.CreateDirectory('Z', ["parent", "child", "grandchild"]);
-        Assert.IsTrue(Directory.Exists(Path.Combine(_testRoot, "parent", "child", "grandchild")));
+        Assert.IsTrue(Directory.Exists(Path.Combine(_testRoot.Path, "parent", "child", "grandchild")));
     }
 
     [TestMethod]
     public void DeleteDirectory_RemovesDirectory()
     {
-        var dir = Path.Combine(_testRoot, "todelete");
+        var dir = Path.Combine(_testRoot.Path, "todelete");
         Directory.CreateDirectory(dir);
         _fs.DeleteDirectory('Z', ["todelete"], recursive: false);
         Assert.IsFalse(Directory.Exists(dir));
@@ -110,7 +112,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void DeleteDirectory_Recursive_RemovesContents()
     {
-        var dir = Path.Combine(_testRoot, "parent");
+        var dir = Path.Combine(_testRoot.Path, "parent");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "child.txt"), "");
         _fs.DeleteDirectory('Z', ["parent"], recursive: true);
@@ -124,9 +126,9 @@ public class DosFileSystemTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        Directory.CreateDirectory(Path.Combine(_testRoot, "dir1"));
-        File.WriteAllText(Path.Combine(_testRoot, "file1.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "file2.log"), "");
+        Directory.CreateDirectory(Path.Combine(_testRoot.Path, "dir1"));
+        File.WriteAllText(Path.Combine(_testRoot.Path, "file1.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "file2.log"), "");
 
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
 
@@ -140,9 +142,9 @@ public class DosFileSystemTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        File.WriteAllText(Path.Combine(_testRoot, "test.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "test.log"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "other.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "test.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "test.log"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "other.txt"), "");
 
         var entries = _fs.EnumerateEntries('Z', [], "test.*").ToList();
 
@@ -165,7 +167,7 @@ public class DosFileSystemTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         var longName = "This is a very long file name that definitely exceeds 8.3 format.txt";
-        File.WriteAllText(Path.Combine(_testRoot, longName), "test");
+        File.WriteAllText(Path.Combine(_testRoot.Path, longName), "test");
 
         var entries = _fs.EnumerateEntries('Z', [], "*").ToList();
         var entry = entries.Single(e => e.Name == longName);
@@ -180,7 +182,7 @@ public class DosFileSystemTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        File.WriteAllText(Path.Combine(_testRoot, "short.tx"), "test");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "short.tx"), "test");
 
         var entries = _fs.EnumerateEntries('Z', [], "short.tx").ToList();
         var entry = entries.Single();
@@ -193,9 +195,9 @@ public class DosFileSystemTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        File.WriteAllText(Path.Combine(_testRoot, "VeryLongFileName1.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "AnotherVeryLongFileName2.txt"), "");
-        File.WriteAllText(Path.Combine(_testRoot, "YetAnotherExtremelyLongFileName3.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "VeryLongFileName1.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "AnotherVeryLongFileName2.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "YetAnotherExtremelyLongFileName3.txt"), "");
 
         var entries = _fs.EnumerateEntries('Z', [], "*.txt").ToList();
 
@@ -211,7 +213,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void ReadAllText_ReturnsContent()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "content.txt"), "Hello World");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "content.txt"), "Hello World");
         Assert.AreEqual("Hello World", _fs.ReadAllText('Z', ["content.txt"]));
     }
 
@@ -219,13 +221,13 @@ public class DosFileSystemTests : IDisposable
     public void WriteAllText_WritesContent()
     {
         _fs.WriteAllText('Z', ["written.txt"], "written content");
-        Assert.AreEqual("written content", File.ReadAllText(Path.Combine(_testRoot, "written.txt")));
+        Assert.AreEqual("written content", File.ReadAllText(Path.Combine(_testRoot.Path, "written.txt")));
     }
 
     [TestMethod]
     public void OpenRead_ReturnsReadableStream()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "stream.txt"), "data");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "stream.txt"), "data");
         using var stream = _fs.OpenRead('Z', ["stream.txt"]);
         using var reader = new StreamReader(stream);
         Assert.AreEqual("data", reader.ReadToEnd());
@@ -234,11 +236,11 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void OpenWrite_Append_AppendsToFile()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "append.txt"), "first");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "append.txt"), "first");
         using (var stream = _fs.OpenWrite('Z', ["append.txt"], append: true))
         using (var writer = new StreamWriter(stream))
             writer.Write("second");
-        Assert.AreEqual("firstsecond", File.ReadAllText(Path.Combine(_testRoot, "append.txt")));
+        Assert.AreEqual("firstsecond", File.ReadAllText(Path.Combine(_testRoot.Path, "append.txt")));
     }
 
     // ── DeleteFile / CopyFile / MoveFile / RenameFile ─────────────────────────
@@ -246,7 +248,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void DeleteFile_RemovesFile()
     {
-        var file = Path.Combine(_testRoot, "delete_me.txt");
+        var file = Path.Combine(_testRoot.Path, "delete_me.txt");
         File.WriteAllText(file, "");
         _fs.DeleteFile('Z', ["delete_me.txt"]);
         Assert.IsFalse(File.Exists(file));
@@ -255,27 +257,27 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void CopyFile_CopiesContent()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "source.txt"), "test content");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "source.txt"), "test content");
         _fs.CopyFile('Z', ["source.txt"], 'Z', ["dest.txt"], overwrite: false);
-        Assert.AreEqual("test content", File.ReadAllText(Path.Combine(_testRoot, "dest.txt")));
+        Assert.AreEqual("test content", File.ReadAllText(Path.Combine(_testRoot.Path, "dest.txt")));
     }
 
     [TestMethod]
     public void MoveFile_MovesFile()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "move_src.txt"), "moving");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "move_src.txt"), "moving");
         _fs.MoveFile('Z', ["move_src.txt"], 'Z', ["move_dst.txt"]);
-        Assert.IsFalse(File.Exists(Path.Combine(_testRoot, "move_src.txt")));
-        Assert.AreEqual("moving", File.ReadAllText(Path.Combine(_testRoot, "move_dst.txt")));
+        Assert.IsFalse(File.Exists(Path.Combine(_testRoot.Path, "move_src.txt")));
+        Assert.AreEqual("moving", File.ReadAllText(Path.Combine(_testRoot.Path, "move_dst.txt")));
     }
 
     [TestMethod]
     public void RenameFile_RenamesInPlace()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "old.txt"), "rename");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "old.txt"), "rename");
         _fs.RenameFile('Z', ["old.txt"], "new.txt");
-        Assert.IsFalse(File.Exists(Path.Combine(_testRoot, "old.txt")));
-        Assert.AreEqual("rename", File.ReadAllText(Path.Combine(_testRoot, "new.txt")));
+        Assert.IsFalse(File.Exists(Path.Combine(_testRoot.Path, "old.txt")));
+        Assert.AreEqual("rename", File.ReadAllText(Path.Combine(_testRoot.Path, "new.txt")));
     }
 
     // ── Metadata ─────────────────────────────────────────────────────────────
@@ -283,7 +285,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void GetFileSize_ReturnsCorrectSize()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "sized.txt"), "12345");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "sized.txt"), "12345");
         var size = _fs.GetFileSize('Z', ["sized.txt"]);
         Assert.IsTrue(size > 0);
     }
@@ -291,7 +293,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void GetLastWriteTime_ReturnsRecentTime()
     {
-        File.WriteAllText(Path.Combine(_testRoot, "timestamped.txt"), "");
+        File.WriteAllText(Path.Combine(_testRoot.Path, "timestamped.txt"), "");
         var t = _fs.GetLastWriteTime('Z', ["timestamped.txt"]);
         Assert.IsTrue(t > DateTime.Now.AddMinutes(-1));
     }
@@ -299,7 +301,7 @@ public class DosFileSystemTests : IDisposable
     [TestMethod]
     public void GetAttributes_SetAttributes_RoundTrips()
     {
-        var file = Path.Combine(_testRoot, "attr.txt");
+        var file = Path.Combine(_testRoot.Path, "attr.txt");
         File.WriteAllText(file, "");
         _fs.SetAttributes('Z', ["attr.txt"], FileAttributes.ReadOnly);
         var attrs = _fs.GetAttributes('Z', ["attr.txt"]);

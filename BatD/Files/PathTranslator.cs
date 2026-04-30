@@ -1,4 +1,4 @@
-using Context;
+using global::Context;
 
 namespace BatD.Files;
 
@@ -8,6 +8,8 @@ namespace BatD.Files;
 /// - Context initialization: translate host %PATH% to Bat virtual drives
 /// - Process.Start: translate Bat paths back to host native paths
 /// </summary>
+// todo: use HostPath and BatPath
+// todo: Use the IFileSystem methods for translating paths
 public static class PathTranslator
 {
     /// <summary>
@@ -15,13 +17,13 @@ public static class PathTranslator
     /// Example: "C:\Windows;C:\Program Files\Git\cmd" with Z:->C:\ becomes "Z:\Windows;Z:\Program Files\Git\cmd"
     /// On Linux: "/usr/bin:/usr/local/bin" with Z:->/  becomes "Z:\usr\bin;Z:\usr\local\bin"
     /// </summary>
-    public static string TranslateHostPathToBat(string hostPath, IFileSystem fileSystem)
+    public static async Task<string> TranslateHostPathToBat(string hostPath, IFileSystem fileSystem)
     {
         var entries = hostPath.Split(fileSystem.NativePathSeparator, StringSplitOptions.RemoveEmptyEntries);
         var translated = new List<string>();
         foreach (var entry in entries)
         {
-            var batPath = TranslateHostPathEntryToBat(entry, fileSystem);
+            var batPath = await TranslateHostPathEntryToBat(entry, fileSystem);
             if (batPath != null) translated.Add(batPath);
         }
         return string.Join(';', translated);
@@ -32,28 +34,30 @@ public static class PathTranslator
     /// Example: "Z:\Windows\System32\cmd.exe" with Z:->C:\ becomes "C:\Windows\System32\cmd.exe"
     /// This is already implemented as GetNativePath - this is just a convenience wrapper.
     /// </summary>
-    public static string TranslateBatPathToHost(string batPath, IFileSystem fileSystem)
+    public static async Task<string> TranslateBatPathToHost(string batPath, IFileSystem fileSystem)
     {
         if (batPath.Length < 2 || !char.IsLetter(batPath[0]) || batPath[1] != ':') return batPath;
 
         var drive = char.ToUpperInvariant(batPath[0]);
         var remainder = batPath.Length > 3 ? batPath[3..] : "";
         var segments = remainder.Length > 0 ? remainder.Split('\\', StringSplitOptions.RemoveEmptyEntries) : [];
-        return fileSystem.GetNativePath(drive, segments);
+        var hostPath = await fileSystem.GetNativePathAsync(new BatPath(drive, segments));
+        return hostPath.Path;
     }
 
     /// <summary>
     /// Translates a single host path to a Bat virtual path.
     /// Returns null if the path doesn't fall under any mapped drive.
     /// </summary>
-    public static string? TranslateHostPathEntryToBat(string hostEntry, IFileSystem fileSystem)
+    public static async Task<string?> TranslateHostPathEntryToBat(string hostEntry, IFileSystem fileSystem)
     {
         var sep = fileSystem.NativeDirectorySeparator;
         var entryNorm = hostEntry.TrimEnd(sep);
 
         for (var drive = 'A'; drive <= 'Z'; drive++)
         {
-            if (!TryGetRootForDrive(fileSystem, drive, out var nativeRoot))
+            var (found, nativeRoot) = await TryGetRootForDriveAsync(fileSystem, drive);
+            if (!found)
                 continue;
 
             var rootNorm = nativeRoot.TrimEnd(sep);
@@ -79,43 +83,47 @@ public static class PathTranslator
     /// TODO: Cache the translated dictionary per environment snapshot for performance.
     /// Current cost is O(variables × drives) per process launch.
     /// </remarks>
-    public static Dictionary<string, string> TranslateBatEnvironmentToHost(
+    public static async Task<Dictionary<string, string>> TranslateBatEnvironmentToHost(
         IReadOnlyDictionary<string, string> batEnv, IFileSystem fileSystem)
     {
         var result = new Dictionary<string, string>(batEnv.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var (key, value) in batEnv)
         {
             result[key] = key.Equals("PATH", StringComparison.OrdinalIgnoreCase)
-                ? TranslateBatPathListToHost(value, fileSystem)
-                : TranslateBatValueToHost(value, fileSystem);
+                ? await TranslateBatPathListToHost(value, fileSystem)
+                : await TranslateBatValueToHost(value, fileSystem);
         }
         return result;
     }
 
-    private static string TranslateBatPathListToHost(string batPathList, IFileSystem fileSystem)
+    private static async Task<string> TranslateBatPathListToHost(string batPathList, IFileSystem fileSystem)
     {
         var sep = fileSystem.NativePathSeparator;
         var entries = batPathList.Split(';', StringSplitOptions.RemoveEmptyEntries);
-        return string.Join(sep, entries.Select(e => TranslateBatPathToHost(e, fileSystem)));
+        var translated = new List<string>(entries.Length);
+        foreach (var e in entries)
+            translated.Add(await TranslateBatPathToHost(e, fileSystem));
+        return string.Join(sep, translated);
     }
 
-    private static string TranslateBatValueToHost(string value, IFileSystem fileSystem)
+    private static async Task<string> TranslateBatValueToHost(string value, IFileSystem fileSystem)
     {
         if (value.Length >= 3 && char.IsLetter(value[0]) && value[1] == ':' && value[2] == '\\')
-            return TranslateBatPathToHost(value, fileSystem);
+            return await TranslateBatPathToHost(value, fileSystem);
 
         if (value.Contains(';'))
         {
             var entries = value.Split(';', StringSplitOptions.RemoveEmptyEntries);
             if (entries.Any(e => e.Length >= 3 && char.IsLetter(e[0]) && e[1] == ':'))
-                return TranslateBatPathListToHost(value, fileSystem);
+                return await TranslateBatPathListToHost(value, fileSystem);
         }
 
         return value;
     }
 
-    private static bool TryGetRootForDrive(IFileSystem fileSystem, char drive, out string root)
+    private static async Task<(bool Success, string Root)> TryGetRootForDriveAsync(IFileSystem fileSystem, char drive)
     {
-        return fileSystem.TryGetNativePath(drive, [], out root);
+        var (success, hostPath) = await fileSystem.TryGetNativePathAsync(new BatPath(drive, []));
+        return (success, success ? hostPath.Path : "");
     }
 }

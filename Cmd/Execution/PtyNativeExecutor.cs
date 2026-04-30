@@ -16,8 +16,8 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
     public async Task<int> ExecuteAsync(string executablePath, string arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
         var context = batchContext.Context;
-        var workingDir = context.FileSystem.GetNativePath(new BatPath(context.CurrentDrive, context.CurrentPath));
-        var hostExecutablePath = PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
+        var workingDir = await context.FileSystem.GetNativePathAsync(new BatPath(context.CurrentDrive, context.CurrentPath));
+        var hostExecutablePath = await PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
         var hasRedirections = redirections.Count > 0;
 
         var usePty = !hasRedirections && waitForExit && context.Console.IsInteractive && !context.Console.IsNative;
@@ -26,24 +26,24 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         {
             try
             {
-                return await ExecuteWithPtyAsync(hostExecutablePath, arguments, workingDir, context);
+                return await ExecuteWithPtyAsync(hostExecutablePath, arguments, workingDir.Path, context);
             }
             catch (Exception ex)
             {
                 // ConPTY failed — fall back to regular process and report
                 await context.Console.Error.WriteLineAsync($"[pty] {ex.Message} — falling back");
-                return await ExecuteWithProcessAsync(hostExecutablePath, arguments, workingDir, context, false);
+                return await ExecuteWithProcessAsync(hostExecutablePath, arguments, workingDir.Path, context, false);
             }
         }
 
-        return await ExecuteWithProcessAsync(hostExecutablePath, arguments, workingDir, context, hasRedirections);
+        return await ExecuteWithProcessAsync(hostExecutablePath, arguments, workingDir.Path, context, hasRedirections);
     }
 
     private static async Task<int> ExecuteWithPtyAsync(string executable, string arguments, string workingDir, global::Context.IContext context)
     {
         using var pty = CreatePty();
 
-        var hostEnv = PathTranslator.TranslateBatEnvironmentToHost(
+        var hostEnv = await PathTranslator.TranslateBatEnvironmentToHost(
             (IReadOnlyDictionary<string, string>)context.EnvironmentVariables,
             context.FileSystem);
 
@@ -131,7 +131,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         };
         if (!psi.UseShellExecute)
         {
-            foreach (var (key, value) in PathTranslator.TranslateBatEnvironmentToHost(
+            foreach (var (key, value) in await PathTranslator.TranslateBatEnvironmentToHost(
                 (IReadOnlyDictionary<string, string>)context.EnvironmentVariables, context.FileSystem))
                 psi.Environment[key] = value;
         }

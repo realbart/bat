@@ -82,19 +82,19 @@ internal class Dispatcher : IDispatcher
         }
     }
 
-    private static (char Drive, string[] Segments) ParseNativePath(string path, BatchContext bc)
+    private static BatPath ParseNativePath(string path, BatchContext bc)
     {
         if (path.StartsWith('\\'))
-            return (bc.Context.CurrentDrive, path[1..].Split('\\', StringSplitOptions.RemoveEmptyEntries));
+            return new BatPath(bc.Context.CurrentDrive, path[1..].Split('\\', StringSplitOptions.RemoveEmptyEntries));
 
         if (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':')
         {
             var drive = char.ToUpperInvariant(path[0]);
             var remainder = path.Length >= 3 && path[2] == '\\' ? path[3..] : path[2..];
-            return (drive, remainder.Split('\\', StringSplitOptions.RemoveEmptyEntries));
+            return new BatPath(drive, remainder.Split('\\', StringSplitOptions.RemoveEmptyEntries));
         }
 
-        return (bc.Context.CurrentDrive, [.. bc.Context.CurrentPath, .. path.Split('\\', StringSplitOptions.RemoveEmptyEntries)]);
+        return new BatPath(bc.Context.CurrentDrive, [.. bc.Context.CurrentPath, .. path.Split('\\', StringSplitOptions.RemoveEmptyEntries)]);
     }
 
     private static string ExtractValue(IReadOnlyList<IToken> tokens)
@@ -130,8 +130,8 @@ internal class Dispatcher : IDispatcher
                     conditionMet = bc.Context.ErrorCode >= level;
                 break;
             case IfOperator.Exist:
-                var (drive, segments) = ParseNativePath(right, bc);
-                conditionMet = await bc.Context.FileSystem.FileExistsAsync(drive, segments) || await bc.Context.FileSystem.DirectoryExistsAsync(drive, segments);
+                var existPath = ParseNativePath(right, bc);
+                conditionMet = await bc.Context.FileSystem.FileExistsAsync(existPath) || await bc.Context.FileSystem.DirectoryExistsAsync(existPath);
                 break;
             case IfOperator.Defined:
                 conditionMet = bc.Context.EnvironmentVariables.ContainsKey(right);
@@ -185,7 +185,7 @@ internal class Dispatcher : IDispatcher
         if (rawName.Length == 2 && char.IsAsciiLetter(rawName[0]) && rawName[1] == ':')
         {
             var targetDrive = char.ToUpperInvariant(rawName[0]);
-            if (await bc.Context.FileSystem.DirectoryExistsAsync(targetDrive, []))
+            if (await bc.Context.FileSystem.DirectoryExistsAsync(new BatPath(targetDrive, [])))
             {
                 bc.Context.SetCurrentDrive(targetDrive);
                 return 0;
@@ -212,7 +212,7 @@ internal class Dispatcher : IDispatcher
             return 1;
         }
 
-        var (folderFound, _) = bc.Context.TryGetCurrentFolder();
+        var (folderFound, _) = await bc.Context.TryGetCurrentFolderAsync();
         if (!folderFound)
         {
             await bc.Console.Error.WriteLineAsync("The current directory is invalid.");
@@ -221,7 +221,7 @@ internal class Dispatcher : IDispatcher
 
         return await WithRedirections(bc, cmd.Redirections, async () =>
         {
-            var executor = GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
+            var executor = await GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
             var arguments = string.Join(" ", cmd.Tail.OfType<TextToken>().Select(t => t.Value));
             return await executor.ExecuteAsync(executablePath, arguments, bc, cmd.Redirections);
         });
@@ -318,14 +318,14 @@ internal class Dispatcher : IDispatcher
             ((ICommand)Activator.CreateInstance(commandType)!).ExecuteAsync(args, bc, cmd.Redirections));
     }
 
-    private static IExecutor GetExecutor(IConsole console, string executablePath, global::Context.IFileSystem fileSystem)
+    private static async Task<IExecutor> GetExecutor(IConsole console, string executablePath, global::Context.IFileSystem fileSystem)
     {
         var ext = Path.GetExtension(executablePath).ToLowerInvariant();
 
         if (ext is ".bat" or ".cmd")
             return new BatchExecutor();
 
-        var hostPath = PathTranslator.TranslateBatPathToHost(executablePath, fileSystem);
+        var hostPath = await PathTranslator.TranslateBatPathToHost(executablePath, fileSystem);
         var peType = ExecutableTypeDetector.GetExecutableType(hostPath);
 
         return peType switch

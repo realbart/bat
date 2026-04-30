@@ -1,4 +1,4 @@
-using Bat.Context.Ux;
+using BatD.Context.Ux;
 using Context;
 
 namespace Bat.UnitTests;
@@ -34,29 +34,31 @@ public class UxFileSystemTests : IDisposable
     // ── GetNativePath ────────────────────────────────────────────────────────
 
     [TestMethod]
-    public void GetNativePath_RootPath_ReturnsRoot()
+    public async Task GetNativePath_RootPath_ReturnsRoot()
     {
-        Assert.AreEqual(_testRoot, _fs.GetNativePath('Z', []));
+        var result = await _fs.GetNativePathAsync(new BatPath('Z', []));
+        Assert.AreEqual(_testRoot, result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_WithSegments_JoinsWithForwardSlash()
+    public async Task GetNativePath_WithSegments_JoinsWithForwardSlash()
     {
         var expected = _testRoot.TrimEnd('/') + "/Users/test.txt";
-        Assert.AreEqual(expected, _fs.GetNativePath('Z', ["Users", "test.txt"]));
+        var result = await _fs.GetNativePathAsync(new BatPath('Z', ["Users", "test.txt"]));
+        Assert.AreEqual(expected, result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_UnmappedDrive_ReturnsFallbackPath()
+    public async Task GetNativePath_UnmappedDrive_ReturnsFallbackPath()
     {
-        var result = _fs.GetNativePath('Q', []);
-        Assert.AreEqual("/q:", result);
+        var result = await _fs.GetNativePathAsync(new BatPath('Q', []));
+        Assert.AreEqual("/q:", result.Path);
     }
 
     [TestMethod]
     public void GetFullPathDisplayName_ShowsWindowsStylePath()
     {
-        var display = _fs.GetFullPathDisplayName('Z', ["Projects", "bat"]);
+        var display = _fs.GetFullPathDisplayName(new BatPath('Z', ["Projects", "bat"]));
         Assert.AreEqual(@"Z:\Projects\bat", display);
     }
 

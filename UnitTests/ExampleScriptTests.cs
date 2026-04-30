@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using Bat.Execution;
-using Context;
+using BatD.Files;
 
 namespace Bat.UnitTests;
 
@@ -183,7 +183,7 @@ public class ExampleScriptTests
         var scriptDrive = char.ToUpperInvariant(scriptDir[0]);
         var driveRoot = $"{scriptDrive}:\\";
 
-        var fs = new Bat.Context.Dos.DosFileSystem(new Dictionary<char, string> { [scriptDrive] = driveRoot });
+        var fs = new BatD.Context.Dos.DosFileSystem(new Dictionary<char, string> { [scriptDrive] = driveRoot });
         var console = new TestConsole { WindowWidth = CmdConsoleWidth.Value };
         var ctx = new TestCommandContext(fs) { Console = console, FileCulture = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture) };
         ctx.SetCurrentDrive(scriptDrive);
@@ -220,9 +220,9 @@ public class ExampleScriptTests
         var driveRoot = $"{scriptDrive}:\\";
 
 #if WINDOWS
-        var fs = new Bat.Context.Dos.DosFileSystem(new Dictionary<char, string> { [scriptDrive] = driveRoot });
+        var fs = new BatD.Context.Dos.DosFileSystem(new Dictionary<char, string> { [scriptDrive] = driveRoot });
 #else
-        var fs = new Bat.Context.Ux.UxFileSystemAdapter(new Dictionary<char, string> { [scriptDrive] = driveRoot });
+        var fs = new BatD.Context.Ux.UxFileSystemAdapter(new Dictionary<char, string> { [scriptDrive] = driveRoot });
 #endif
         var console = new TestConsole();
         var ctx = new TestCommandContext(fs) { Console = console, FileCulture = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture) };

@@ -142,8 +142,8 @@ internal static class Expander
             // Make absolute if relative
             if (!Path.IsPathRooted(fullPath) && bc.Context.FileSystem != null)
             {
-                var cwd = bc.Context.FileSystem.GetNativePath(bc.Context.CurrentDrive, bc.Context.CurrentPath);
-                fullPath = Path.GetFullPath(Path.Combine(cwd, fullPath));
+                var cwd = bc.Context.FileSystem.GetNativePathAsync(new BatPath(bc.Context.CurrentDrive, bc.Context.CurrentPath)).GetAwaiter().GetResult();
+                fullPath = Path.GetFullPath(Path.Combine(cwd.Path, fullPath));
             }
         }
 

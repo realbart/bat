@@ -1,6 +1,6 @@
 using Bat.Commands;
 using Bat.Console;
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 using Bat.Parsing;
 using Bat.Tokens;
 

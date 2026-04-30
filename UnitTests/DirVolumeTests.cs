@@ -1,6 +1,6 @@
 #if UNIX
 using Bat.Commands;
-using Bat.Context.Ux;
+using BatD.Context.Ux;
 using Bat.Execution;
 using Context;
 

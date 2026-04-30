@@ -102,8 +102,8 @@ internal class StartCommand : ICommand
         }
 
         var workingDir = startArgs.WorkingDirectory
-            ?? context.FileSystem.GetNativePath(context.CurrentDrive, context.CurrentPath);
-        var hostExecutablePath = PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
+            ?? (await context.FileSystem.GetNativePathAsync(new BatPath(context.CurrentDrive, context.CurrentPath))).Path;
+        var hostExecutablePath = await PathTranslator.TranslateBatPathToHost(executablePath, context.FileSystem);
 
         var psi = new ProcessStartInfo(hostExecutablePath, startArgs.Arguments)
         {
@@ -119,7 +119,7 @@ internal class StartCommand : ICommand
 
         if (!psi.UseShellExecute)
         {
-            foreach (var (key, value) in PathTranslator.TranslateBatEnvironmentToHost(
+            foreach (var (key, value) in await PathTranslator.TranslateBatEnvironmentToHost(
                 (IReadOnlyDictionary<string, string>)context.EnvironmentVariables, context.FileSystem))
                 psi.Environment[key] = value;
         }
@@ -274,7 +274,7 @@ internal class StartCommand : ICommand
         }
 
         var workingDir = startArgs.WorkingDirectory
-            ?? context.FileSystem.GetNativePath(context.CurrentDrive, context.CurrentPath);
+            ?? (await context.FileSystem.GetNativePathAsync(new BatPath(context.CurrentDrive, context.CurrentPath))).Path;
 
         var fullCommand = string.IsNullOrEmpty(arguments) ? batExePath : $"{batExePath} {arguments}";
 

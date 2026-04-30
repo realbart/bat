@@ -55,45 +55,42 @@ public static class Program
 
     private static async Task<int> ListSubsts(IContext context, TextWriter output)
     {
-        foreach (var kvp in context.FileSystem.GetSubsts().OrderBy(k => k.Key))
+        foreach (var kvp in context.FileSystem.Substs.OrderBy(k => k.Key))
             await output.WriteLineAsync($"{kvp.Key}:\\: => {kvp.Value}");
         return 0;
     }
 
     private static async Task<int> DeleteSubst(IContext context, char drive, string driveArg, TextWriter output)
     {
-        if (!context.FileSystem.GetSubsts().ContainsKey(drive))
+        if (!context.FileSystem.Substs.ContainsKey(drive))
         {
             await output.WriteLineAsync($"Invalid parameter - {char.ToUpperInvariant(driveArg[0])}:");
             return 1;
         }
-        context.FileSystem.RemoveSubst(drive);
+        context.FileSystem.Substs.Remove(drive);
         return 0;
     }
 
     private static async Task<int> AssignSubst(IContext context, char drive, string driveArg, string pathArg, TextWriter output)
     {
-        if (context.FileSystem.GetSubsts().ContainsKey(drive))
+        if (context.FileSystem.Substs.ContainsKey(drive))
         {
             await output.WriteLineAsync("Drive already SUBSTed");
             return 1;
         }
 
-        var (targetDrive, targetSegments) = ParseDosPath(pathArg, context);
-        if (!await context.FileSystem.DirectoryExistsAsync(targetDrive, targetSegments))
+        var targetPath = ParseDosPath(pathArg, context);
+        if (!await context.FileSystem.DirectoryExistsAsync(targetPath))
         {
             await output.WriteLineAsync($"Path not found - {pathArg}");
             return 1;
         }
 
-        var batPath = targetSegments.Length == 0
-            ? $"{targetDrive}:\\"
-            : $"{targetDrive}:\\{string.Join("\\", targetSegments)}";
-        context.FileSystem.AddSubst(drive, batPath);
+        context.FileSystem.Substs.Add(drive, targetPath);
         return 0;
     }
 
-    private static (char Drive, string[] Segments) ParseDosPath(string path, IContext context)
+    private static BatPath ParseDosPath(string path, IContext context)
     {
         var drive = context.CurrentDrive;
         var rest = path;
@@ -119,7 +116,7 @@ public static class Program
             if (seg == ".." && segs.Count > 0) { segs.RemoveAt(segs.Count - 1); continue; }
             if (seg != "..") segs.Add(seg);
         }
-        return (drive, [..segs]);
+        return new BatPath(drive, [..segs]);
     }
 }
 #pragma warning restore CS8892, IDE0060

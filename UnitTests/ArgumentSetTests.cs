@@ -1,6 +1,6 @@
 using Bat.Commands;
-using Bat.Context;
 using Bat.Tokens;
+using BatD.Files;
 
 namespace Bat.UnitTests;
 

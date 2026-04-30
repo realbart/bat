@@ -1,5 +1,5 @@
-using Bat.Context.Dos;
-using Bat.Context.Ux;
+using BatD.Context.Dos;
+using BatD.Context.Ux;
 using Context;
 
 namespace Bat.UnitTests;

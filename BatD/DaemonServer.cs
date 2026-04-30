@@ -2,7 +2,7 @@ using Ipc;
 using System.Net.Sockets;
 using System.Reflection;
 
-namespace Bat.Daemon;
+namespace BatD;
 
 /// <summary>
 /// Headless daemon server that manages cmd sessions.
@@ -17,9 +17,9 @@ internal sealed class DaemonServer : IDisposable
 
     // Shared filesystem — visible to all sessions
 #if WINDOWS
-    private readonly Bat.Context.Dos.DosFileSystem _fileSystem = new();
+    private readonly BatD.Context.Dos.DosFileSystem _fileSystem = new();
 #else
-    private readonly Bat.Context.Ux.UxFileSystemAdapter _fileSystem = new();
+    private readonly BatD.Context.Ux.UxFileSystemAdapter _fileSystem = new();
 #endif
 
     // cmd.exe satellite loaded once at first session
@@ -146,9 +146,9 @@ internal sealed class DaemonServer : IDisposable
     private global::Context.IContext CreateContext(SocketConsole console)
     {
 #if WINDOWS
-        return new Bat.Context.Dos.DosContext(_fileSystem, console);
+        return new BatD.Context.Dos.DosContext(_fileSystem, console);
 #else
-        return new Bat.Context.Ux.UxContextAdapter(_fileSystem, console);
+        return new BatD.Context.Ux.UxContextAdapter(_fileSystem, console);
 #endif
     }
 

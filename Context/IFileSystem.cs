@@ -4,14 +4,16 @@ public interface IFileSystem
 {
     string GetFullPathDisplayName(BatPath path);
     string GetDisplayName(string segment);
-    string GetNativePath(BatPath path);
 
-    IReadOnlyDictionary<char, string> GetSubsts();
-    void AddSubst(char drive, string nativePath);
-    void RemoveSubst(char drive);
+    Task<HostPath> GetNativePathAsync(BatPath path, CancellationToken cancellationToken = default);
+    Task<BatPath> FromNativePathAsync(HostPath hostPath, CancellationToken cancellationToken = default);
 
-    // ── Async members ──────────────────────────────────────────────────────────
-
+    /// <summary>
+    /// A dictionary of mappings from drive letters to paths, representing the current state of the BAT's SUBSTs.
+    /// This dictionary is mutable and can be modified directly.
+    /// Make sure drive letters are uppercase, exist and that the paths are absolute and normalized, as they will be used for path resolution.
+    /// </summary>
+    Dictionary<char, BatPath> Substs { get; }
     Task<bool> FileExistsAsync(BatPath path, CancellationToken cancellationToken = default);
     Task<bool> DirectoryExistsAsync(BatPath path, CancellationToken cancellationToken = default);
     Task<bool> IsExecutableAsync(BatPath path, CancellationToken cancellationToken = default);
@@ -44,5 +46,5 @@ public interface IFileSystem
     char NativeDirectorySeparator { get; }
     char NativePathSeparator { get; }
 
-    bool TryGetNativePath(BatPath path, out string nativePath);
+    Task<(bool Success, HostPath Path)> TryGetNativePathAsync(BatPath path, CancellationToken cancellationToken = default);
 }

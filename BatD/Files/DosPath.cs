@@ -1,8 +1,9 @@
-namespace Bat.Context;
+namespace BatD.Files;
 
 /// <summary>
 /// DOS path parsing and manipulation utilities.
 /// </summary>
+// todo: add these as extension methods to BatPath.
 public static class DosPath
 {
     /// <summary>

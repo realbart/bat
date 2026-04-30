@@ -122,14 +122,14 @@ public static class Program
 
     private static async Task LoadMacroFileAsync(IContext context, string filePath, TextWriter output)
     {
-        var (drive, segments) = ParsePath(filePath, context);
-        if (!await context.FileSystem.FileExistsAsync(drive, segments))
+        var parsedPath = ParsePath(filePath, context);
+        if (!await context.FileSystem.FileExistsAsync(parsedPath))
         {
             await output.WriteLineAsync($"The system cannot find the file specified.");
             return;
         }
 
-        var content = await context.FileSystem.ReadAllTextAsync(drive, segments);
+        var content = await context.FileSystem.ReadAllTextAsync(parsedPath);
         foreach (var line in content.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries))
         {
             var eqIdx = line.IndexOf('=');
@@ -143,7 +143,7 @@ public static class Program
         }
     }
 
-    private static (char Drive, string[] Segments) ParsePath(string path, IContext context)
+    private static BatPath ParsePath(string path, IContext context)
     {
         var drive = context.CurrentDrive;
         var rest = path;
@@ -169,7 +169,7 @@ public static class Program
             if (seg == ".." && segs.Count > 0) { segs.RemoveAt(segs.Count - 1); continue; }
             if (seg != "..") segs.Add(seg);
         }
-        return (drive, [.. segs]);
+        return new BatPath(drive, [.. segs]);
     }
 }
 #pragma warning restore CS8892, IDE0060

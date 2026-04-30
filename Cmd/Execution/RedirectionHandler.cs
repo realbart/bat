@@ -60,8 +60,8 @@ internal sealed class RedirectionHandler : IDisposable
         if (targetText.Equals("nul", StringComparison.OrdinalIgnoreCase))
             return isError ? console.WithError(TextWriter.Null) : console.WithOutput(TextWriter.Null);
 
-        var (drive, path) = ResolvePath(ctx, targetText);
-        var stream = ctx.FileSystem.OpenWriteAsync(drive, path, append).GetAwaiter().GetResult();
+        var resolvedPath = ResolvePath(ctx, targetText);
+        var stream = ctx.FileSystem.OpenWriteAsync(resolvedPath, append).GetAwaiter().GetResult();
         var writer = new StreamWriter(stream) { AutoFlush = true, NewLine = "\r\n" };
         handler._streams.Add(writer);
         handler._streams.Add(stream);
@@ -70,8 +70,8 @@ internal sealed class RedirectionHandler : IDisposable
 
     private static IConsole ApplyInputRedirection(RedirectionHandler handler, IContext ctx, IConsole console, string targetText)
     {
-        var (drive, path) = ResolvePath(ctx, targetText);
-        var stream = ctx.FileSystem.OpenReadAsync(drive, path).GetAwaiter().GetResult();
+        var resolvedPath = ResolvePath(ctx, targetText);
+        var stream = ctx.FileSystem.OpenReadAsync(resolvedPath).GetAwaiter().GetResult();
         var reader = new StreamReader(stream);
         handler._streams.Add(reader);
         handler._streams.Add(stream);
@@ -88,7 +88,7 @@ internal sealed class RedirectionHandler : IDisposable
         return "";
     }
 
-    private static (char Drive, string[] Path) ResolvePath(IContext ctx, string filePath)
+    private static BatPath ResolvePath(IContext ctx, string filePath)
     {
         // Strip surrounding quotes — cmd.exe does this for redirect targets
         if (filePath.Length >= 2 && filePath[0] == '"' && filePath[^1] == '"')
@@ -106,7 +106,7 @@ internal sealed class RedirectionHandler : IDisposable
         if (pathPart.StartsWith('\\'))
         {
             var segments = pathPart.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
-            return (drive, segments);
+            return new BatPath(drive, segments);
         }
 
         var current = new List<string>(ctx.GetPathForDrive(drive));
@@ -121,7 +121,7 @@ internal sealed class RedirectionHandler : IDisposable
                 current.Add(part);
             }
         }
-        return (drive, [.. current]);
+        return new BatPath(drive, [.. current]);
     }
 
     public void Dispose()

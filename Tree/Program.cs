@@ -84,24 +84,24 @@ public static class Program
             (true, true) => ("`-", "+-", "  ", ": ", ":", "  ", ": ", "📁 ", "📄 ", "🖥️ ")
         };
 
-        var rootDisplay = context.FileSystem.GetFullPathDisplayName(drive, path);
+        var rootDisplay = context.FileSystem.GetFullPathDisplayName(new BatPath(drive, path));
         await context.Console.Out.WriteLineAsync($"{rootPrefix}{rootDisplay}");
 
         var initialIndent = hasE ? " " : "";
-        await PrintTree(drive, path, initialIndent);
+        await PrintTree(new BatPath(drive, path), initialIndent);
         return 0;
 
-        async Task PrintTree(char currentDrive, string[] currentPath, string prefix)
+        async Task PrintTree(BatPath currentPath, string prefix)
         {
             var directories = await context.FileSystem
-                .EnumerateEntriesAsync(currentDrive, currentPath, "*")
+                .EnumerateEntriesAsync(currentPath, "*")
                 .Where(e => e.IsDirectory)
                 .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                 .ToListAsync();
 
             var files = hasF
                 ? await context.FileSystem
-                    .EnumerateEntriesAsync(currentDrive, currentPath, "*")
+                    .EnumerateEntriesAsync(currentPath, "*")
                     .Where(e => !e.IsDirectory)
                     .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                     .ToListAsync()
@@ -148,7 +148,7 @@ public static class Program
                     continue;
                 }
 
-                await PrintTree(currentDrive, [.. currentPath, dir.Name], prefix + childIndent);
+                await PrintTree(new BatPath(currentPath.Drive, [.. currentPath.Segments, dir.Name]), prefix + childIndent);
             }
         }
     }

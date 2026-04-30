@@ -42,7 +42,7 @@ public class PromptExpanderTests
         public string[] GetPathForDrive(char drive) => [];
         public IReadOnlyDictionary<char, string[]> GetAllDrivePaths() => new Dictionary<char, string[]>();
         public void RestoreAllDrivePaths(Dictionary<char, string[]> paths) { }
-        public (bool Found, string NativePath) TryGetCurrentFolder() => (false, "");
+        public Task<(bool Found, string NativePath)> TryGetCurrentFolderAsync() => Task.FromResult((false, ""));
         public void ApplySnapshot(IContext other) { }
         public IContext StartNew(IConsole? console = null) => this;
     }

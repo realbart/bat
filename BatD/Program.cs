@@ -1,4 +1,4 @@
-namespace Bat.Daemon;
+namespace BatD;
 
 public static class Program
 {
@@ -7,7 +7,7 @@ public static class Program
         // batd runs as a windowless daemon (WinExe).
         // ConPTY creates its own pseudo-console - no AllocConsole() needed.
 
-        using var server = new DaemonServer();
+        using var server = new BatD.DaemonServer();
         var started = await server.ListenAsync();
         return started ? 0 : 0;
     }

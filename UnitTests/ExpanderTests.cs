@@ -1,5 +1,5 @@
 #if WINDOWS
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 using Bat.Execution;
 
 namespace Bat.UnitTests;

@@ -1,4 +1,4 @@
-using Bat.Daemon;
+using BatD;
 using Ipc;
 
 namespace Bat.UnitTests;

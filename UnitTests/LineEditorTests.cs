@@ -12,7 +12,7 @@ internal static class LineEditorExtensions
         editor.ReadLineAsync(prompt, context.StartNew(console)).GetAwaiter().GetResult();
 }
 
-internal class TestContext : Context.Context
+internal class TestContext : BatD.Context.Context
 {
     public TestContext(IConsole console) : base(new TestFileSystem(), console)
     {

@@ -1,8 +1,8 @@
 using System.Text;
-using Context;
+using global::Context;
 using Ipc;
 
-namespace Bat.Daemon;
+namespace BatD;
 
 /// <summary>
 /// IConsole implementation backed by a Unix domain socket connection.

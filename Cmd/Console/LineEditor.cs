@@ -469,7 +469,7 @@ internal class LineEditor
 
         var (drive, dir, prefix) = ParseCompletionArg(partial, context);
         var candidates = context.FileSystem
-            .EnumerateEntriesAsync(drive, dir, prefix + "*")
+            .EnumerateEntriesAsync(new BatPath(drive, dir), prefix + "*")
             .ToBlockingEnumerable()
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .Select(e => partial[..^prefix.Length] + e.Name)

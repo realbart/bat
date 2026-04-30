@@ -18,7 +18,7 @@ internal class DotNetLibraryExecutor(PtyNativeExecutor nativeFallback, bool isPr
 
     public async Task<int> ExecuteAsync(string executablePath, string arguments, BatchContext batchContext, IReadOnlyList<Redirection> redirections)
     {
-        var hostPath = PathTranslator.TranslateBatPathToHost(executablePath, batchContext.Context.FileSystem);
+        var hostPath = await PathTranslator.TranslateBatPathToHost(executablePath, batchContext.Context.FileSystem);
 
         try
         {

@@ -1,6 +1,6 @@
 #if WINDOWS
 using Bat.Context;
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 
 namespace Bat.UnitTests;
 
@@ -246,34 +246,34 @@ public class EnvironmentTranslationTests
     // ── PathTranslator (unit-level, no OS dependency) ────────────────────────
 
     [TestMethod]
-    public void TranslateHostPathToBat_SingleAbsolutePath_Translated()
+    public async Task TranslateHostPathToBat_SingleAbsolutePath_Translated()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Users\kempsb\AppData", fs);
+        var result = await BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Users\kempsb\AppData", fs);
         Assert.AreEqual(@"Z:\Users\kempsb\AppData", result);
     }
 
     [TestMethod]
-    public void TranslateHostPathToBat_SemicolonSeparatedPaths_AllTranslated()
+    public async Task TranslateHostPathToBat_SemicolonSeparatedPaths_AllTranslated()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;C:\Users", fs);
+        var result = await BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;C:\Users", fs);
         Assert.AreEqual(@"Z:\Windows;Z:\Users", result);
     }
 
     [TestMethod]
-    public void TranslateHostPathToBat_MixedInAndOutOfScope_OnlyInScopeKept()
+    public async Task TranslateHostPathToBat_MixedInAndOutOfScope_OnlyInScopeKept()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;E:\External;C:\Users", fs);
+        var result = await BatD.Files.PathTranslator.TranslateHostPathToBat(@"C:\Windows;E:\External;C:\Users", fs);
         Assert.AreEqual(@"Z:\Windows;Z:\Users", result);
     }
 
     [TestMethod]
-    public void TranslateHostPathToBat_AllOutOfScope_ReturnsEmpty()
+    public async Task TranslateHostPathToBat_AllOutOfScope_ReturnsEmpty()
     {
         var fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
-        var result = BatD.Files.PathTranslator.TranslateHostPathToBat(@"E:\External;F:\Other", fs);
+        var result = await BatD.Files.PathTranslator.TranslateHostPathToBat(@"E:\External;F:\Other", fs);
         Assert.AreEqual("", result);
     }
 }

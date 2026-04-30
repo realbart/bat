@@ -3,10 +3,11 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Bat.Commands;
 using Bat.Console;
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 using Bat.Execution;
 using Bat.Parsing;
 using Bat.Tokens;
+using BatD.Files;
 using Context;
 
 namespace Bat.UnitTests;
@@ -335,11 +336,12 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         foreach (var kv in paths)
             _paths[kv.Key] = kv.Value.ToArray();
     }
-    public (bool Found, string NativePath) TryGetCurrentFolder()
+    public async Task<(bool Found, string NativePath)> TryGetCurrentFolderAsync()
     {
         if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
             return (false, "");
-        return (true, FileSystem.GetNativePath(CurrentDrive, CurrentPath));
+        var hp = await FileSystem.GetNativePathAsync(new BatPath(CurrentDrive, CurrentPath));
+        return (true, hp.Path);
     }
 
     public void ApplySnapshot(IContext other)
@@ -396,7 +398,7 @@ internal sealed class TestFileSystem : IFileSystem
         = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _shortNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _fileContents = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<char, string> _substs = [];
+    public Dictionary<char, BatPath> Substs { get; } = [];
 
     public void AddDir(char drive, string[] path) => _dirs.Add(Key(drive, path));
 
@@ -430,7 +432,20 @@ internal sealed class TestFileSystem : IFileSystem
 
     public string GetDisplayName(string segment) => segment;
 
-    public string GetNativePath(BatPath path) => Key(path.Drive, path.Segments);
+    public Task<HostPath> GetNativePathAsync(BatPath path, CancellationToken ct = default) =>
+        Task.FromResult(new HostPath(Key(path.Drive, path.Segments)));
+
+    public Task<BatPath> FromNativePathAsync(HostPath hostPath, CancellationToken ct = default)
+    {
+        var p = hostPath.Path;
+        if (string.IsNullOrEmpty(p) || p.Length < 2 || p[1] != ':')
+            throw new ArgumentException($"Invalid path: {p}");
+        var drive = char.ToUpperInvariant(p[0]);
+        var rest = p.Length > 3 && p[2] == '\\' ? p[3..] : "";
+        var segments = string.IsNullOrEmpty(rest) ? Array.Empty<string>() : rest.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        return Task.FromResult(new BatPath(drive, segments));
+    }
+
     public bool DirectoryExists(char drive, string[] path) => _dirs.Contains(Key(drive, path));
     public bool FileExists(char drive, string[] path)
     {
@@ -540,9 +555,6 @@ internal sealed class TestFileSystem : IFileSystem
     public string GetVolumeLabel(char drive) => "";
     public long GetFreeBytes(char drive) => 1024 * 1024 * 1024;
     public IReadOnlyDictionary<string, string> GetFileAssociations() => new Dictionary<string, string>();
-    public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
-    public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
-    public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
 
     // ── Async members ──────────────────────────────────────────────────────────
     public Task<bool> FileExistsAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(FileExists(path.Drive, path.Segments));
@@ -574,10 +586,14 @@ internal sealed class TestFileSystem : IFileSystem
     public char NativeDirectorySeparator => OperatingSystem.IsWindows() ? '\\' : '/';
     public char NativePathSeparator => OperatingSystem.IsWindows() ? ';' : ':';
 
-    public bool TryGetNativePath(BatPath path, out string nativePath)
+    public async Task<(bool Success, HostPath Path)> TryGetNativePathAsync(BatPath path, CancellationToken ct = default)
     {
-        try { nativePath = GetNativePath(path); return true; }
-        catch { nativePath = ""; return false; }
+        try
+        {
+            var result = await GetNativePathAsync(path, ct);
+            return (true, result);
+        }
+        catch { return (false, default); }
     }
 }
 

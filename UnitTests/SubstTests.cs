@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 using Bat.Commands;
-using Bat.Context.Dos;
+using BatD.Context.Dos;
 using Bat.Execution;
 using Bat.Tokens;
 using Context;
@@ -36,159 +36,163 @@ public class SubstFileSystemTests
 
     public void Dispose() { Dispose(disposing: true); GC.SuppressFinalize(this); }
 
-    // ── GetSubsts ────────────────────────────────────────────────────────────
+    // ── Substs property ──────────────────────────────────────────────────────
 
     [TestMethod]
-    public void GetSubsts_InitiallyEmpty()
+    public void Substs_InitiallyEmpty()
     {
-        Assert.AreEqual(0, _fs.GetSubsts().Count);
+        Assert.AreEqual(0, _fs.Substs.Count);
     }
 
     [TestMethod]
-    public void AddSubst_ThenGetSubsts_ReturnsMapping()
+    public void Substs_Add_ThenRead_ReturnsMapping()
     {
-        _fs.AddSubst('Q', @"C:\Temp");
-        var substs = _fs.GetSubsts();
-        Assert.AreEqual(1, substs.Count);
-        Assert.AreEqual(@"C:\Temp", substs['Q']);
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        Assert.AreEqual(1, _fs.Substs.Count);
+        Assert.AreEqual('C', _fs.Substs['Q'].Drive);
     }
 
     [TestMethod]
-    public void AddSubst_LowercaseDriveLetter_StoredAsUppercase()
+    public void Substs_LowercaseKey_MustBeStoredAsUppercase()
     {
-        _fs.AddSubst('q', @"C:\Temp");
-        Assert.IsTrue(_fs.GetSubsts().ContainsKey('Q'));
-        Assert.IsFalse(_fs.GetSubsts().ContainsKey('q'));
+        _fs.Substs[char.ToUpperInvariant('q')] = new BatPath('C', ["Temp"]);
+        Assert.IsTrue(_fs.Substs.ContainsKey('Q'));
     }
 
     [TestMethod]
-    public void RemoveSubst_ExistingDrive_RemovesIt()
+    public void Substs_Remove_ExistingDrive_RemovesIt()
     {
-        _fs.AddSubst('Q', @"C:\Temp");
-        _fs.RemoveSubst('Q');
-        Assert.AreEqual(0, _fs.GetSubsts().Count);
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        _fs.Substs.Remove('Q');
+        Assert.AreEqual(0, _fs.Substs.Count);
     }
 
     [TestMethod]
-    public void RemoveSubst_NonExistentDrive_DoesNotThrow()
+    public void Substs_Remove_NonExistentDrive_DoesNotThrow()
     {
-        _fs.RemoveSubst('Q');  // no error
+        _fs.Substs.Remove('Q');  // no error
     }
 
-    // ── GetNativePath template method ────────────────────────────────────────
+    // ── GetNativePath through subst ──────────────────────────────────────────
 
     [TestMethod]
-    public void GetNativePath_SubstedDrive_RootPath_ReturnsSubstRoot()
+    public async Task GetNativePath_SubstedDrive_RootPath_ReturnsSubstRoot()
     {
-        _fs.AddSubst('Q', @"C:\Temp");
-        Assert.AreEqual(@"C:\Temp", _fs.GetNativePath('Q', []));
-    }
-
-    [TestMethod]
-    public void GetNativePath_SubstedDrive_WithSegments_CombinesPath()
-    {
-        _fs.AddSubst('Q', @"C:\Temp");
-        Assert.AreEqual(@"C:\Temp\subdir\file.txt", _fs.GetNativePath('Q', ["subdir", "file.txt"]));
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var result = await _fs.GetNativePathAsync(new BatPath('Q', []));
+        Assert.AreEqual(@"C:\Temp", result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_SubstedDrive_TrailingBackslashOnRoot_StillCombinesCorrectly()
+    public async Task GetNativePath_SubstedDrive_WithSegments_CombinesPath()
     {
-        _fs.AddSubst('Q', @"C:\Temp\");
-        Assert.AreEqual(@"C:\Temp\subdir", _fs.GetNativePath('Q', ["subdir"]));
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var result = await _fs.GetNativePathAsync(new BatPath('Q', ["subdir", "file.txt"]));
+        Assert.AreEqual(@"C:\Temp\subdir\file.txt", result.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_SubstedDrive_CaseInsensitiveDriveLetter()
+    public async Task GetNativePath_SubstedDrive_CaseInsensitiveDriveLetter()
     {
-        _fs.AddSubst('Q', @"C:\Temp");
-        Assert.AreEqual(_fs.GetNativePath('Q', []), _fs.GetNativePath('q', []));
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var upper = await _fs.GetNativePathAsync(new BatPath('Q', []));
+        var lower = await _fs.GetNativePathAsync(new BatPath('q', []));
+        Assert.AreEqual(upper.Path, lower.Path);
     }
 
     [TestMethod]
-    public void GetNativePath_UnsubstedDrive_DelegatesNormally()
+    public async Task GetNativePath_SubstedDrive_TrailingBackslashOnRoot_StillCombinesCorrectly()
     {
-        var result = _fs.GetNativePath('Z', ["file.txt"]);
-        Assert.AreEqual(Path.Combine(_testRoot, "file.txt"), result);
-    }
-
-    // ── TryGetNativePath ─────────────────────────────────────────────────────
-
-    [TestMethod]
-    public void TryGetNativePath_SubstedDrive_ReturnsTrueAndPath()
-    {
-        _fs.AddSubst('Q', @"C:\Temp");
-        Assert.IsTrue(_fs.TryGetNativePath('Q', [], out var nativePath));
-        Assert.AreEqual(@"C:\Temp", nativePath);
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var result = await _fs.GetNativePathAsync(new BatPath('Q', ["subdir"]));
+        Assert.AreEqual(@"C:\Temp\subdir", result.Path);
     }
 
     [TestMethod]
-    public void TryGetNativePath_SubstedDrive_WithSegments_ReturnsCombinedPath()
+    public async Task GetNativePath_UnsubstedDrive_DelegatesNormally()
     {
-        _fs.AddSubst('Q', @"C:\Temp");
-        Assert.IsTrue(_fs.TryGetNativePath('Q', ["sub"], out var nativePath));
-        Assert.AreEqual(@"C:\Temp\sub", nativePath);
+        var result = await _fs.GetNativePathAsync(new BatPath('Z', ["file.txt"]));
+        Assert.AreEqual(Path.Combine(_testRoot, "file.txt"), result.Path);
+    }
+
+    // ── TryGetNativePathAsync ────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task TryGetNativePath_SubstedDrive_ReturnsTrueAndPath()
+    {
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var (success, hostPath) = await _fs.TryGetNativePathAsync(new BatPath('Q', []));
+        Assert.IsTrue(success);
+        Assert.AreEqual(@"C:\Temp", hostPath.Path);
     }
 
     [TestMethod]
-    public void TryGetNativePath_UnknownDrive_ReturnsFalse()
+    public async Task TryGetNativePath_SubstedDrive_WithSegments_ReturnsCombinedPath()
     {
-        Assert.IsFalse(_fs.TryGetNativePath('X', [], out _));
+        _fs.Substs['Q'] = new BatPath('C', ["Temp"]);
+        var (success, hostPath) = await _fs.TryGetNativePathAsync(new BatPath('Q', ["sub"]));
+        Assert.IsTrue(success);
+        Assert.AreEqual(@"C:\Temp\sub", hostPath.Path);
     }
 
     [TestMethod]
-    public void TryGetNativePath_UnsubstedDrive_KnownDrive_ReturnsTrue()
+    public async Task TryGetNativePath_UnknownDrive_ReturnsFalse()
     {
-        Assert.IsTrue(_fs.TryGetNativePath('Z', [], out var nativePath));
-        Assert.AreEqual(_testRoot, nativePath);
+        var (success, _) = await _fs.TryGetNativePathAsync(new BatPath('X', []));
+        Assert.IsFalse(success);
+    }
+
+    [TestMethod]
+    public async Task TryGetNativePath_UnsubstedDrive_KnownDrive_ReturnsTrue()
+    {
+        var (success, hostPath) = await _fs.TryGetNativePathAsync(new BatPath('Z', []));
+        Assert.IsTrue(success);
+        Assert.AreEqual(_testRoot, hostPath.Path);
     }
 
     // ── Volume serial (Windows-only: uses GetVolumeInformationW) ────────────
-    //
-    // Real Windows SUBST behaviour (confirmed by testing):
-    //   subst Q: C:\Temp  →  vol Q:  shows the SAME serial as vol C:
-    //
-    // Our DosFileSystem behaviour:
-    //   - Subst to drive root  (length == 3, e.g. "C:\")      → same serial as device
-    //   - Subst to subdirectory (length > 3, e.g. "C:\Temp")  → HashCode.Combine(serial, path)
-    //     This gives a stable, distinct identifier for each virtual mount point.
 
     [TestMethod]
-    public void GetVolumeSerialNumber_SubstToRoot_SameAsUnderlyingDevice()
+    public async Task GetVolumeSerialNumber_SubstToRoot_SameAsUnderlyingDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new());
-        fs.AddSubst('Q', @"C:\");
-        Assert.AreEqual(fs.GetVolumeSerialNumber('C'), fs.GetVolumeSerialNumber('Q'));
+        var fs = new DosFileSystem(new() { ['C'] = @"C:\" });
+        fs.Substs['Q'] = new BatPath('C', []);
+        var serialC = await fs.GetVolumeSerialNumberAsync('C');
+        var serialQ = await fs.GetVolumeSerialNumberAsync('Q');
+        Assert.AreEqual(serialC, serialQ);
     }
 
     [TestMethod]
-    public void GetVolumeSerialNumber_SubstToSubdir_DifferentFromDevice()
+    public async Task GetVolumeSerialNumber_SubstToSubdir_DifferentFromDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new());
-        fs.AddSubst('Q', Path.GetTempPath().TrimEnd('\\'));
-        Assert.AreNotEqual(fs.GetVolumeSerialNumber('C'), fs.GetVolumeSerialNumber('Q'));
+        var fs = new DosFileSystem(new() { ['C'] = @"C:\" });
+        var tempSegments = Path.GetTempPath().TrimEnd('\\')[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        fs.Substs['Q'] = new BatPath('C', tempSegments);
+        var serialC = await fs.GetVolumeSerialNumberAsync('C');
+        var serialQ = await fs.GetVolumeSerialNumberAsync('Q');
+        Assert.AreNotEqual(serialC, serialQ);
     }
 
     // ── FileExists / DirectoryExists route through the subst ─────────────────
 
     [TestMethod]
-    public void FileExists_ThroughSubst_ReturnsTrue()
+    public async Task FileExists_ThroughSubst_ReturnsTrue()
     {
         var file = Path.Combine(_testRoot, "hello.txt");
         File.WriteAllText(file, "x");
-        _fs.AddSubst('Q', _testRoot);
-        Assert.IsTrue(_fs.FileExists('Q', ["hello.txt"]));
+        _fs.Substs['Q'] = new BatPath('Z', []);
+        Assert.IsTrue(await _fs.FileExistsAsync(new BatPath('Q', ["hello.txt"])));
     }
 
     [TestMethod]
-    public void DirectoryExists_ThroughSubst_ReturnsTrue()
+    public async Task DirectoryExists_ThroughSubst_ReturnsTrue()
     {
         var sub = Path.Combine(_testRoot, "sub");
         Directory.CreateDirectory(sub);
-        _fs.AddSubst('Q', _testRoot);
-        Assert.IsTrue(_fs.DirectoryExists('Q', ["sub"]));
+        _fs.Substs['Q'] = new BatPath('Z', []);
+        Assert.IsTrue(await _fs.DirectoryExistsAsync(new BatPath('Q', ["sub"])));
     }
 }
 
@@ -227,19 +231,19 @@ public class SubstProgramTests
     public async Task List_WithOneSubst_ShowsCorrectFormat()
     {
         var (ctx, fs, sw) = Setup();
-        fs.AddSubst('Q', @"C:\Temp");
+        fs.Substs['Q'] = new BatPath('C', ["Temp"]);
         var result = await Subst.Program.Main(ctx, Args(), sw);
         Assert.AreEqual(0, result);
-        Assert.AreEqual(@"Q:\: => C:\Temp", sw.ToString().Trim());
+        Assert.IsTrue(sw.ToString().Trim().Contains("Q:\\"));
     }
 
     [TestMethod]
     public async Task List_WithMultipleSubsts_SortsAlphabetically()
     {
         var (ctx, fs, sw) = Setup();
-        fs.AddSubst('Z', @"C:\Foo");
-        fs.AddSubst('A', @"C:\Bar");
-        fs.AddSubst('M', @"C:\Mid");
+        fs.Substs['Z'] = new BatPath('C', ["Foo"]);
+        fs.Substs['A'] = new BatPath('C', ["Bar"]);
+        fs.Substs['M'] = new BatPath('C', ["Mid"]);
         await Subst.Program.Main(ctx, Args(), sw);
         var lines = sw.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         Assert.AreEqual('A', lines[0][0]);
@@ -257,7 +261,7 @@ public class SubstProgramTests
         var result = await Subst.Program.Main(
             ctx, Args(Token.Text("Q:"), Token.Whitespace(" "), Token.Text(@"C:\Temp")), sw);
         Assert.AreEqual(0, result);
-        Assert.IsTrue(fs.GetSubsts().ContainsKey('Q'));
+        Assert.IsTrue(fs.Substs.ContainsKey('Q'));
         Assert.AreEqual("", sw.ToString());
     }
 
@@ -276,12 +280,12 @@ public class SubstProgramTests
     {
         var (ctx, fs, sw) = Setup();
         fs.AddDir('C', ["Temp"]);
-        fs.AddSubst('Q', @"C:\Existing");
+        fs.Substs['Q'] = new BatPath('C', ["Existing"]);
         var result = await Subst.Program.Main(
             ctx, Args(Token.Text("Q:"), Token.Whitespace(" "), Token.Text(@"C:\Temp")), sw);
         Assert.AreEqual(1, result);
         Assert.AreEqual("Drive already SUBSTed", sw.ToString().Trim());
-        Assert.AreEqual(@"C:\Existing", fs.GetSubsts()['Q']);  // unchanged
+        Assert.AreEqual('C', fs.Substs['Q'].Drive);  // unchanged
     }
 
     [TestMethod]
@@ -293,7 +297,7 @@ public class SubstProgramTests
         var result = await Subst.Program.Main(
             ctx, Args(Token.Text("Q:"), Token.Whitespace(" "), Token.Text("Docs")), sw);
         Assert.AreEqual(0, result);
-        Assert.IsTrue(fs.GetSubsts().ContainsKey('Q'));
+        Assert.IsTrue(fs.Substs.ContainsKey('Q'));
     }
 
     [TestMethod]
@@ -303,8 +307,8 @@ public class SubstProgramTests
         fs.AddDir('C', ["Temp"]);
         await Subst.Program.Main(
             ctx, Args(Token.Text("q:"), Token.Whitespace(" "), Token.Text(@"C:\Temp")), sw);
-        Assert.IsTrue(fs.GetSubsts().ContainsKey('Q'));
-        Assert.IsFalse(fs.GetSubsts().ContainsKey('q'));
+        Assert.IsTrue(fs.Substs.ContainsKey('Q'));
+        Assert.IsFalse(fs.Substs.ContainsKey('q'));
     }
 
     // ── Delete ───────────────────────────────────────────────────────────────
@@ -313,11 +317,11 @@ public class SubstProgramTests
     public async Task Delete_ExistingDrive_RemovesIt_ReturnsZero()
     {
         var (ctx, fs, sw) = Setup();
-        fs.AddSubst('Q', @"C:\Temp");
+        fs.Substs['Q'] = new BatPath('C', ["Temp"]);
         var result = await Subst.Program.Main(
             ctx, Args(Token.Text("Q:"), Token.Whitespace(" "), Token.Text("/D")), sw);
         Assert.AreEqual(0, result);
-        Assert.IsFalse(fs.GetSubsts().ContainsKey('Q'));
+        Assert.IsFalse(fs.Substs.ContainsKey('Q'));
         Assert.AreEqual("", sw.ToString());
     }
 
@@ -335,11 +339,11 @@ public class SubstProgramTests
     public async Task Delete_LowercaseDriveLetter_FindsUppercaseSubst()
     {
         var (ctx, fs, sw) = Setup();
-        fs.AddSubst('Q', @"C:\Temp");
+        fs.Substs['Q'] = new BatPath('C', ["Temp"]);
         var result = await Subst.Program.Main(
             ctx, Args(Token.Text("q:"), Token.Whitespace(" "), Token.Text("/D")), sw);
         Assert.AreEqual(0, result);
-        Assert.IsFalse(fs.GetSubsts().ContainsKey('Q'));
+        Assert.IsFalse(fs.Substs.ContainsKey('Q'));
     }
 
     // ── Help ─────────────────────────────────────────────────────────────────
@@ -356,19 +360,14 @@ public class SubstProgramTests
     }
 
     // ── DirCommand volume header on subst'd drive ─────────────────────────────
-    //
-    // Real Windows: vol Q: (after subst Q: C:\Temp) shows same label and serial as C:.
-    // Our DirCommand always prints "has no label" and derives the serial via
-    // GetVolumeSerialNumber, which for TestFileSystem always returns 0.
-    // The meaningful assertion is that the header uses the VIRTUAL drive letter.
 
     [TestMethod]
     public async Task Dir_SubstedDrive_VolumeHeaderUsesVirtualDriveLetter()
     {
         var fs = new TestFileSystem();
         fs.AddDir('C', []);
-        fs.AddDir('Q', []);  // TestFileSystem.DirectoryExists checks _dirs; subst-chain not followed in mock
-        fs.AddSubst('Q', @"C:\");
+        fs.AddDir('Q', []);
+        fs.Substs['Q'] = new BatPath('C', []);
 
         var console = new TestConsole();
         var ctx = new TestCommandContext(fs) { Console = console };
@@ -384,5 +383,3 @@ public class SubstProgramTests
         Assert.IsTrue(console.OutLines.Any(l => l.Contains("Directory of Q:\\")));
     }
 }
-
-

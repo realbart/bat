@@ -10,6 +10,8 @@ namespace Bat.Context;
 ///   Linux ARM64  : 24  (dev_t(8) + ino_t(8) + mode_t(4)  + nlink_t(4))
 ///   macOS        : 16  (dev_t(4) + mode_t(2) + nlink_t(2) + ino_t(8))
 /// </summary>
+// todo: only compile on linux/macos
+// todo: file system naming should use eiter Ux or Dos prefix
 public static partial class UnixFileOwner
 {
     private const int StatBufferSize = 256;

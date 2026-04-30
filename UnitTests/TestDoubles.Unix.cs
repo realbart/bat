@@ -58,11 +58,12 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
         }
     }
 
-    public (bool Found, string NativePath) TryGetCurrentFolder()
+    public async Task<(bool Found, string NativePath)> TryGetCurrentFolderAsync()
     {
         if (!FileSystem.DirectoryExists(CurrentDrive, CurrentPath))
             return (false, "");
-        return (true, FileSystem.GetNativePath(CurrentDrive, CurrentPath));
+        var hp = await FileSystem.GetNativePathAsync(new BatPath(CurrentDrive, CurrentPath));
+        return (true, hp.Path);
     }
 
     public IContext StartNew(IConsole? console = null)
