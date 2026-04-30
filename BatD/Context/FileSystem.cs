@@ -50,7 +50,7 @@ public abstract class FileSystem : IFileSystem
     public abstract Task DeleteFileAsync(BatPath path, CancellationToken cancellationToken = default);
     public abstract Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken cancellationToken = default);
 
-    public abstract IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, CancellationToken cancellationToken = default);
+    public abstract IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, bool includeDotEntries = false, CancellationToken cancellationToken = default);
 
     public abstract Task<Stream> OpenReadAsync(BatPath path, CancellationToken cancellationToken = default);
     public abstract Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken cancellationToken = default);

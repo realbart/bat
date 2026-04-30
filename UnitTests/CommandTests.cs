@@ -563,7 +563,7 @@ internal sealed class TestFileSystem : IFileSystem
     public Task CreateDirectoryAsync(BatPath path, CancellationToken ct = default) { CreateDirectory(path.Drive, path.Segments); return Task.CompletedTask; }
     public Task DeleteFileAsync(BatPath path, CancellationToken ct = default) { DeleteFile(path.Drive, path.Segments); return Task.CompletedTask; }
     public Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken ct = default) { DeleteDirectory(path.Drive, path.Segments, recursive); return Task.CompletedTask; }
-    public async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, bool includeDotEntries = false, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         foreach (var e in EnumerateEntries(path.Drive, path.Segments, pattern)) yield return e;
     }

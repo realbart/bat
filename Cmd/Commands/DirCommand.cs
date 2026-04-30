@@ -114,7 +114,7 @@ internal class DirCommand : ICommand
         if (!opts.BareNames) await WriteDirectorySummaryAsync(console, context, dirPath.Drive, fileCount, dirCount, totalSize, opts);
 
         if (!recurse) return;
-        await foreach (var entry in context.FileSystem.EnumerateEntriesAsync(dirPath, "*"))
+        await foreach (var entry in context.FileSystem.EnumerateEntriesAsync(dirPath, "*", includeDotEntries: true))
         {
             if (!entry.IsDirectory || entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 continue;
@@ -156,7 +156,7 @@ internal class DirCommand : ICommand
         if (!await context.FileSystem.DirectoryExistsAsync(dirPath))
             return (false, []);
 
-        var entries = await context.FileSystem.EnumerateEntriesAsync(dirPath, pattern).ToListAsync();
+        var entries = await context.FileSystem.EnumerateEntriesAsync(dirPath, pattern, includeDotEntries: true).ToListAsync();
 
         IEnumerable<DosFileEntry> filtered = entries;
         if (opts.AttributeFilter.Length > 0) filtered = filtered.Where(e => MatchesAttributeFilter(e, opts.AttributeFilter));

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Bat.UnitTests</RootNamespace>
+    <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="4.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BatD\BatD.csproj" />
+    <ProjectReference Include="..\Subst\Subst.csproj" />
+    <ProjectReference Include="..\Tree\Tree.csproj" />
+    <ProjectReference Include="..\Cmd\Cmd.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\UnitTests\UnixDirDisplayTests.cs" Link="UnixDirDisplayTests.cs" />
+    <Compile Include="..\UnitTests\UnixPathMappingTests.cs" Link="UnixPathMappingTests.cs" />
+    <Compile Include="..\UnitTests\UxFileSystemTests.cs" Link="UxFileSystemTests.cs" />
+    <Compile Include="..\UnitTests\CrossPlatformTests.cs" Link="CrossPlatformTests.cs" />
+    <Compile Include="..\UnitTests\FileAssociationTests.cs" Link="FileAssociationTests.cs" />
+    <Compile Include="..\UnitTests\TreeExclusionTests.cs" Link="TreeExclusionTests.cs" />
+    <Compile Include="..\UnitTests\TestConsole.cs" Link="TestConsole.cs" />
+    <Compile Include="..\UnitTests\TestArgs.Unix.cs" Link="TestArgs.Unix.cs" />
+    <Compile Include="..\UnitTests\ParserExtensions.cs" Link="ParserExtensions.cs" />
+    <Compile Include="..\UnitTests\FileSystemExtensions.cs" Link="FileSystemExtensions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\UnitTests\Examples\**" Link="Examples\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

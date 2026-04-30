@@ -46,6 +46,35 @@ internal static class Expander
                 i += 2;
                 return true;
             }
+            // %%letter — FOR loop variable: expand directly to its value if set, else keep %%letter
+            if (i + 2 < line.Length && char.IsLetter(line[i + 2]))
+            {
+                var varKey = line[i + 2].ToString();
+                if (bc.Context.EnvironmentVariables.TryGetValue(varKey, out var forVal))
+                {
+                    result.Append(forVal);
+                    i += 3;
+                    return true;
+                }
+            }
+            // %%~modifiersletter — FOR loop variable tilde expansion (e.g. %%~nxf)
+            if (i + 2 < line.Length && line[i + 2] == '~')
+            {
+                var pos2 = i + 3;
+                var mods2 = new StringBuilder();
+                while (pos2 < line.Length && "fdpnxsatz".Contains(char.ToLowerInvariant(line[pos2])))
+                    mods2.Append(char.ToLowerInvariant(line[pos2++]));
+                if (mods2.Length > 0 && pos2 < line.Length && char.IsLetter(line[pos2]))
+                {
+                    var varKey2 = line[pos2].ToString();
+                    if (bc.Context.EnvironmentVariables.TryGetValue(varKey2, out var rawVal))
+                    {
+                        result.Append(ApplyTildeMods(mods2.ToString(), rawVal ?? ""));
+                        i = pos2 + 1;
+                        return true;
+                    }
+                }
+            }
             return false;
         }
 
@@ -147,48 +176,7 @@ internal static class Expander
             }
         }
 
-        var expanded = new StringBuilder();
-        foreach (var mod in mods)
-        {
-            switch (mod)
-            {
-                case 'f': // full path
-                    expanded.Clear();
-                    expanded.Append(fullPath);
-                    break;
-                case 'd': // drive letter + colon
-                    if (fullPath.Length >= 2 && fullPath[1] == ':')
-                        expanded.Append(fullPath[..2]);
-                    break;
-                case 'p': // path (after drive, with trailing \)
-                    var dir = Path.GetDirectoryName(fullPath);
-                    if (dir != null)
-                    {
-                        var pathPart = dir.Length >= 2 && dir[1] == ':' ? dir[2..] : dir;
-                        if (pathPart.Length > 0 && pathPart[^1] != '\\')
-                            pathPart += "\\";
-                        expanded.Append(pathPart);
-                    }
-                    break;
-                case 'n': // filename without extension
-                    expanded.Append(Path.GetFileNameWithoutExtension(fullPath));
-                    break;
-                case 'x': // extension (including dot)
-                    expanded.Append(Path.GetExtension(fullPath));
-                    break;
-                case 'z': // file size
-                    try
-                    {
-                        var fi = new FileInfo(fullPath);
-                        if (fi.Exists) expanded.Append(fi.Length);
-                    }
-                    catch { }
-                    break;
-                // s, a, t — not yet implemented, silently ignored
-            }
-        }
-
-        result.Append(expanded);
+        result.Append(ApplyTildeMods(mods, fullPath));
         i = pos + 1;
         return true;
     }
@@ -206,12 +194,75 @@ internal static class Expander
 
         while (i < line.Length)
         {
+            // %~modifiers<letter> — FOR variable tilde expansion (produced by %%~nxf after batch param pass)
+            if (line[i] == '%' && i + 1 < line.Length && line[i + 1] == '~' && TryExpandForVariableTilde(line, ref i, ctx, result)) continue;
             if (line[i] == '%' && TryExpandEnvVariable(line, ref i, ctx, result)) continue;
             result.Append(line[i]);
             i++;
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Expands %~modifiersX where X is a single letter FOR variable (e.g. %~nxf → filename+ext of %f).
+    /// </summary>
+    private static bool TryExpandForVariableTilde(string line, ref int i, IContext ctx, StringBuilder result)
+    {
+        // line[i]=='%', line[i+1]=='~', followed by modifiers and a letter
+        var pos = i + 2;
+        var mods = new StringBuilder();
+        while (pos < line.Length && "fdpnxsatz".Contains(char.ToLowerInvariant(line[pos])))
+        {
+            mods.Append(char.ToLowerInvariant(line[pos]));
+            pos++;
+        }
+
+        if (mods.Length == 0 || pos >= line.Length || !char.IsLetter(line[pos]))
+            return false;
+
+        var varLetter = line[pos].ToString();
+        if (!ctx.EnvironmentVariables.TryGetValue(varLetter, out var rawValue))
+            return false;
+
+        result.Append(ApplyTildeMods(mods.ToString(), rawValue ?? ""));
+        i = pos + 1;
+        return true;
+    }
+
+    /// <summary>Applies tilde path modifiers (f/d/p/n/x/z) to a raw path value.</summary>
+    internal static string ApplyTildeMods(string mods, string rawValue)
+    {
+        var fullPath = rawValue;
+        if (fullPath.Length >= 2 && fullPath[0] == '"' && fullPath[^1] == '"')
+            fullPath = fullPath[1..^1];
+
+        var expanded = new StringBuilder();
+        foreach (var mod in mods)
+        {
+            switch (mod)
+            {
+                case 'f': expanded.Clear(); expanded.Append(fullPath); break;
+                case 'd':
+                    if (fullPath.Length >= 2 && fullPath[1] == ':') expanded.Append(fullPath[..2]);
+                    break;
+                case 'p':
+                    var dir = Path.GetDirectoryName(fullPath);
+                    if (dir != null)
+                    {
+                        var part = dir.Length >= 2 && dir[1] == ':' ? dir[2..] : dir;
+                        if (part.Length > 0 && part[^1] != '\\') part += "\\";
+                        expanded.Append(part);
+                    }
+                    break;
+                case 'n': expanded.Append(Path.GetFileNameWithoutExtension(fullPath)); break;
+                case 'x': expanded.Append(Path.GetExtension(fullPath)); break;
+                case 'z':
+                    try { var fi = new FileInfo(fullPath); if (fi.Exists) expanded.Append(fi.Length); } catch { }
+                    break;
+            }
+        }
+        return expanded.ToString();
     }
 
     private static bool TryExpandEnvVariable(string line, ref int i, IContext ctx, StringBuilder result)

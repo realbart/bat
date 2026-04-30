@@ -92,7 +92,7 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     }
 
     public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
-        BatPath path, string pattern,
+        BatPath path, string pattern, bool includeDotEntries = false,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var dirPath = ResolveNativePath(path);
@@ -107,6 +107,7 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
             do
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (!includeDotEntries && data.cFileName is "." or "..") continue;
                 var isDir = (data.dwFileAttributes & 0x10) != 0;
                 var size = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
                 var lastWrite = FileTimeToDateTime(data.ftLastWriteTime);

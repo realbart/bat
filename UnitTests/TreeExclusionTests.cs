@@ -2,6 +2,7 @@ using BatD.Context.Ux;
 using Bat.Execution;
 using Bat.Tokens;
 using Bat.Commands;
+using Context;
 
 namespace Bat.UnitTests;
 
@@ -275,5 +276,30 @@ public class TreeExclusionTests
             } catch {}
             Directory.Delete(root, true);
         }
+    }
+    // ── Dot-directory infinite loop ───────────────────────────────────────────
+
+    [TestMethod]
+    [Timeout(5000)]
+    public async Task Tree_DoesNotRecurseInfinitely_WhenDirectoryContainsDotEntries()
+    {
+        // The real filesystem always has "." and ".." in every directory.
+        // Tree must complete within the [Timeout] — an infinite loop would timeout/fail.
+        var fs = new UxFileSystemAdapter(new() { ['Z'] = _testRoot });
+        Directory.CreateDirectory(Path.Combine(_testRoot, "sub"));
+
+        var console = new TestConsole();
+        var ctx = new UxContextAdapter(fs, console);
+        ctx.SetCurrentDrive('Z');
+        ctx.SetPath('Z', []);
+
+        var spec = ArgumentSpec.From([new("tree")]);
+        var args = ArgumentSet.Parse([], spec);
+
+        await Tree.Program.Main(ctx, args);
+
+        var output = string.Join("\n", console.OutLines);
+        Assert.IsTrue(output.Contains("sub"), "Output should contain the real subdirectory");
+        Assert.IsFalse(output.Contains("├───."), "Output must not contain '.' as a directory entry");
     }
 }

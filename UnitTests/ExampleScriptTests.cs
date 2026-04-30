@@ -257,6 +257,10 @@ public class ExampleScriptTests
         s = s.Replace(scriptDir + "\\", "{dir}", StringComparison.OrdinalIgnoreCase);
         s = s.Replace(scriptDir, "{dir}", StringComparison.OrdinalIgnoreCase);
 
+        // Strip ANSI/VT escape sequences (e.g. title sequences \x1b]0;...\x07 from cmd.exe startup)
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\x1b\][^\x07]*\x07", "");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\x1b\[[0-9;]*[A-Za-z]", "");
+
         // Normalize AM/PM designators to their OEM fallback so bat (UTF-8) and cmd.exe (OEM) compare equal.
         // Characters outside the OEM codepage are replaced with '?' by cmd.exe; we do the same for bat output.
         var am = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.AMDesignator;

@@ -12,7 +12,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
-    $OutputPath = [System.IO.Path]::GetFullPath((Join-Path $ProjectDirectory $OutputPath))
+    $solutionDirForPath = Split-Path $ProjectDirectory -Parent
+    $OutputPath = [System.IO.Path]::GetFullPath((Join-Path $solutionDirForPath (Join-Path (Split-Path $ProjectDirectory -Leaf) $OutputPath)))
 }
 
 # Stop any running batd to release file locks before copying

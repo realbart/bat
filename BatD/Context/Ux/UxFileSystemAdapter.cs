@@ -111,7 +111,7 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
     }
 
     public override async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(
-        BatPath path, string pattern,
+        BatPath path, string pattern, bool includeDotEntries = false,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var native = ResolveCaseInsensitive(ResolveNativePath(path));

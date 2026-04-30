@@ -64,7 +64,7 @@ internal sealed class ArgumentSet : IArgumentSet
     /// </summary>
     public static ArgumentSet Parse(IReadOnlyList<IToken> tokens, ArgumentSpec spec)
     {
-        var fullArgument = string.Concat(tokens.Select(t => t.Raw)).TrimStart();
+        var fullArgument = string.Concat(tokens.Select(t => t is TextToken tt ? tt.Value : t.Raw)).TrimStart();
 
         // Build word list from tokens
         var words = new List<string>();

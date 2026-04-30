@@ -152,7 +152,7 @@ internal static class CommandTokenizer
         if (TokenizerHelpers.IsInIfCondition(ref scanner) && IsComparisonOperator(text))
         {
             scanner.Expected = IsUnaryOperator(text)
-                ? ExpectedTokenTypes.IfCondition | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace
+                ? ExpectedTokenTypes.IfUnaryArg | ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace
                 : ExpectedTokenTypes.StartOfCommand;
             scanner.HasCommand = false;
             return Token.ComparisonOperator(text);
@@ -174,11 +174,12 @@ internal static class CommandTokenizer
             scanner.Expected = ExpectedTokenTypes.AfterCommand;
             return;
         }
-        if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfCondition))
+        if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfCondition) || scanner.Expected.HasFlag(ExpectedTokenTypes.IfUnaryArg))
         {
             var expected = ExpectedAfterIfWord(text);
-            // After unary operator argument, allow blocks for THEN branch
-            if (expected == (ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace))
+            // Only add Command flag when we just read the argument of a unary operator (EXIST/DEFINED/ERRORLEVEL)
+            if (scanner.Expected.HasFlag(ExpectedTokenTypes.IfUnaryArg)
+                && expected == (ExpectedTokenTypes.Text | ExpectedTokenTypes.Whitespace))
                 expected |= ExpectedTokenTypes.Command;
             scanner.Expected = expected;
             return;

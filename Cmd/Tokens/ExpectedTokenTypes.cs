@@ -17,6 +17,7 @@ public enum ExpectedTokenTypes
     IfCondition = 1024,     // Expecting condition after if [not]
     IfOperator = 2048,      // Expecting ==, EQU, etc.
     IfRightSide = 4096,     // Expecting right side of comparison
+    IfUnaryArg = 8192,      // Expecting argument to unary IF operator (EXIST/DEFINED/ERRORLEVEL)
 
     // Common combinations
     AfterCommand = Text | Whitespace | Redirection | CommandSeparator | BlockEnd,

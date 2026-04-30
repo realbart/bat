@@ -70,6 +70,9 @@ internal class Dispatcher : IDispatcher
             case CommandNode cmd:
                 return await ExecuteCommandNodeAsync(bc, cmd);
 
+            case ForCommandNode @for:
+                return await ExecuteForNodeAsync(bc, @for);
+
             case IfCommandNode @if:
                 return await ExecuteIfNodeAsync(bc, @if);
 
@@ -110,6 +113,297 @@ internal class Dispatcher : IDispatcher
                 result.Append(token.Raw);
         }
         return result.ToString();
+    }
+
+    private static async Task<int> ExecuteForNodeAsync(BatchContext bc, ForCommandNode @for)
+    {
+        var varName = @for.Variable.ToString();  // stored as plain letter, expanded via %var%
+        var listText = string.Concat(@for.List.TakeWhile(t => !(t is TextToken tt && tt.Value.Equals("do", StringComparison.OrdinalIgnoreCase))).Select(t => t.Raw));
+
+        async Task<int> RunBody(string value)
+        {
+            var savedVar = bc.Context.EnvironmentVariables.TryGetValue(varName, out var v) ? v : null;
+            bc.Context.EnvironmentVariables[varName] = value;
+            try
+            {
+                // Re-expand and re-parse the body so that %%variable gets substituted
+                var bodyText = string.Concat(@for.Body.GetTokens().Select(t => t.Raw));
+                var expanded = BatchExecutor.Expand(bodyText, bc);
+                var parser = new Parser();
+                parser.Append(expanded);
+                var parsed = parser.ParseCommand();
+                if (parsed.HasError || parsed.Root is EmptyCommandNode) return 0;
+                return await ExecuteNodeAsync(bc, parsed.Root);
+            }
+            finally
+            {
+                if (savedVar == null) bc.Context.EnvironmentVariables.Remove(varName);
+                else bc.Context.EnvironmentVariables[varName] = savedVar;
+            }
+        }
+
+        // Expand the list items (env vars and batch params)
+        var rawItems = @for.List
+            .TakeWhile(t => !(t is TextToken tt && tt.Value.Equals("do", StringComparison.OrdinalIgnoreCase)))
+            .Select(t => t.Raw)
+            .ToList();
+
+        // ── /L numeric loop: for /l %%n in (start,step,end) do ────────────────
+        if (@for.Switches.HasFlag(ForSwitches.Loop))
+        {
+            var combined = BatchExecutor.Expand(string.Concat(rawItems), bc).Trim();
+            var parts = combined.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length >= 3
+                && int.TryParse(parts[0], out var start)
+                && int.TryParse(parts[1], out var step)
+                && int.TryParse(parts[2], out var end))
+            {
+                var last = 0;
+                if (step > 0) for (var n = start; n <= end; n += step) last = await RunBody(n.ToString());
+                else if (step < 0) for (var n = start; n >= end; n += step) last = await RunBody(n.ToString());
+            }
+            return bc.Context.ErrorCode;
+        }
+
+        // ── /F file/string/command processing ─────────────────────────────────
+        if (@for.Switches.HasFlag(ForSwitches.F))
+        {
+            var paramsText = BatchExecutor.Expand(string.Concat(@for.Params.Select(t => t.Raw)), bc).Trim();
+            var source = BatchExecutor.Expand(string.Concat(rawItems), bc).Trim();
+
+            // Parse /F options string (e.g. "tokens=1,2 delims=, skip=1")
+            string? optionsStr = null;
+            if (paramsText.StartsWith('"') || paramsText.StartsWith('\''))
+                optionsStr = paramsText[1..Math.Max(1, paramsText.LastIndexOfAny(['"', '\'']))];
+
+            var delims = " \t";
+            var tokens = new[] { 1 };
+            var skip = 0;
+            var useBackq = false;
+            var eol = ';';
+
+            if (optionsStr != null)
+            {
+                foreach (var opt in optionsStr.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var kv = opt.Split('=', 2);
+                    switch (kv[0].ToLowerInvariant())
+                    {
+                        case "delims": delims = kv.Length > 1 ? kv[1] : ""; break;
+                        case "tokens":
+                            if (kv.Length > 1) tokens = kv[1].Split(',')
+                                .SelectMany(t => t.Contains('-')
+                                    ? Enumerable.Range(int.Parse(t.Split('-')[0]), int.Parse(t.Split('-')[1]) - int.Parse(t.Split('-')[0]) + 1)
+                                    : t == "*" ? [-1] : [int.Parse(t)])
+                                .ToArray();
+                            break;
+                        case "skip": if (kv.Length > 1) int.TryParse(kv[1], out skip); break;
+                        case "eol": if (kv.Length > 1 && kv[1].Length > 0) eol = kv[1][0]; break;
+                        case "usebackq": useBackq = true; break;
+                    }
+                }
+            }
+
+            IEnumerable<string> lines;
+            if (source.StartsWith('"') && source.EndsWith('"'))
+            {
+                // "string" → process as a single line
+                lines = [source[1..^1]];
+            }
+            else if (useBackq && source.StartsWith('`') && source.EndsWith('`'))
+            {
+                // `command` → capture output
+                var cmd = source[1..^1];
+                var output = await RunCaptureAsync(cmd, bc);
+                lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            }
+            else if (useBackq && source.StartsWith('"') && source.EndsWith('"'))
+            {
+                // "file" with usebackq → read file
+                var filePath = BatchExecutor.Expand(source[1..^1], bc);
+                lines = File.Exists(filePath) ? await File.ReadAllLinesAsync(filePath) : [];
+            }
+            else
+            {
+                // bare word → command output
+                var cmd = source;
+                var output = await RunCaptureAsync(cmd, bc);
+                lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            }
+
+            var lineNum = 0;
+            foreach (var line in lines)
+            {
+                lineNum++;
+                if (lineNum <= skip) continue;
+                if (line.Length > 0 && line[0] == eol) continue;
+
+                var parts = delims.Length == 0
+                    ? [line]
+                    : line.Split(delims.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+                // Assign tokens to successive loop variables
+                var varChar = @for.Variable;
+                foreach (var tokenIdx in tokens)
+                {
+                    string value;
+                    if (tokenIdx == -1) // "*" = rest of line
+                    {
+                        var firstDelim = line.IndexOfAny(delims.ToCharArray());
+                        value = firstDelim >= 0 ? line[(firstDelim + 1)..].TrimStart(delims.ToCharArray()) : line;
+                    }
+                    else
+                    {
+                        value = tokenIdx <= parts.Length ? parts[tokenIdx - 1] : "";
+                    }
+
+                    bc.Context.EnvironmentVariables[$"{varChar}"] = value;
+                        varChar = (char)(varChar + 1);
+                }
+
+                await ExecuteNodeAsync(bc, @for.Body);
+            }
+
+            bc.Context.EnvironmentVariables.Remove(varName);
+            return bc.Context.ErrorCode;
+        }
+
+        // ── /D or /R or plain wildcard set ────────────────────────────────────
+        var isDir = @for.Switches.HasFlag(ForSwitches.Dirs);
+        var isRecursive = @for.Switches.HasFlag(ForSwitches.Recursive);
+
+        // Get optional /R root path from Params
+        var rootPath = isRecursive
+            ? BatchExecutor.Expand(string.Concat(@for.Params
+                .SkipWhile(t => t.Raw.Equals("/R", StringComparison.OrdinalIgnoreCase))
+                .Skip(1)
+                .TakeWhile(t => t is not WhitespaceToken)
+                .Select(t => t.Raw)), bc).Trim()
+            : null;
+
+        // Tokenize the list (space/comma separated, respecting quotes)
+        var expandedList = string.Concat(rawItems.Select(i => BatchExecutor.Expand(i, bc)));
+        var setItems = TokenizeSet(expandedList);
+
+        foreach (var item in setItems)
+        {
+            // Check if it's a wildcard pattern
+            if (item.Contains('*') || item.Contains('?'))
+            {
+                var (drive, dir) = ParsePatternPath(item, bc);
+                var pattern = Path.GetFileName(item.Replace('/', '\\'));
+
+                if (isRecursive)
+                {
+                    await foreach (var entry in bc.Context.FileSystem.EnumerateEntriesAsync(new BatPath(drive, dir), "*"))
+                    {
+                        if (entry.IsDirectory)
+                        {
+                            string[] subPath = [..dir, entry.Name];
+                            await foreach (var subEntry in bc.Context.FileSystem.EnumerateEntriesAsync(new BatPath(drive, subPath), pattern))
+                            {
+                                if (isDir == subEntry.IsDirectory || (!isDir && !subEntry.IsDirectory))
+                                {
+                                    var fullBatPath = $"{drive}:\\" + string.Join("\\", [..subPath, subEntry.Name]);
+                                    await RunBody(ApplyTildeExpansion(fullBatPath));
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    await foreach (var entry in bc.Context.FileSystem.EnumerateEntriesAsync(new BatPath(drive, dir), pattern))
+                    {
+                        if (isDir ? entry.IsDirectory : !entry.IsDirectory)
+                        {
+                            var fullBatPath = $"{drive}:\\" + string.Join("\\", [..dir, entry.Name]);
+                            await RunBody(ApplyTildeExpansion(fullBatPath));
+                        }
+                    }
+                }
+            }
+            else if (!isDir && !isRecursive)
+            {
+                // Plain value — no filesystem lookup, just substitute
+                await RunBody(item);
+            }
+        }
+
+        return bc.Context.ErrorCode;
+    }
+
+    /// <summary>Tokenizes a FOR set string, respecting double-quoted items.</summary>
+    private static List<string> TokenizeSet(string set)
+    {
+        var result = new List<string>();
+        var i = 0;
+        while (i < set.Length)
+        {
+            if (char.IsWhiteSpace(set[i]) || set[i] == ',') { i++; continue; }
+            if (set[i] == '"')
+            {
+                var end = set.IndexOf('"', i + 1);
+                if (end < 0) end = set.Length - 1;
+                result.Add(set[(i + 1)..end]);
+                i = end + 1;
+            }
+            else
+            {
+                var start = i;
+                while (i < set.Length && set[i] != ' ' && set[i] != ',' && set[i] != '\t') i++;
+                result.Add(set[start..i]);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Returns the BAT drive+dir for a pattern like C:\dir\*.txt or relative *.bat.</summary>
+    private static (char Drive, string[] Dir) ParsePatternPath(string pattern, BatchContext bc)
+    {
+        var full = pattern.Replace('/', '\\');
+        char drive;
+        string rest;
+
+        if (full.Length >= 2 && char.IsLetter(full[0]) && full[1] == ':')
+        {
+            drive = char.ToUpperInvariant(full[0]);
+            rest = full.Length > 3 ? full[3..] : "";
+        }
+        else if (full.StartsWith('\\'))
+        {
+            drive = bc.Context.CurrentDrive;
+            rest = full[1..];
+        }
+        else
+        {
+            drive = bc.Context.CurrentDrive;
+            rest = string.Join("\\", bc.Context.CurrentPath) + (bc.Context.CurrentPath.Length > 0 ? "\\" : "") + full;
+        }
+
+        var parts = rest.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        var dir = parts.Length > 1 ? parts[..^1] : [];
+        return (drive, dir);
+    }
+
+    /// <summary>Strips tilde-expansion directives if the value is a quoted path (for %%~nxf).</summary>
+    private static string ApplyTildeExpansion(string value) => value;
+
+    /// <summary>Runs a command string and captures its stdout output.</summary>
+    private static async Task<string> RunCaptureAsync(string command, BatchContext bc)
+    {
+        var sw = new StringWriter();
+        var captureConsole = bc.Context.Console.WithOutput(sw);
+        var captureCtx = bc.Context.StartNew(captureConsole);
+        var captureBc = new BatchContext { Context = captureCtx };
+
+        var parser = new Parser();
+        parser.Append(command);
+        var result = parser.ParseCommand();
+        if (!result.HasError && result.Root is not EmptyCommandNode)
+            await ExecuteNodeAsync(captureBc, result.Root);
+
+        return sw.ToString();
     }
 
     private static async Task<int> ExecuteIfNodeAsync(BatchContext bc, IfCommandNode @if)

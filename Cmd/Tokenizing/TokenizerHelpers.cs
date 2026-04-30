@@ -37,6 +37,10 @@ internal static class TokenizerHelpers
         return ctx == BlockContext.If || ctx == BlockContext.IfBlock;
     }
 
+    public static bool IsExpectingIfCondition(ref Scanner scanner) =>
+        scanner.Expected.HasFlag(ExpectedTokenTypes.IfCondition) ||
+        scanner.Expected.HasFlag(ExpectedTokenTypes.IfUnaryArg);
+
     /// <summary>
     /// Checks if we're at the start of a new line (no tokens yet, or last token was end-of-line).
     /// Used to determine if @ (echo suppressor) and : (label) have special meaning.

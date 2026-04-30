@@ -93,7 +93,7 @@ internal static class IfParser
         var wsAfterRight = reader.ConsumeWhitespace();
 
         var thenBranch = SequenceParser.ParseCommandOp(ref reader);
-        if (thenBranch == null || reader.ParseError != null)
+        if (thenBranch == null || thenBranch is IncompleteNode || reader.ParseError != null)
         { reader.ParseError ??= "IF: missing then-branch."; return null; }
 
         var wsAfterThen = reader.ConsumeWhitespace();

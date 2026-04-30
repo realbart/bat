@@ -21,7 +21,7 @@ public interface IFileSystem
     Task DeleteFileAsync(BatPath path, CancellationToken cancellationToken = default);
     Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken cancellationToken = default);
 
-    IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, bool includeDotEntries = false, CancellationToken cancellationToken = default);
 
     Task<Stream> OpenReadAsync(BatPath path, CancellationToken cancellationToken = default);
     Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken cancellationToken = default);
