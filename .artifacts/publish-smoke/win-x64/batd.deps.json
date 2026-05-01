@@ -1,0 +1,40 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0/win-x64",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {},
+    ".NETCoreApp,Version=v10.0/win-x64": {
+      "batd/2.0.10.726": {
+        "dependencies": {
+          "Context": "2.0.10.726"
+        },
+        "runtime": {
+          "batd.dll": {}
+        }
+      },
+      "Context/2.0.10.726": {
+        "runtime": {
+          "Context.dll": {
+            "assemblyVersion": "2.0.10.726",
+            "fileVersion": "2.0.10.726"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "batd/2.0.10.726": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Context/2.0.10.726": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

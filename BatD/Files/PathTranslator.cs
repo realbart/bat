@@ -96,6 +96,23 @@ public static class PathTranslator
         return result;
     }
 
+    /// <summary>
+    /// Strips a specific host directory from the PATH in an environment dictionary.
+    /// Used to remove the bat bin directory before launching external processes.
+    /// </summary>
+    public static void StripHostDirectoryFromPath(Dictionary<string, string> hostEnv, string hostDirToStrip, IFileSystem fileSystem)
+    {
+        if (!hostEnv.TryGetValue("PATH", out var path)) return;
+        var sep = fileSystem.NativePathSeparator;
+        var filtered = path
+            .Split(sep, StringSplitOptions.RemoveEmptyEntries)
+            .Where(e => !e.TrimEnd(fileSystem.NativeDirectorySeparator).Equals(
+                hostDirToStrip.TrimEnd(fileSystem.NativeDirectorySeparator),
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        hostEnv["PATH"] = string.Join(sep, filtered);
+    }
+
     private static async Task<string> TranslateBatPathListToHost(string batPathList, IFileSystem fileSystem)
     {
         var sep = fileSystem.NativePathSeparator;

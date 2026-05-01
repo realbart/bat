@@ -30,14 +30,13 @@
     <File Path="docs/steps/STEP_13_UX_FILESYSTEM.md" />
     <File Path="IMPLEMENTATION_PLAN.md" />
   </Folder>
-  <Folder Name="/PtyDemo/" />
+  <Folder Name="/Tests/">
+    <Project Path="UnitTests.Linux/UnitTests.Linux.csproj" />
+    <Project Path="UnitTests.Windows/UnitTests.Windows.csproj" />
+    <Project Path="UnitTests/UnitTests.csproj" />
+  </Folder>
   <Project Path="Bat/Bat.csproj" Id="0e00064d-4755-493e-ac6b-e890775da22b" />
   <Project Path="BatD/BatD.csproj" />
   <Project Path="Context/Context.csproj" />
-  <Folder Name="/Tests/">
-    <Project Path="UnitTests/UnitTests.csproj" />
-    <Project Path="UnitTests.Windows/UnitTests.Windows.csproj" />
-    <Project Path="UnitTests.Linux/UnitTests.Linux.csproj" />
-  </Folder>
 </Solution>
 

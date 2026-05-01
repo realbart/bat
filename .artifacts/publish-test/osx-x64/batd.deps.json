@@ -1,0 +1,40 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0/osx-x64",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {},
+    ".NETCoreApp,Version=v10.0/osx-x64": {
+      "batd/2.0.10.869": {
+        "dependencies": {
+          "Context": "2.0.10.869"
+        },
+        "runtime": {
+          "batd.dll": {}
+        }
+      },
+      "Context/2.0.10.869": {
+        "runtime": {
+          "Context.dll": {
+            "assemblyVersion": "2.0.10.869",
+            "fileVersion": "2.0.10.869"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "batd/2.0.10.869": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Context/2.0.10.869": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

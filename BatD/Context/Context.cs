@@ -126,7 +126,7 @@ public abstract class Context : IContext
         InitializeCurrentDirectory();
 
         // Point ComSpec at bat's own cmd.exe (like cmd.exe points at itself)
-        var cmdExePath = Path.Combine(AppContext.BaseDirectory, "cmd.exe");
+        var cmdExePath = Path.Combine(AppContext.BaseDirectory, "bin", "cmd.exe");
         var virtualCmdPath = await BatD.Files.PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
         if (virtualCmdPath != null)
             EnvironmentVariables["ComSpec"] = virtualCmdPath;

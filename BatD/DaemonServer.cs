@@ -156,7 +156,7 @@ internal sealed class DaemonServer : IDisposable
     {
         if (_cmdMain != null) return _cmdMain;
 
-        var cmdPath = Path.Combine(AppContext.BaseDirectory, "cmd.exe");
+        var cmdPath = Path.Combine(AppContext.BaseDirectory, "bin", "cmd.exe");
         if (!File.Exists(cmdPath))
             throw new FileNotFoundException("cmd.exe satellite not found", cmdPath);
 
@@ -164,10 +164,11 @@ internal sealed class DaemonServer : IDisposable
         var assemblyBytes = bytes[PrefixLength..];
 
         // Load PDB alongside the assembly so the debugger can attach breakpoints
+        Assembly assembly;
 
 #if DEBUG
         var pdbPath = Path.ChangeExtension(cmdPath, ".pdb");
-        var assembly = File.Exists(pdbPath)
+        assembly = File.Exists(pdbPath)
             ? Assembly.Load(assemblyBytes, File.ReadAllBytes(pdbPath))
             : Assembly.Load(assemblyBytes);
 #else
@@ -270,13 +271,13 @@ internal sealed class DaemonServer : IDisposable
     }
 
     /// <summary>
-    /// Prepends the batd executable directory to the host PATH environment variable
+    /// Prepends the bat command directory to the host PATH environment variable
     /// BEFORE context initialization translates it to virtual paths.
     /// This ensures satellites (cmd.exe, tree.com, etc.) are found by ExecutableResolver.
     /// </summary>
     private static void PrependBatDirectoryToPath()
     {
-        var hostDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        var hostDir = Path.Combine(AppContext.BaseDirectory, "bin").TrimEnd(Path.DirectorySeparatorChar);
         var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
 
         // Don't add if already present

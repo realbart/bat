@@ -46,6 +46,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         var hostEnv = await PathTranslator.TranslateBatEnvironmentToHost(
             (IReadOnlyDictionary<string, string>)context.EnvironmentVariables,
             context.FileSystem);
+        PathTranslator.StripHostDirectoryFromPath(hostEnv, Path.Combine(AppContext.BaseDirectory, "bin"), context.FileSystem);
 
         pty.Start(executable, arguments, workingDir, hostEnv, context.Console.WindowWidth, context.Console.WindowHeight);
 
@@ -131,8 +132,10 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         };
         if (!psi.UseShellExecute)
         {
-            foreach (var (key, value) in await PathTranslator.TranslateBatEnvironmentToHost(
-                (IReadOnlyDictionary<string, string>)context.EnvironmentVariables, context.FileSystem))
+            var hostEnv = await PathTranslator.TranslateBatEnvironmentToHost(
+                (IReadOnlyDictionary<string, string>)context.EnvironmentVariables, context.FileSystem);
+            PathTranslator.StripHostDirectoryFromPath(hostEnv, Path.Combine(AppContext.BaseDirectory, "bin"), context.FileSystem);
+            foreach (var (key, value) in hostEnv)
                 psi.Environment[key] = value;
         }
         var process = Process.Start(psi);

@@ -28,6 +28,10 @@ Write-Host "ProjectDirectory: $ProjectDirectory"
 $exes = @("Subst", "Doskey", "Xcopy", "Cmd")
 $coms = @("Tree")
 
+$commandOutputPath = Join-Path $OutputPath "bin"
+if (Test-Path $commandOutputPath) { Remove-Item "$commandOutputPath\*" -Force }
+New-Item -ItemType Directory -Path $commandOutputPath -Force | Out-Null
+
 $solutionDir = Split-Path $ProjectDirectory -Parent
 $prefixBinPath = Join-Path $solutionDir "prefix.bin"
 
@@ -68,20 +72,13 @@ function ProcessFile {
 
     $dllBytes = [System.IO.File]::ReadAllBytes($dllPath)
     $outputFileName = $OutputName.ToLower() + $Extension
-    $outputFilePath = Join-Path $OutputPath $outputFileName
+    $outputFilePath = Join-Path $commandOutputPath $outputFileName
 
     $combinedBytes = [byte[]]($prefixBytes + $dllBytes)
     [System.IO.File]::WriteAllBytes($outputFilePath, $combinedBytes)
 
     Write-Host "Created: $outputFilePath"
 
-    $pdbPath = Join-Path $projectDir "bin\$Configuration\net10.0\$OutputName.pdb"
-    if (Test-Path $pdbPath) {
-        $pdbFileName = $OutputName.ToLower() + ".pdb"
-        $pdbOutputPath = Join-Path $OutputPath $pdbFileName
-        Copy-Item $pdbPath $pdbOutputPath -Force
-        Write-Host "Copied: $pdbOutputPath"
-    }
 }
 
 foreach ($exe in $exes) {
@@ -95,17 +92,16 @@ foreach ($com in $coms) {
 # Copy prefixed satellites to BatD output dir so debugging BatD as startup project works
 $batdOutputDir = Join-Path $solutionDir "BatD\bin\$Configuration\net10.0"
 if (Test-Path $batdOutputDir) {
+    $batdCommandOutputDir = Join-Path $batdOutputDir "bin"
+    if (Test-Path $batdCommandOutputDir) { Remove-Item "$batdCommandOutputDir\*" -Force }
+    New-Item -ItemType Directory -Path $batdCommandOutputDir -Force | Out-Null
     foreach ($exe in $exes) {
-        $src = Join-Path $OutputPath "$($exe.ToLower()).exe"
-        if (Test-Path $src) { Copy-Item $src $batdOutputDir -Force; Write-Host "Copied to BatD: $($exe.ToLower()).exe" }
-        $pdb = Join-Path $OutputPath "$($exe.ToLower()).pdb"
-        if (Test-Path $pdb) { Copy-Item $pdb $batdOutputDir -Force }
+        $src = Join-Path $commandOutputPath "$($exe.ToLower()).exe"
+        if (Test-Path $src) { Copy-Item $src $batdCommandOutputDir -Force; Write-Host "Copied to BatD bin: $($exe.ToLower()).exe" }
     }
     foreach ($com in $coms) {
-        $src = Join-Path $OutputPath "$($com.ToLower()).com"
-        if (Test-Path $src) { Copy-Item $src $batdOutputDir -Force; Write-Host "Copied to BatD: $($com.ToLower()).com" }
-        $pdb = Join-Path $OutputPath "$($com.ToLower()).pdb"
-        if (Test-Path $pdb) { Copy-Item $pdb $batdOutputDir -Force }
+        $src = Join-Path $commandOutputPath "$($com.ToLower()).com"
+        if (Test-Path $src) { Copy-Item $src $batdCommandOutputDir -Force; Write-Host "Copied to BatD bin: $($com.ToLower()).com" }
     }
 }
 

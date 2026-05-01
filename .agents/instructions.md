@@ -2,6 +2,8 @@
 
 These are the general instructions for developing and maintaining the `bat` project.
 
+> **IMPORTANT:** This is the only file where instructions may be added or updated. Never write to `.github/copilot-instructions.md` — that file must stay unchanged.
+
 ## Projects
 * Do not add new projects unless explicitly asked to
 
@@ -25,6 +27,12 @@ These are the general instructions for developing and maintaining the `bat` proj
 - When writing unit tests: read docs/Architecture.md and docs/UnitTests.md.
 - When writing functionality: follow docs/Architecture.md.
 - When fixing bugs: write a failing test first (TDD).
+
+## File Output
+- In Bat, file output via redirects (>, >>) must always use \r\n line endings regardless of platform, matching CMD behavior. The \r\n to \n conversion only happens at the rendering/display layer, not at the file I/O layer.
+
+## Distribution Layout
+- For distribution output, only `bat` and `batd` should exist at the runtime root plus a `bin` folder. No `.pdb`, `.dll`, or `.json` sidecar files should be shipped. The `bin` folder contents should be identical across distributions because the DOS command files are disguised DLL wrappers. The publish script may start by removing the existing output tree.
 
 ## Architecture & Logic Placement
 The project is divided into several layers: FileSystem, Console, Context, BatchContext, Line Parser. Always place functionality in the most appropriate and "clean" layer.
