@@ -28,6 +28,7 @@
 {entry} pause.bat
 {entry} pause.txt
 {entry} redirect.bat
+{entry} redirect.txt
 {entry} rem.bat
 {entry} rem.txt
 {entry} remark.bat
@@ -68,6 +69,7 @@ if.txt
 pause.bat
 pause.txt
 redirect.bat
+redirect.txt
 rem.bat
 rem.txt
 remark.bat
@@ -106,6 +108,7 @@ if.txt
 pause.bat
 pause.txt
 redirect.bat
+redirect.txt
 rem.bat
 rem.txt
 remark.bat
@@ -144,6 +147,7 @@ if.txt
 pause.bat
 pause.txt
 redirect.bat
+redirect.txt
 rem.bat
 rem.txt
 remark.bat
@@ -182,6 +186,7 @@ if.txt
 pause.bat
 pause.txt
 redirect.bat
+redirect.txt
 rem.bat
 rem.txt
 remark.bat

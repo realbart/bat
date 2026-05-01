@@ -1,0 +1,5 @@
+hello
+hello
+world
+pipe test
+after stderr redirect: 1

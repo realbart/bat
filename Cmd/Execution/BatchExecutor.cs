@@ -98,6 +98,8 @@ internal class BatchExecutor : IExecutor
             }
 
             var exitCode = await Dispatcher.ExecuteNodeAsync(bc, result.Root);
+            if (exitCode != ExitCommand.ExitSentinel && exitCode != ExitCommand.ExitBatchSentinel && exitCode != GotoCommand.GotoSentinel)
+                context.ErrorCode = exitCode;
             context.EnvironmentVariables["ERRORLEVEL"] = context.ErrorCode.ToString();
             if (exitCode == ExitCommand.ExitSentinel)
             {

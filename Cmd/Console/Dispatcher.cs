@@ -540,14 +540,6 @@ internal class Dispatcher : IDispatcher
         // "bat" is an alias for "cmd" — nested shell via satellite, not a native process
         var resolvedName = rawName.Equals("bat", StringComparison.OrdinalIgnoreCase) ? "cmd" : rawName;
 
-        var executablePath = await ExecutableResolver.ResolveAsync(resolvedName, bc.Context);
-        if (executablePath == null)
-        {
-            await bc.Console.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
-            await bc.Console.Error.WriteLineAsync("operable program or batch file.");
-            return 1;
-        }
-
         var (folderFound, _) = await bc.Context.TryGetCurrentFolderAsync();
         if (!folderFound)
         {
@@ -557,8 +549,16 @@ internal class Dispatcher : IDispatcher
 
         return await WithRedirections(bc, cmd.Redirections, async () =>
         {
+            var executablePath = await ExecutableResolver.ResolveAsync(resolvedName, bc.Context);
+            if (executablePath == null)
+            {
+                await bc.Console.Error.WriteLineAsync($"'{rawName}' is not recognized as an internal or external command,");
+                await bc.Console.Error.WriteLineAsync("operable program or batch file.");
+                return 1;
+            }
+
             var executor = await GetExecutor(bc.Console, executablePath, bc.Context.FileSystem);
-            var arguments = string.Join(" ", cmd.Tail.OfType<TextToken>().Select(t => t.Value));
+            var arguments = string.Concat(cmd.Tail.Select(t => t.Raw)).TrimStart();
             return await executor.ExecuteAsync(executablePath, arguments, bc, cmd.Redirections);
         });
     }

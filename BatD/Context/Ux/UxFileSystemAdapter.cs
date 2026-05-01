@@ -184,7 +184,7 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
         var native = ResolveNativePath(path);
         return Task.FromResult<Stream>(append
             ? new FileStream(native, FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(native));
+            : new FileStream(native, FileMode.Create, FileAccess.Write));
     }
 
     public override async Task<string> ReadAllTextAsync(BatPath path, CancellationToken cancellationToken = default) =>

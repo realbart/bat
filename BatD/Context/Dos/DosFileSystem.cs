@@ -137,7 +137,7 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     public override Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken cancellationToken = default) =>
         Task.FromResult<Stream>(append
             ? new FileStream(ResolveNativePath(path), FileMode.Append, FileAccess.Write)
-            : File.OpenWrite(ResolveNativePath(path)));
+            : new FileStream(ResolveNativePath(path), FileMode.Create, FileAccess.Write));
 
     public override async Task<string> ReadAllTextAsync(BatPath path, CancellationToken cancellationToken = default) =>
         await File.ReadAllTextAsync(ResolveNativePath(path), cancellationToken);
