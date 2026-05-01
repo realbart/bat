@@ -22,7 +22,7 @@ internal sealed class RedirectionHandler : IDisposable
 
         foreach (var redir in redirections)
         {
-            var targetText = GetTargetText(redir.Target);
+            var targetText = Expander.ExpandEnvironmentVariables(GetTargetText(redir.Target), ctx);
 
             switch (redir.Token)
             {

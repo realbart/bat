@@ -145,9 +145,14 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             var outTask = ForwardStreamAsync(process.StandardOutput, context.Console.Out);
             var errTask = ForwardStreamAsync(process.StandardError, context.Console.Error);
 
-            // Forward console input to process stdin
+            // Forward stdin: when not interactive (piped input), copy the TextReader directly
+            // so the process receives the full pipe content and stdin closes on EOF.
+            // When interactive, forward keystrokes one at a time.
             using var cts = new CancellationTokenSource();
-            _ = ForwardInputAsync(context.Console, process.StandardInput, cts.Token);
+            if (!context.Console.IsInteractive)
+                _ = ForwardTextReaderAsync(context.Console.In, process.StandardInput, cts.Token);
+            else
+                _ = ForwardInputAsync(context.Console, process.StandardInput, cts.Token);
 
             await Task.WhenAll(outTask, errTask);
             await process.WaitForExitAsync();
@@ -174,6 +179,25 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
                 if (key.Key == ConsoleKey.Enter)
                     await stdin.FlushAsync(ct);
             }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    private static async Task ForwardTextReaderAsync(TextReader reader, StreamWriter stdin, CancellationToken ct)
+    {
+        try
+        {
+            var buffer = new char[4096];
+            int read;
+            while (!ct.IsCancellationRequested &&
+                   (read = await reader.ReadAsync(buffer.AsMemory(), ct)) > 0)
+            {
+                await stdin.WriteAsync(buffer.AsMemory(0, read), ct);
+                await stdin.FlushAsync(ct);
+            }
+            stdin.Close();
         }
         catch (OperationCanceledException) { }
         catch (IOException) { }

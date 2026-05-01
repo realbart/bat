@@ -87,7 +87,7 @@ public static class Program
             { }
             else
             {
-                await output.WriteLineAsync("Invalid macro definition.");
+                await output.WriteLineAsync("invalid macro definition.");
                 return 1;
             }
         }
