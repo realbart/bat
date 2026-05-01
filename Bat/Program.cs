@@ -226,19 +226,18 @@ internal static class Program
         {
             try
             {
-                var stdinStream = Console.OpenStandardInput();
-                var buf = new byte[256];
                 while (!ct.IsCancellationRequested)
                 {
-                    var n = await stdinStream.ReadAsync(buf, ct);
-                    if (n <= 0) break;
-
                     if (_rawMode)
+                    {
+                        var stdinStream = Console.OpenStandardInput();
+                        var buf = new byte[256];
+                        var n = await stdinStream.ReadAsync(buf, ct);
+                        if (n <= 0) break;
                         await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
+                    }
                     else
                     {
-                        // On Unix in key mode, use Console.ReadKey for structured key info
-                        // (stdin is already being consumed above, so just send as key)
                         var key = Console.ReadKey(true);
                         await TerminalProtocol.WriteKeyAsync(stream, key, ct);
                     }
