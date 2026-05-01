@@ -34,9 +34,11 @@ public static class TerminalProtocol
     /// <summary>Returns the socket path for the current user.</summary>
     public static string GetSocketPath()
     {
-        var tmp = OperatingSystem.IsWindows()
-            ? Environment.GetEnvironmentVariable("TEMP") ?? Path.GetTempPath()
-            : "/tmp";
+#if WINDOWS
+        var tmp = Environment.GetEnvironmentVariable("TEMP") ?? Path.GetTempPath();
+#else
+        var tmp = "/tmp";
+#endif
         return Path.Combine(tmp, $"batd-{Environment.UserName}.sock");
     }
 
