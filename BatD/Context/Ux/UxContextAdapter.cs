@@ -33,6 +33,15 @@ public class UxContextAdapter : global::BatD.Context.Context
         return StartNewCore(newContext);
     }
 
+    public override global::Context.IPseudoTerminal CreatePty()
+    {
+#if UNIX
+        return new BatD.Pty.PosixPty();
+#else
+        throw new PlatformNotSupportedException();
+#endif
+    }
+
     protected override void PostProcessEnvironmentVariables()
     {
         // Translate environment variables whose values are Unix absolute paths.

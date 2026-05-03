@@ -3,13 +3,13 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace Bat.Pty;
+namespace BatD.Pty;
 
 /// <summary>
 /// Windows ConPTY implementation.
 /// Based on https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
 /// </summary>
-internal sealed class ConPty : IPseudoTerminal
+internal sealed class ConPty : global::Context.IPseudoTerminal
 {
     private SafeFileHandle? _inputWriteHandle;
     private SafeFileHandle? _outputReadHandle;
@@ -56,7 +56,6 @@ internal sealed class ConPty : IPseudoTerminal
                 : $"\"{executable}\" {arguments}";
 
             // Build environment block if custom environment is provided
-            // Otherwise pass nint.Zero to inherit parent environment
             nint envBlock = nint.Zero;
             SafeHandle? envBlockHandle = null;
 
@@ -96,7 +95,7 @@ internal sealed class ConPty : IPseudoTerminal
                 _processId = pi.dwProcessId;
                 CloseHandle(pi.hThread);
 
-                _inputStream = null; // Using direct ReadFile/WriteFile P/Invoke instead
+                _inputStream = null;
                 _outputStream = null;
             }
             finally
@@ -165,11 +164,6 @@ internal sealed class ConPty : IPseudoTerminal
         return (int)code;
     }
 
-    /// <summary>
-    /// Closes the pseudoconsole handle, which signals EOF on the output pipe
-    /// so the reader can drain remaining bytes and finish.
-    /// Must be called after the child process exits but before awaiting the output reader.
-    /// </summary>
     public void ClosePseudoConsoleHandle()
     {
         if (_hPC != nint.Zero) { ClosePseudoConsole(_hPC); _hPC = nint.Zero; }
@@ -228,7 +222,6 @@ internal sealed class ConPty : IPseudoTerminal
     private const uint PSEUDOCONSOLE_INHERIT_CURSOR = 0x00000001;
     private static readonly nint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
 
-    // Helper for managing unmanaged memory
     private sealed class SafeHGlobalHandle : SafeHandle
     {
         public SafeHGlobalHandle(nint handle) : base(nint.Zero, true)

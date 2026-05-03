@@ -1,18 +1,14 @@
-namespace Bat.Pty;
+namespace Context;
 
 /// <summary>
 /// Platform-agnostic interface for pseudo-terminal operations.
 /// Implementations: ConPty (Windows), PosixPty (Linux/macOS).
 /// </summary>
-internal interface IPseudoTerminal : IDisposable
+public interface IPseudoTerminal : IDisposable
 {
     /// <summary>
     /// Spawns a process attached to this PTY.
     /// </summary>
-    /// <param name="executable">Path to the executable</param>
-    /// <param name="arguments">Command line arguments</param>
-    /// <param name="workingDirectory">Working directory for the process</param>
-    /// <param name="environment">Environment variables (null = inherit)</param>
     void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment, int columns, int rows);
 
     /// <summary>
@@ -35,10 +31,11 @@ internal interface IPseudoTerminal : IDisposable
     /// Waits for the process to exit and returns the exit code.
     /// </summary>
     Task<int> WaitForExitAsync(CancellationToken ct = default);
-        /// <summary>
-        /// Closes the pseudoconsole handle to signal EOF on the output pipe.
-        /// </summary>
-        void ClosePseudoConsoleHandle();
+
+    /// <summary>
+    /// Closes the pseudoconsole handle to signal EOF on the output pipe.
+    /// </summary>
+    void ClosePseudoConsoleHandle();
 
     /// <summary>
     /// Gets the process ID of the spawned process.

@@ -26,6 +26,8 @@ internal class TestContext : BatD.Context.Context
     {
         return new TestContext(FileSystem, console ?? Console);
     }
+
+    public override IPseudoTerminal CreatePty() => throw new NotSupportedException();
 }
 
 [TestClass]

@@ -150,6 +150,8 @@ public abstract class Context : IContext
 
     public abstract IContext StartNew(IConsole? console = null);
 
+    public abstract IPseudoTerminal CreatePty();
+
     protected IContext StartNewCore(IContext newInstance)
     {
         foreach (var kv in EnvironmentVariables)

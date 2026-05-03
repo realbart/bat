@@ -1,5 +1,5 @@
 // todo: only compile in windos builds
-
+#if WINDOWS
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
@@ -286,3 +286,4 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool FindClose(IntPtr hFindFile);
 }
+#endif

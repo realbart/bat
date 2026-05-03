@@ -224,17 +224,33 @@ internal static class Program
 #if !WINDOWS
         private async Task UnixInputLoopAsync(Stream stream, CancellationToken ct)
         {
+            var currentlyRaw = false;
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    if (_rawMode)
+                    // Mode switch
+                    if (_rawMode && !currentlyRaw)
+                    {
+                        UnixTerminal.EnterRawMode();
+                        currentlyRaw = true;
+                    }
+                    else if (!_rawMode && currentlyRaw)
+                    {
+                        UnixTerminal.LeaveRawMode();
+                        currentlyRaw = false;
+                    }
+
+                    if (currentlyRaw)
                     {
                         var stdinStream = Console.OpenStandardInput();
                         var buf = new byte[256];
-                        var n = await stdinStream.ReadAsync(buf, ct);
-                        if (n <= 0) break;
-                        await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
+                        while (_rawMode && !ct.IsCancellationRequested)
+                        {
+                            var n = await stdinStream.ReadAsync(buf, ct);
+                            if (n <= 0) break;
+                            await TerminalProtocol.WriteAsync(stream, TerminalMessageType.RawInput, buf.AsMemory(0, n), ct);
+                        }
                     }
                     else
                     {
@@ -245,6 +261,11 @@ internal static class Program
             }
             catch (OperationCanceledException) { }
             catch (IOException) { }
+            finally
+            {
+                if (currentlyRaw)
+                    UnixTerminal.LeaveRawMode();
+            }
         }
 #endif
 

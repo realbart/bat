@@ -41,7 +41,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
 
     private static async Task<int> ExecuteWithPtyAsync(string executable, string arguments, string workingDir, global::Context.IContext context)
     {
-        using var pty = CreatePty();
+        using var pty = CreatePty(context);
 
         var hostEnv = await PathTranslator.TranslateBatEnvironmentToHost(
             (IReadOnlyDictionary<string, string>)context.EnvironmentVariables,
@@ -108,13 +108,9 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         }
     }
 
-    private static IPseudoTerminal CreatePty()
+    private static global::Context.IPseudoTerminal CreatePty(global::Context.IContext context)
     {
-#if WINDOWS
-        return new ConPty();
-#else
-        return new PosixPty();
-#endif
+        return context.CreatePty();
     }
 
     private async Task<int> ExecuteWithProcessAsync(string executable, string arguments, string workingDir, global::Context.IContext context, bool hasRedirections)

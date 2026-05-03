@@ -14,15 +14,11 @@ internal sealed class PtyProcessRunner : IDisposable
     private Task? _outputTask;
     private bool _disposed;
 
-    public PtyProcessRunner(IConsole console)
+    public PtyProcessRunner(IContext context)
     {
-        _console = console;
+        _console = context.Console;
         _console.Resized += OnResized;
-#if WINDOWS
-        _pty = new ConPty();
-#else
-        _pty = new PosixPty();
-#endif
+        _pty = context.CreatePty();
     }
 
     private void OnResized(int columns, int rows)

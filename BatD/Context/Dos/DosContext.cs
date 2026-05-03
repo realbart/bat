@@ -1,3 +1,4 @@
+#if WINDOWS
 using BatD.Context;
 using BatD.Files;
 using global::Context;
@@ -31,6 +32,8 @@ public class DosContext : global::BatD.Context.Context
 
         return StartNewCore(newContext);
     }
+
+    public override global::Context.IPseudoTerminal CreatePty() => new BatD.Pty.ConPty();
 
     protected override void PostProcessEnvironmentVariables()
     {
@@ -114,3 +117,5 @@ public class DosContext : global::BatD.Context.Context
         CurrentFolders[CurrentDrive] = [];
     }
 }
+
+#endif

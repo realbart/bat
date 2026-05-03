@@ -45,6 +45,11 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="Pty\ConPty.cs" />
+    <Compile Include="Pty\PosixPty.cs" />
+  </ItemGroup>
+
   <!-- Kill any running batd before build — it locks the output binary -->
   <Target Name="KillBatd" BeforeTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="taskkill /im batd.exe /f 2&gt;nul" IgnoreExitCode="true" />

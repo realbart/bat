@@ -45,6 +45,7 @@ public class PromptExpanderTests
         public Task<(bool Found, string NativePath)> TryGetCurrentFolderAsync() => Task.FromResult((false, ""));
         public void ApplySnapshot(IContext other) { }
         public IContext StartNew(IConsole? console = null) => this;
+        public IPseudoTerminal CreatePty() => throw new NotSupportedException();
     }
 
     // ── tests ────────────────────────────────────────────────────────────────

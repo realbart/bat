@@ -388,6 +388,8 @@ internal class TestCommandContext(IFileSystem? fileSystem = null) : IContext
 
         return newContext;
     }
+
+    public IPseudoTerminal CreatePty() => throw new NotSupportedException("PTY not available in tests");
 }
 
 /// <summary>In-memory IFileSystem for unit tests.</summary>

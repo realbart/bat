@@ -36,4 +36,9 @@ public interface IContext
     /// Performs deep copy of state with optional console override.
     /// </summary>
     IContext StartNew(IConsole? console = null);
+
+    /// <summary>
+    /// Creates a platform-specific pseudo-terminal instance.
+    /// </summary>
+    IPseudoTerminal CreatePty();
 }

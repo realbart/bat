@@ -1,15 +1,14 @@
 #if UNIX
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Bat.Pty;
+namespace BatD.Pty;
 
 /// <summary>
-/// POSIX PTY implementation using forkpty/posix_openpt.
+/// POSIX PTY implementation using forkpty.
 /// Works on Linux, macOS, and other POSIX-compliant systems.
 /// </summary>
-internal sealed partial class PosixPty : IPseudoTerminal
+internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 {
     private int _masterFd = -1;
     private int _childPid = -1;
@@ -41,7 +40,6 @@ internal sealed partial class PosixPty : IPseudoTerminal
             // Set environment variables
             if (environment != null)
             {
-                // Clear and set new environment
                 foreach (var kvp in environment)
                     Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
             }
@@ -252,7 +250,7 @@ internal sealed partial class PosixPty : IPseudoTerminal
     private const int F_SETFL = 4;
     private const int O_NONBLOCK = 2048;
     private const int SIGTERM = 15;
-    private const uint TIOCSWINSZ = 0x5414; // Linux value, may differ on macOS
+    private const uint TIOCSWINSZ = 0x5414;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct WinSize
