@@ -1,6 +1,7 @@
 #if UNIX
 using System.Text.RegularExpressions;
 using Context;
+using BatD.Files;
 
 namespace Bat.UnitTests;
 
@@ -105,7 +106,6 @@ public class TestFileSystem : IFileSystem
         = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _shortNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _fileContents = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<char, string> _substs = [];
 
     public void AddDir(char drive, string[] path) => _dirs.Add(Key(drive, path));
 
@@ -246,11 +246,90 @@ public class TestFileSystem : IFileSystem
     public virtual string GetVolumeLabel(char drive) => "";
     public virtual long GetFreeBytes(char drive) => 1024 * 1024 * 1024;
     public IReadOnlyDictionary<string, string> GetFileAssociations() => new Dictionary<string, string>();
-    public IReadOnlyDictionary<char, string> GetSubsts() => _substs;
-    public void AddSubst(char drive, string nativePath) => _substs[char.ToUpperInvariant(drive)] = nativePath;
-    public void RemoveSubst(char drive) => _substs.Remove(char.ToUpperInvariant(drive));
-}
+    public void AddSubst(char drive, string nativePath) => Substs[char.ToUpperInvariant(drive)] = BatPath.Parse(nativePath);
+    public void RemoveSubst(char drive) => Substs.Remove(char.ToUpperInvariant(drive));
 
+    public Dictionary<char, BatPath> Substs { get; } = [];
+
+    public char NativeDirectorySeparator => '/';
+    public char NativePathSeparator => ':';
+
+    // ── Async members ──────────────────────────────────────────────────────────
+    public Task<HostPath> GetNativePathAsync(BatPath path, CancellationToken ct = default) =>
+        Task.FromResult(new HostPath(GetNativePath(path.Drive, path.Segments)));
+
+    public Task<BatPath> FromNativePathAsync(HostPath hostPath, CancellationToken ct = default)
+    {
+        var p = hostPath.Path;
+        if (string.IsNullOrEmpty(p) || p.Length < 2 || p[1] != ':')
+            throw new ArgumentException($"Invalid path: {p}");
+        var drive = char.ToUpperInvariant(p[0]);
+        var rest = p.Length > 3 && p[2] == '\\' ? p[3..] : "";
+        var segments = string.IsNullOrEmpty(rest) ? Array.Empty<string>() : rest.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        return Task.FromResult(new BatPath(drive, segments));
+    }
+
+    public Task<bool> FileExistsAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(FileExists(path.Drive, path.Segments));
+    public Task<bool> DirectoryExistsAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(DirectoryExists(path.Drive, path.Segments));
+    public Task<bool> IsExecutableAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(IsExecutable(path.Drive, path.Segments));
+    public Task CreateDirectoryAsync(BatPath path, CancellationToken ct = default) { CreateDirectory(path.Drive, path.Segments); return Task.CompletedTask; }
+    public Task DeleteFileAsync(BatPath path, CancellationToken ct = default) { DeleteFile(path.Drive, path.Segments); return Task.CompletedTask; }
+    public Task DeleteDirectoryAsync(BatPath path, bool recursive, CancellationToken ct = default) { DeleteDirectory(path.Drive, path.Segments, recursive); return Task.CompletedTask; }
+    public async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(BatPath path, string pattern, bool includeDotEntries = false, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        foreach (var e in EnumerateEntries(path.Drive, path.Segments, pattern)) yield return e;
+    }
+    public Task<Stream> OpenReadAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(OpenRead(path.Drive, path.Segments));
+    public Task<Stream> OpenWriteAsync(BatPath path, bool append, CancellationToken ct = default) => Task.FromResult(OpenWrite(path.Drive, path.Segments, append));
+    public Task<string> ReadAllTextAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(ReadAllText(path.Drive, path.Segments));
+    public Task WriteAllTextAsync(BatPath path, string content, CancellationToken ct = default) { WriteAllText(path.Drive, path.Segments, content); return Task.CompletedTask; }
+    public Task CopyFileAsync(BatPath source, BatPath dest, bool overwrite, CancellationToken ct = default) { CopyFile(source.Drive, source.Segments, dest.Drive, dest.Segments, overwrite); return Task.CompletedTask; }
+    public Task MoveFileAsync(BatPath source, BatPath dest, CancellationToken ct = default) { MoveFile(source.Drive, source.Segments, dest.Drive, dest.Segments); return Task.CompletedTask; }
+    public Task RenameFileAsync(BatPath path, string newName, CancellationToken ct = default) { RenameFile(path.Drive, path.Segments, newName); return Task.CompletedTask; }
+    public Task<FileAttributes> GetAttributesAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(GetAttributes(path.Drive, path.Segments));
+    public Task SetAttributesAsync(BatPath path, FileAttributes attributes, CancellationToken ct = default) { SetAttributes(path.Drive, path.Segments, attributes); return Task.CompletedTask; }
+    public Task<long> GetFileSizeAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(GetFileSize(path.Drive, path.Segments));
+    public Task<DateTime> GetLastWriteTimeAsync(BatPath path, CancellationToken ct = default) => Task.FromResult(GetLastWriteTime(path.Drive, path.Segments));
+    public Task<uint> GetVolumeSerialNumberAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetVolumeSerialNumber(drive));
+    public Task<string> GetVolumeLabelAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetVolumeLabel(drive));
+    public Task<long> GetFreeBytesAsync(char drive, CancellationToken ct = default) => Task.FromResult(GetFreeBytes(drive));
+    public Task<IReadOnlyDictionary<string, string>> GetFileAssociationsAsync(CancellationToken ct = default) => Task.FromResult(GetFileAssociations());
+
+    public async Task<(bool Success, HostPath Path)> TryGetNativePathAsync(BatPath path, CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await GetNativePathAsync(path, ct);
+            return (true, result);
+        }
+        catch { return (false, default); }
+    }
+
+    // Async char/string[] overloads
+    public Task<bool> FileExistsAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(FileExists(drive, path));
+    public Task<bool> DirectoryExistsAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(DirectoryExists(drive, path));
+    public Task<bool> IsExecutableAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(IsExecutable(drive, path));
+    public Task CreateDirectoryAsync(char drive, string[] path, CancellationToken ct = default) { CreateDirectory(drive, path); return Task.CompletedTask; }
+    public Task DeleteFileAsync(char drive, string[] path, CancellationToken ct = default) { DeleteFile(drive, path); return Task.CompletedTask; }
+    public Task DeleteDirectoryAsync(char drive, string[] path, bool recursive, CancellationToken ct = default) { DeleteDirectory(drive, path, recursive); return Task.CompletedTask; }
+    public async IAsyncEnumerable<DosFileEntry> EnumerateEntriesAsync(char drive, string[] path, string pattern, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        foreach (var e in EnumerateEntries(drive, path, pattern)) yield return e;
+    }
+    public Task<Stream> OpenReadAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(OpenRead(drive, path));
+    public Task<Stream> OpenWriteAsync(char drive, string[] path, bool append, CancellationToken ct = default) => Task.FromResult(OpenWrite(drive, path, append));
+    public Task<string> ReadAllTextAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(ReadAllText(drive, path));
+    public Task WriteAllTextAsync(char drive, string[] path, string content, CancellationToken ct = default) { WriteAllText(drive, path, content); return Task.CompletedTask; }
+    public Task CopyFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, bool overwrite, CancellationToken ct = default) { CopyFile(sourceDrive, sourcePath, destDrive, destPath, overwrite); return Task.CompletedTask; }
+    public Task MoveFileAsync(char sourceDrive, string[] sourcePath, char destDrive, string[] destPath, CancellationToken ct = default) { MoveFile(sourceDrive, sourcePath, destDrive, destPath); return Task.CompletedTask; }
+    public Task RenameFileAsync(char drive, string[] path, string newName, CancellationToken ct = default) { RenameFile(drive, path, newName); return Task.CompletedTask; }
+    public Task<FileAttributes> GetAttributesAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetAttributes(drive, path));
+    public Task SetAttributesAsync(char drive, string[] path, FileAttributes attributes, CancellationToken ct = default) { SetAttributes(drive, path, attributes); return Task.CompletedTask; }
+    public Task<long> GetFileSizeAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetFileSize(drive, path));
+    public Task<DateTime> GetLastWriteTimeAsync(char drive, string[] path, CancellationToken ct = default) => Task.FromResult(GetLastWriteTime(drive, path));
+    public bool TryGetNativePath(char drive, string[] path, out string nativePath) { nativePath = GetNativePath(drive, path); return true; }
+    public string GetFullPathDisplayName(BatPath path) => GetFullPathDisplayName(path.Drive, path.Segments);
+}
 /// <summary>A writable stream that flushes content back to TestFileSystem on dispose.</summary>
 internal sealed class WriteTrackingStream(TestFileSystem fs, string key, bool append) : MemoryStream
 {

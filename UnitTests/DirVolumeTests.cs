@@ -1,8 +1,10 @@
 #if UNIX
 using Bat.Commands;
 using BatD.Context.Ux;
+using BatD.Files;
 using Bat.Execution;
 using Context;
+using System.Globalization;
 
 namespace Bat.UnitTests;
 
@@ -56,7 +58,7 @@ public class DirVolumeTests
         
         var (cmd, console, bc) = Setup(fs, 'C', []);
         // Set US culture: M/dd/yyyy (base en-US uses M/d/yyyy)
-        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new("en-US"));
+        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new CultureInfo("en-US"));
         
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
 
@@ -66,7 +68,7 @@ public class DirVolumeTests
         // Set NL culture: dd-MM-yyyy
         console = new();
         bc.Context = bc.Context.StartNew(console);
-        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new("nl-NL"));
+        ((TestCommandContext)bc.Context).FileCulture = NormalizedFileCulture.Create(new CultureInfo("nl-NL"));
         await cmd.ExecuteAsync(TestArgs.For<DirCommand>(), bc, []);
         
         // nl-NL short date for 2026-04-15 is 15-04-2026, time 13:30
