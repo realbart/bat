@@ -27,7 +27,7 @@
 	<Compile Include="..\BatD\TerminalProtocol.cs" Link="TerminalProtocol.cs" />
   </ItemGroup>
 
-  <Target Name="RunAfterBuild" AfterTargets="Build">
+  <Target Name="RunAfterBuild" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
 	<PropertyGroup>
 	  <_AfterBuildScript>"$(MSBuildProjectDirectory)\AfterBuild.ps1" -Configuration $(Configuration) -OutputPath $(OutputPath) -ProjectDirectory $(MSBuildProjectDirectory)</_AfterBuildScript>
 	</PropertyGroup>

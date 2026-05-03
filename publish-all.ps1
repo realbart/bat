@@ -1,11 +1,51 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = "Release",
-    [string[]]$RuntimeIdentifiers = @("win-x64", "linux-x64", "osx-arm64"),
+    [string[]]$RuntimeIdentifiers = @(),
     [string]$OutputRoot = (Join-Path $PSScriptRoot "publish")
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($RuntimeIdentifiers.Count -eq 0) {
+    $onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+    $onLinux   = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)
+    $RuntimeIdentifiers = if ($onWindows)    { @("win-x64", "linux-x64") }
+                          elseif ($onLinux)  { @("linux-x64") }
+                          else               { @("osx-arm64") }
+}
+
+function Ensure-WslDotNet {
+    # Check if dotnet is available in WSL
+    $version = wsl -- bash -lc "dotnet --version 2>/dev/null" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $version -match '^10\.') {
+        Write-Host "WSL dotnet $version found."
+        return
+    }
+
+    Write-Host "Installing .NET 10 SDK in WSL..."
+    wsl -- bash -lc "curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install .NET SDK in WSL." }
+
+    # Persist PATH in .bashrc and .profile so future login shells find it
+    wsl -- bash -lc @'
+for f in ~/.bashrc ~/.profile; do
+    grep -qxF 'export PATH=$PATH:$HOME/.dotnet' "$f" 2>/dev/null || echo 'export PATH=$PATH:$HOME/.dotnet' >> "$f"
+done
+'@
+    Write-Host ".NET 10 SDK installed in WSL."
+}
+
+function Ensure-WslNativeAotPrereqs {
+    # Check if clang or gcc is available (required for NativeAOT on Linux)
+    $hasClang = wsl -- bash -lc "command -v clang 2>/dev/null" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $hasClang) { return }
+
+    Write-Host "Installing NativeAOT prerequisites in WSL (clang, zlib)..."
+    wsl -- bash -lc "apt-get update -qq && apt-get install -y clang zlib1g-dev"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install NativeAOT prerequisites in WSL." }
+    Write-Host "NativeAOT prerequisites installed."
+}
 
 $solutionDir = $PSScriptRoot
 $outputRootPath = if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
@@ -16,8 +56,8 @@ else {
 }
 
 $rootPublishTargets = @(
-    @{ Name = "bat"; Project = "Bat\Bat.csproj" },
-    @{ Name = "batd"; Project = "BatD\BatD.csproj" }
+    @{ Name = "bat";  Project = "Bat\Bat.csproj";   Aot = $true  },
+    @{ Name = "batd"; Project = "BatD\BatD.csproj"; Aot = $false }
 )
 $commandTargets = @(
     @{ Project = "Cmd"; Assembly = "Cmd"; Output = "cmd.exe" },
@@ -28,10 +68,30 @@ $commandTargets = @(
 )
 
 function Invoke-DotNet {
-    param([string[]]$Arguments)
+    param(
+        [string[]]$Arguments,
+        [string]$RuntimeIdentifier
+    )
 
-    Write-Host "dotnet $($Arguments -join ' ')"
-    & dotnet @Arguments
+    $onLinux = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)
+    if ($RuntimeIdentifier -and $RuntimeIdentifier.StartsWith("linux") -and -not $onLinux) {
+        # Cross-OS AOT is not supported — route Linux builds through WSL
+        Ensure-WslDotNet
+        Ensure-WslNativeAotPrereqs
+        $wslArgs = $Arguments | ForEach-Object {
+            if ($_ -match '^([A-Za-z]):(.*)$') {
+                '/mnt/' + $Matches[1].ToLower() + ($Matches[2] -replace '\\', '/')
+            } else {
+                $_ -replace '\\', '/'
+            }
+        }
+        Write-Host "wsl dotnet $($wslArgs -join ' ')"
+        wsl dotnet @wslArgs
+    } else {
+        Write-Host "dotnet $($Arguments -join ' ')"
+        & dotnet @Arguments
+    }
+
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet failed with exit code $LASTEXITCODE."
     }
@@ -44,6 +104,13 @@ function Publish-RootTarget {
         [string]$Destination
     )
 
+    # WSL routes linux builds through a Linux environment, so AOT is supported there too.
+    $onWindows2 = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+    $onLinux2   = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)
+    $isWslLinuxBuild = $RuntimeIdentifier.StartsWith("linux") -and $onWindows2
+    $currentOs = if ($onWindows2) { "win" } elseif ($onLinux2) { "linux" } else { "osx" }
+    $aotSupported = $Target.Aot -and ($RuntimeIdentifier.StartsWith($currentOs) -or $isWslLinuxBuild)
+
     $args = @(
         "publish",
         (Join-Path $solutionDir $Target.Project),
@@ -54,12 +121,15 @@ function Publish-RootTarget {
         "/p:DebugType=None",
         "/p:DebugSymbols=false",
         "/p:IncludeSymbolsInSingleFile=false",
-        "/p:PublishAot=false",
         "-o", $Destination,
         "--nologo"
     )
 
-    Invoke-DotNet -Arguments $args
+    if (-not $aotSupported) {
+        $args += "/p:PublishAot=false"
+    }
+
+    Invoke-DotNet -Arguments $args -RuntimeIdentifier $RuntimeIdentifier
 }
 
 function Build-CommandLibrary {
