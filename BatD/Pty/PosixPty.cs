@@ -1,21 +1,23 @@
 #if UNIX
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
 namespace BatD.Pty;
 
 /// <summary>
-/// POSIX PTY implementation using forkpty.
-/// Works on Linux, macOS, and other POSIX-compliant systems.
+/// POSIX PTY implementation using posix_openpt + Process.Start (no fork).
+/// Avoids the fork-safety issues with .NET's GC/threadpool.
 /// </summary>
 internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 {
     private int _masterFd = -1;
-    private int _childPid = -1;
+    private int _slaveFd = -1;
+    private Process? _process;
     private bool _disposed;
 
-    public int ProcessId => _childPid;
-    public bool HasExited => _childPid > 0 && Waitpid(_childPid, out _, WNOHANG) != 0;
+    public int ProcessId => _process?.Id ?? -1;
+    public bool HasExited => _process?.HasExited ?? true;
 
     public void Start(string executable, string arguments, string workingDirectory, IDictionary<string, string>? environment, int columns, int rows)
     {
@@ -23,46 +25,79 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
         columns = Math.Max(1, columns);
         rows = Math.Max(1, rows);
-        var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows, ws_xpixel = 0, ws_ypixel = 0 };
 
-        // forkpty creates master/slave PTY pair and forks
-        var pid = ForkPty(out _masterFd, nint.Zero, nint.Zero, ref winSize);
+        // Open a new PTY master
+        _masterFd = PosixOpenpt(O_RDWR | O_NOCTTY);
+        if (_masterFd < 0)
+            throw new InvalidOperationException($"posix_openpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-        if (pid < 0)
-            throw new InvalidOperationException($"forkpty failed with errno {Marshal.GetLastPInvokeError()}");
+        if (Grantpt(_masterFd) != 0)
+            throw new InvalidOperationException($"grantpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-        if (pid == 0)
-        {
-            // Child process — after fork(), only async-signal-safe / raw P/Invoke calls are safe.
-            // Managed .NET (GC locks, thread-pool, etc.) must NOT be used here.
-            if (!string.IsNullOrEmpty(workingDirectory))
-                Chdir(workingDirectory);
+        if (Unlockpt(_masterFd) != 0)
+            throw new InvalidOperationException($"unlockpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-            if (environment != null)
-            {
-                foreach (var kvp in environment)
-                    Setenv(kvp.Key, kvp.Value, 1);
-            }
+        var slaveNamePtr = Ptsname(_masterFd);
+        if (slaveNamePtr == nint.Zero)
+            throw new InvalidOperationException($"ptsname failed with errno {Marshal.GetLastPInvokeError()}");
+        var slaveName = Marshal.PtrToStringUTF8(slaveNamePtr)!;
 
-            // Parse arguments and exec
-            var args = ParseArguments(arguments);
-            var argv = new string[args.Length + 2];
-            argv[0] = executable;
-            for (var i = 0; i < args.Length; i++)
-                argv[i + 1] = args[i];
-
-            Execvp(executable, argv);
-
-            // If we get here, exec failed — use _exit() not Environment.Exit()
-            Exit(127);
-        }
-
-        // Parent process
-        _childPid = pid;
+        // Set window size on master
+        var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows };
+        Ioctl(_masterFd, TIOCSWINSZ, ref winSize);
 
         // Set master to non-blocking for async operations
         var flags = Fcntl(_masterFd, F_GETFL, 0);
         Fcntl(_masterFd, F_SETFL, flags | O_NONBLOCK);
+
+        // Open slave fd
+        _slaveFd = Open(slaveName, O_RDWR, 0);
+        if (_slaveFd < 0)
+            throw new InvalidOperationException($"open slave failed with errno {Marshal.GetLastPInvokeError()}");
+
+        // Use a helper shell script to attach the slave PTY to the child's stdio,
+        // create a new session (setsid), and exec the target.
+        // This avoids fork() entirely from .NET.
+        var psi = new ProcessStartInfo("/bin/bash")
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+            WorkingDirectory = string.IsNullOrEmpty(workingDirectory) ? null : workingDirectory,
+        };
+
+        if (environment != null)
+        {
+            foreach (var kvp in environment)
+                psi.Environment[kvp.Key] = kvp.Value;
+        }
+
+        // Pass slave PTY path as env var; the child script will use it
+        psi.Environment["__BAT_SLAVE_PTY"] = slaveName;
+        psi.Environment["TERM"] = "xterm-256color";
+
+        _process = Process.Start(psi);
+        if (_process == null)
+            throw new InvalidOperationException("Failed to start child process");
+
+        // Send the shell script that attaches to the slave PTY and execs the command
+        var shellScript = $"exec setsid -w bash -c 'exec 0<>\"{slaveName}\" 1>&0 2>&0; exec {EscapeForShell(executable)} {arguments}'";
+        _process.StandardInput.WriteLine(shellScript);
+        _process.StandardInput.Close();
+
+        // Close slave in parent — child has it now
+        Close(_slaveFd);
+        _slaveFd = -1;
+    }
+
+    private static string EscapeForShell(string s)
+    {
+        if (s.Contains('\''))
+            return "'" + s.Replace("'", "'\\''") + "'";
+        if (s.Contains(' ') || s.Contains('"') || s.Contains('$') || s.Contains('`'))
+            return "'" + s + "'";
+        return s;
     }
 
     public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
@@ -109,17 +144,18 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
                     if (_masterFd < 0) return 0;
                     var result = Read(_masterFd, (nint)pin.Pointer, (nuint)buffer.Length);
                     if (result < 0)
+                    {
+                        var errno = Marshal.GetLastPInvokeError();
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
-                            var errno = Marshal.GetLastPInvokeError();
-                            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                            {
-                                Thread.Sleep(1);
-                                continue;
-                            }
-                            if (errno == EIO)
-                                return 0; // PTY closed — real EOF
-                            throw new InvalidOperationException($"read failed with errno {errno}");
+                            Thread.Sleep(1);
+                            continue;
                         }
+                        if (errno == EIO)
+                            return 0; // PTY slave closed
+                        throw new InvalidOperationException($"read failed with errno {errno}");
+                    }
+                    if (result == 0) return 0;
                     return (int)result;
                 }
                 return 0;
@@ -129,38 +165,18 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
     public void Resize(int columns, int rows)
     {
-        ObjectDisposedException.ThrowIf(_disposed || _masterFd < 0, this);
+        if (_disposed || _masterFd < 0) return;
         var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows };
         Ioctl(_masterFd, TIOCSWINSZ, ref winSize);
     }
 
     public async Task<int> WaitForExitAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed || _childPid < 0, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_process == null) return -1;
 
-        return await Task.Run(() =>
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                var result = Waitpid(_childPid, out var status, 0);
-                if (result == _childPid)
-                {
-                    if (WIFEXITED(status))
-                        return WEXITSTATUS(status);
-                    if (WIFSIGNALED(status))
-                        return 128 + WTERMSIG(status);
-                    return -1;
-                }
-                if (result < 0)
-                {
-                    var errno = Marshal.GetLastPInvokeError();
-                    if (errno == EINTR)
-                        continue;
-                    throw new InvalidOperationException($"waitpid failed with errno {errno}");
-                }
-            }
-            return -1;
-        }, ct);
+        await _process.WaitForExitAsync(ct);
+        return _process.ExitCode;
     }
 
     public void ClosePseudoConsoleHandle()
@@ -182,13 +198,12 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
             Close(_masterFd);
             _masterFd = -1;
         }
-
-        if (_childPid > 0)
+        if (_slaveFd >= 0)
         {
-            Kill(_childPid, SIGTERM);
-            Waitpid(_childPid, out _, 0);
-            _childPid = -1;
+            Close(_slaveFd);
+            _slaveFd = -1;
         }
+        _process?.Dispose();
     }
 
     private static string[] ParseArguments(string arguments)
@@ -236,22 +251,15 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
         return [.. args];
     }
 
-    // Wait status macros
-    private static bool WIFEXITED(int status) => (status & 0x7F) == 0;
-    private static int WEXITSTATUS(int status) => (status >> 8) & 0xFF;
-    private static bool WIFSIGNALED(int status) => ((status & 0x7F) + 1) >> 1 > 0;
-    private static int WTERMSIG(int status) => status & 0x7F;
-
     // Constants
-    private const int WNOHANG = 1;
-    private const int EINTR = 4;
     private const int EAGAIN = 11;
     private const int EWOULDBLOCK = EAGAIN;
     private const int EIO = 5;
     private const int F_GETFL = 3;
     private const int F_SETFL = 4;
+    private const int O_RDWR = 2;
+    private const int O_NOCTTY = 256;
     private const int O_NONBLOCK = 2048;
-    private const int SIGTERM = 15;
     private const uint TIOCSWINSZ = 0x5414;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -263,8 +271,20 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
         public ushort ws_ypixel;
     }
 
-    [LibraryImport("libc", EntryPoint = "forkpty", SetLastError = true)]
-    private static partial int ForkPty(out int master, nint name, nint termp, ref WinSize winp);
+    [LibraryImport("libc", EntryPoint = "posix_openpt", SetLastError = true)]
+    private static partial int PosixOpenpt(int flags);
+
+    [LibraryImport("libc", EntryPoint = "grantpt", SetLastError = true)]
+    private static partial int Grantpt(int fd);
+
+    [LibraryImport("libc", EntryPoint = "unlockpt", SetLastError = true)]
+    private static partial int Unlockpt(int fd);
+
+    [LibraryImport("libc", EntryPoint = "ptsname", SetLastError = true)]
+    private static partial nint Ptsname(int fd);
+
+    [LibraryImport("libc", EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int Open(string path, int flags, int mode);
 
     [LibraryImport("libc", EntryPoint = "read", SetLastError = true)]
     private static partial nint Read(int fd, nint buf, nuint count);
@@ -278,25 +298,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
     [LibraryImport("libc", EntryPoint = "ioctl", SetLastError = true)]
     private static partial int Ioctl(int fd, uint request, ref WinSize winp);
 
-    [LibraryImport("libc", EntryPoint = "waitpid", SetLastError = true)]
-    private static partial int Waitpid(int pid, out int status, int options);
-
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static partial int Kill(int pid, int sig);
-
     [LibraryImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static partial int Fcntl(int fd, int cmd, int arg);
-
-    [LibraryImport("libc", EntryPoint = "execvp", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int Execvp(string file, string?[] argv);
-
-    [LibraryImport("libc", EntryPoint = "setenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int Setenv(string name, string value, int overwrite);
-
-    [LibraryImport("libc", EntryPoint = "chdir", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int Chdir(string path);
-
-    [LibraryImport("libc", EntryPoint = "_exit")]
-    private static partial void Exit(int status);
 }
 #endif

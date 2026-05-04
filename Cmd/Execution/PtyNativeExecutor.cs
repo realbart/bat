@@ -62,10 +62,14 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             var buf = new byte[4096];
             while (true)
             {
-                var n = await pty.ReadAsync(buf, drainCts.Token);
+                int n;
+                try
+                {
+                    n = await pty.ReadAsync(buf, drainCts.Token);
+                }
+                catch { break; }
                 if (n == 0) break;
 
-                // Write raw bytes directly to console (for SocketConsole this goes to the socket)
                 await context.Console.Out.WriteAsync(System.Text.Encoding.UTF8.GetString(buf, 0, n));
                 await context.Console.Out.FlushAsync();
             }
@@ -96,10 +100,10 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         try
         {
             var exitCode = await pty.WaitForExitAsync();
-            await inputCts.CancelAsync();                          // stop forwarding input
-            pty.ClosePseudoConsoleHandle();                        // Windows: triggers EOF on read pipe; Linux: closes master fd → EIO
-            drainCts.CancelAfter(TimeSpan.FromMilliseconds(500)); // safety timeout in case EOF never arrives
-            try { await outputTask; } catch { }                    // drain remaining output
+            await inputCts.CancelAsync();
+            pty.ClosePseudoConsoleHandle();
+            drainCts.CancelAfter(TimeSpan.FromMilliseconds(500));
+            try { await outputTask; } catch { }
             context.ErrorCode = exitCode;
             return exitCode;
         }
