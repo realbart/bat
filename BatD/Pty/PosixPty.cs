@@ -33,15 +33,15 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
         if (pid == 0)
         {
-            // Child process
+            // Child process — after fork(), only async-signal-safe / raw P/Invoke calls are safe.
+            // Managed .NET (GC locks, thread-pool, etc.) must NOT be used here.
             if (!string.IsNullOrEmpty(workingDirectory))
-                Environment.CurrentDirectory = workingDirectory;
+                Chdir(workingDirectory);
 
-            // Set environment variables
             if (environment != null)
             {
                 foreach (var kvp in environment)
-                    Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
+                    Setenv(kvp.Key, kvp.Value, 1);
             }
 
             // Parse arguments and exec
@@ -53,8 +53,8 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
             Execvp(executable, argv);
 
-            // If we get here, exec failed
-            Environment.Exit(127);
+            // If we get here, exec failed — use _exit() not Environment.Exit()
+            Exit(127);
         }
 
         // Parent process
@@ -97,7 +97,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
     public async Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed || _masterFd < 0, this);
+        if (_disposed || _masterFd < 0) return 0;
 
         return await Task.Run(() =>
         {
@@ -106,22 +106,20 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
                 using var pin = buffer.Pin();
                 while (!ct.IsCancellationRequested)
                 {
+                    if (_masterFd < 0) return 0;
                     var result = Read(_masterFd, (nint)pin.Pointer, (nuint)buffer.Length);
                     if (result < 0)
-                    {
-                        var errno = Marshal.GetLastPInvokeError();
-                        if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
-                            // Check if child has exited
-                            if (Waitpid(_childPid, out _, WNOHANG) != 0)
-                                return 0;
-                            Thread.Sleep(1);
-                            continue;
+                            var errno = Marshal.GetLastPInvokeError();
+                            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                            {
+                                Thread.Sleep(1);
+                                continue;
+                            }
+                            if (errno == EIO)
+                                return 0; // PTY closed — real EOF
+                            throw new InvalidOperationException($"read failed with errno {errno}");
                         }
-                        if (errno == EIO)
-                            return 0; // PTY closed
-                        throw new InvalidOperationException($"read failed with errno {errno}");
-                    }
                     return (int)result;
                 }
                 return 0;
@@ -167,7 +165,11 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
     public void ClosePseudoConsoleHandle()
     {
-        // On POSIX, closing the master fd signals EOF; handled in Dispose.
+        if (_masterFd >= 0)
+        {
+            Close(_masterFd);
+            _masterFd = -1;
+        }
     }
 
     public void Dispose()
@@ -261,31 +263,40 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
         public ushort ws_ypixel;
     }
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "forkpty", SetLastError = true)]
     private static partial int ForkPty(out int master, nint name, nint termp, ref WinSize winp);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "read", SetLastError = true)]
     private static partial nint Read(int fd, nint buf, nuint count);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "write", SetLastError = true)]
     private static partial nint Write(int fd, nint buf, nuint count);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
     private static partial int Close(int fd);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "ioctl", SetLastError = true)]
     private static partial int Ioctl(int fd, uint request, ref WinSize winp);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "waitpid", SetLastError = true)]
     private static partial int Waitpid(int pid, out int status, int options);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int Kill(int pid, int sig);
 
-    [LibraryImport("libc", SetLastError = true)]
+    [LibraryImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static partial int Fcntl(int fd, int cmd, int arg);
 
-    [LibraryImport("libc", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport("libc", EntryPoint = "execvp", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int Execvp(string file, string?[] argv);
+
+    [LibraryImport("libc", EntryPoint = "setenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int Setenv(string name, string value, int overwrite);
+
+    [LibraryImport("libc", EntryPoint = "chdir", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int Chdir(string path);
+
+    [LibraryImport("libc", EntryPoint = "_exit")]
+    private static partial void Exit(int status);
 }
 #endif

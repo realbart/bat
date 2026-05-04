@@ -7,9 +7,6 @@ namespace Bat;
 
 internal static class Program
 {
-    private static string BannerText =>
-        $"🦇Bat [Version {typeof(Program).Assembly.GetName().Version}]\r\n(c) Bart Kemps. Released under GPLv3+.\r\n\r\n";
-
 #if WINDOWS
     private const string DaemonExe = "batd.exe";
 #else
@@ -88,6 +85,9 @@ internal static class Program
         var exitCode = await outputTask;
         await cts.CancelAsync();
         inputMode.Dispose();
+        // Force-exit: on Linux, Console.ReadKey blocks forever and ignores cancellation,
+        // so a normal return would leave bat hanging after batd disconnects.
+        Environment.Exit(exitCode);
         return exitCode;
     }
 

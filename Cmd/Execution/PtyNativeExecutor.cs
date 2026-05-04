@@ -53,7 +53,8 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         // Signal the terminal client to switch to raw byte mode
         await context.Console.EnterRawModeAsync();
 
-        using var cts = new CancellationTokenSource();
+        using var inputCts = new CancellationTokenSource();
+        using var drainCts = new CancellationTokenSource();
 
         // Output: PTY → console (raw bytes, NO string conversion to preserve ANSI sequences)
         var outputTask = Task.Run(async () =>
@@ -61,12 +62,12 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             var buf = new byte[4096];
             while (true)
             {
-                var n = await pty.ReadAsync(buf, cts.Token);
+                var n = await pty.ReadAsync(buf, drainCts.Token);
                 if (n == 0) break;
 
                 // Write raw bytes directly to console (for SocketConsole this goes to the socket)
                 await context.Console.Out.WriteAsync(System.Text.Encoding.UTF8.GetString(buf, 0, n));
-                await context.Console.Out.FlushAsync();  // ← ADD EXPLICIT FLUSH!
+                await context.Console.Out.FlushAsync();
             }
         });
 
@@ -76,11 +77,11 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             var buf = new byte[256];
             try
             {
-                while (!cts.Token.IsCancellationRequested)
+                while (!inputCts.Token.IsCancellationRequested)
                 {
-                    var n = await context.Console.ReadRawAsync(buf, cts.Token);
+                    var n = await context.Console.ReadRawAsync(buf, inputCts.Token);
                     if (n <= 0) break;
-                    await pty.WriteAsync(buf.AsMemory(0, n), cts.Token);
+                    await pty.WriteAsync(buf.AsMemory(0, n), inputCts.Token);
                 }
             }
             catch (OperationCanceledException) { }
@@ -95,9 +96,10 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         try
         {
             var exitCode = await pty.WaitForExitAsync();
-            pty.ClosePseudoConsoleHandle();
-            await cts.CancelAsync();
-            try { await outputTask; } catch { }
+            await inputCts.CancelAsync();                          // stop forwarding input
+            pty.ClosePseudoConsoleHandle();                        // Windows: triggers EOF on read pipe; Linux: closes master fd → EIO
+            drainCts.CancelAfter(TimeSpan.FromMilliseconds(500)); // safety timeout in case EOF never arrives
+            try { await outputTask; } catch { }                    // drain remaining output
             context.ErrorCode = exitCode;
             return exitCode;
         }
