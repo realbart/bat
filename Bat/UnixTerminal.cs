@@ -7,7 +7,7 @@ namespace Bat;
 /// Helpers to set the Linux/macOS terminal to raw mode via termios.
 /// Raw mode: no echo, no line buffering — every keypress is immediately available.
 /// </summary>
-internal static class UnixTerminal
+internal static partial class UnixTerminal
 {
     // termios c_iflag bits
     private const uint IGNBRK = 0x0001;
@@ -51,11 +51,11 @@ internal static class UnixTerminal
         public uint c_ospeed;
     }
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "tcgetattr")]
-    private static extern int TcGetAttr(int fd, out Termios termios);
+    [LibraryImport("libc", EntryPoint = "tcgetattr")]
+    private static partial int TcGetAttr(int fd, out Termios termios);
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "tcsetattr")]
-    private static extern int TcSetAttr(int fd, int optionalActions, in Termios termios);
+    [LibraryImport("libc", EntryPoint = "tcsetattr")]
+    private static partial int TcSetAttr(int fd, int optionalActions, in Termios termios);
 
     private static Termios _saved;
     private static bool _inRaw;
