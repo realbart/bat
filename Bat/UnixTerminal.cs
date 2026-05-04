@@ -38,24 +38,23 @@ internal static partial class UnixTerminal
     private const int STDIN_FILENO = 0;
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct Termios
+    private unsafe struct Termios
     {
         public uint c_iflag;
         public uint c_oflag;
         public uint c_cflag;
         public uint c_lflag;
         public byte c_line;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-        public byte[] c_cc;
+        public fixed byte c_cc[32];
         public uint c_ispeed;
         public uint c_ospeed;
     }
 
-    [LibraryImport("libc", EntryPoint = "tcgetattr")]
-    private static partial int TcGetAttr(int fd, out Termios termios);
+    [DllImport("libc", EntryPoint = "tcgetattr", SetLastError = true)]
+    private static extern int TcGetAttr(int fd, out Termios termios);
 
-    [LibraryImport("libc", EntryPoint = "tcsetattr")]
-    private static partial int TcSetAttr(int fd, int optionalActions, in Termios termios);
+    [DllImport("libc", EntryPoint = "tcsetattr", SetLastError = true)]
+    private static extern int TcSetAttr(int fd, int optionalActions, in Termios termios);
 
     private static Termios _saved;
     private static bool _inRaw;
@@ -74,8 +73,11 @@ internal static partial class UnixTerminal
         raw.c_cflag &= ~(CSIZE | PARENB);
         raw.c_cflag |= CS8;
         // VMIN=1, VTIME=0: block until at least 1 byte is available
-        raw.c_cc[6] = 1;  // VMIN
-        raw.c_cc[5] = 0;  // VTIME
+        unsafe
+        {
+            raw.c_cc[6] = 1;  // VMIN
+            raw.c_cc[5] = 0;  // VTIME
+        }
 
         TcSetAttr(STDIN_FILENO, TCSANOW, in raw);
         _inRaw = true;
