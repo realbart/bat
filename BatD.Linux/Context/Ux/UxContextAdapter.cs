@@ -1,5 +1,5 @@
 using BatD.Context;
-using BatD.Files;
+using Bat.Context.Files;
 
 namespace BatD.Context.Ux;
 
@@ -52,7 +52,7 @@ public class UxContextAdapter : global::BatD.Context.Context
             var value = EnvironmentVariables[key];
             if (!value.StartsWith('/')) continue;
 
-            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(value, FileSystem).GetAwaiter().GetResult();
+            var translated = PathTranslator.TranslateHostPathToBat(value, FileSystem).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(translated))
                 EnvironmentVariables.Remove(key);
             else
@@ -66,10 +66,10 @@ public class UxContextAdapter : global::BatD.Context.Context
     {
         var user = Environment.UserName;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var homeTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(home, FileSystem).GetAwaiter().GetResult();
+        var homeTranslated = PathTranslator.TranslateHostPathToBat(home, FileSystem).GetAwaiter().GetResult();
         var hostname = Environment.MachineName;
         var temp = Environment.GetEnvironmentVariable("TMPDIR") ?? "/tmp";
-        var tempTranslated = BatD.Files.PathTranslator.TranslateHostPathToBat(temp, FileSystem).GetAwaiter().GetResult();
+        var tempTranslated = PathTranslator.TranslateHostPathToBat(temp, FileSystem).GetAwaiter().GetResult();
 
         // Split translated home into HOMEDRIVE + HOMEPATH (e.g. Z:\Users\kempsb → Z: + \Users\kempsb)
         var homeDrive = "";

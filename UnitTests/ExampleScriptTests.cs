@@ -176,14 +176,18 @@ public class ExampleScriptTests
         catch { return 80; }
     });
 
-    /// <summary>Runs a script through Bat against the real filesystem (DosFileSystem).</summary>
+    /// <summary>Runs a script through Bat against the real filesystem.</summary>
     private static async Task<(string Out, string Err)> RunWithRealFsAsync(string scriptPath)
     {
         var scriptDir = Path.GetDirectoryName(scriptPath)!;
         var scriptDrive = char.ToUpperInvariant(scriptDir[0]);
         var driveRoot = $"{scriptDrive}:\\";
 
+#if WINDOWS
         var fs = new BatD.Context.Dos.DosFileSystem(new Dictionary<char, string> { [scriptDrive] = driveRoot });
+#else
+        var fs = new BatD.Context.Ux.UxFileSystemAdapter(new Dictionary<char, string> { [scriptDrive] = driveRoot });
+#endif
         var console = new TestConsole { WindowWidth = CmdConsoleWidth.Value };
         var ctx = new TestCommandContext(fs) { Console = console, FileCulture = NormalizedFileCulture.Create(System.Globalization.CultureInfo.CurrentCulture) };
         ctx.SetCurrentDrive(scriptDrive);

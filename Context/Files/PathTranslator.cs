@@ -1,6 +1,6 @@
 using global::Context;
 
-namespace BatD.Files;
+namespace Bat.Context.Files;
 
 /// <summary>
 /// Bidirectional path translation between host paths and Bat virtual drives.

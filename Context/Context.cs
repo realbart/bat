@@ -1,5 +1,5 @@
 using Bat.Context;
-using BatD.Files;
+using Bat.Context.Files;
 using global::Context;
 
 namespace BatD.Context;
@@ -66,7 +66,7 @@ public abstract class Context : IContext
     public string PromptFormat { get; set; } = "$P$G"; // Default: C:\path>
 
     public System.Globalization.CultureInfo FileCulture { get; } =
-        System.Globalization.CultureInfo.CurrentCulture.Create();
+        (System.Globalization.CultureInfo)System.Globalization.CultureInfo.CurrentCulture.Clone();
 
     // Directory stack for PUSHD/POPD
     public Stack<(char Drive, string[] Path)> DirectoryStack { get; } = new();
@@ -117,7 +117,7 @@ public abstract class Context : IContext
 
         if (EnvironmentVariables.TryGetValue("PATH", out var hostPath))
         {
-            EnvironmentVariables["PATH"] = await BatD.Files.PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
+            EnvironmentVariables["PATH"] = await PathTranslator.TranslateHostPathToBat(hostPath, fileSystem);
         }
         // todo: remove this code as the fallback prompt already is $P$G
         if (!EnvironmentVariables.ContainsKey("PROMPT")) EnvironmentVariables["PROMPT"] = "$P$G";
@@ -127,7 +127,7 @@ public abstract class Context : IContext
 
         // Point ComSpec at bat's own cmd.exe (like cmd.exe points at itself)
         var cmdExePath = Path.Combine(AppContext.BaseDirectory, "bin", "cmd.exe");
-        var virtualCmdPath = await BatD.Files.PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
+        var virtualCmdPath = await PathTranslator.TranslateHostPathEntryToBat(cmdExePath, fileSystem);
         if (virtualCmdPath != null)
             EnvironmentVariables["ComSpec"] = virtualCmdPath;
     }

@@ -1,7 +1,7 @@
-#if UNIX
 using System.Reflection;
 using Bat.Commands;
 using Bat.Tokens;
+using Bat.Parsing;
 using Context;
 
 namespace Bat.UnitTests;
@@ -13,4 +13,3 @@ internal static class TestArgs
         => ArgumentSet.Parse(tokens, ArgumentSpec.From(
             typeof(TCmd).GetCustomAttributes<BuiltInCommandAttribute>()));
 }
-#endif

@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BatD\BatD.csproj" />
+    <ProjectReference Include="..\BatD.Linux\BatD.Linux.csproj" />
     <ProjectReference Include="..\Subst\Subst.csproj" />
     <ProjectReference Include="..\Tree\Tree.csproj" />
     <ProjectReference Include="..\Cmd\Cmd.csproj" />
@@ -20,6 +21,11 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\UnitTests\CommandTests.cs" Link="CommandTests.cs" />
+    <Compile Include="..\UnitTests\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\UnitTests\TestFileSystem.cs" Link="TestFileSystem.cs" />
+    <Compile Include="..\UnitTests\TestArgs.cs" Link="TestArgs.cs" />
+    <Compile Include="..\UnitTests\TestHarness.cs" Link="TestHarness.cs" />
     <Compile Include="..\UnitTests\UnixDirDisplayTests.cs" Link="UnixDirDisplayTests.cs" />
     <Compile Include="..\UnitTests\UnixPathMappingTests.cs" Link="UnixPathMappingTests.cs" />
     <Compile Include="..\UnitTests\UxFileSystemTests.cs" Link="UxFileSystemTests.cs" />
@@ -27,9 +33,12 @@
     <Compile Include="..\UnitTests\FileAssociationTests.cs" Link="FileAssociationTests.cs" />
     <Compile Include="..\UnitTests\TreeExclusionTests.cs" Link="TreeExclusionTests.cs" />
     <Compile Include="..\UnitTests\TestConsole.cs" Link="TestConsole.cs" />
-    <Compile Include="..\UnitTests\TestArgs.Unix.cs" Link="TestArgs.Unix.cs" />
+    <Compile Include="..\UnitTests\TestArgs.Unix.cs" Link="TestArgs.Unix.cs" Condition="Exists('..\UnitTests\TestArgs.Unix.cs')" />
     <Compile Include="..\UnitTests\ParserExtensions.cs" Link="ParserExtensions.cs" />
     <Compile Include="..\UnitTests\FileSystemExtensions.cs" Link="FileSystemExtensions.cs" />
+    <Compile Include="..\UnitTests\DosFileSystemTests.cs" Condition="'$(OS)' == 'Windows_NT'" />
+    <Compile Include="..\UnitTests\EnvironmentTranslationTests.cs" Condition="'$(OS)' == 'Windows_NT'" />
+    <Compile Include="..\UnitTests\PathTranslatorTests.cs" Condition="'$(OS)' == 'Windows_NT'" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\UnitTests\Examples\**" Link="Examples\%(RecursiveDir)%(Filename)%(Extension)">

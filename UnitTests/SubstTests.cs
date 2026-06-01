@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using Bat.Commands;
+#if WINDOWS
 using BatD.Context.Dos;
+#endif
 using Bat.Execution;
 using Bat.Tokens;
 using Context;
@@ -12,9 +14,6 @@ namespace Bat.UnitTests;
 #if WINDOWS
 [TestClass]
 public class SubstFileSystemTests : IDisposable
-#else
-public class SubstFileSystemTests
-#endif
 {
     private readonly string _testRoot;
     private readonly DosFileSystem _fs;
@@ -24,7 +23,7 @@ public class SubstFileSystemTests
     {
         _testRoot = Path.Combine(Path.GetTempPath(), $"BatSubstFsTest_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testRoot);
-        _fs = new(new() { ['Z'] = _testRoot, ['C'] = @"C:\" });
+        _fs = new DosFileSystem(new Dictionary<char, string> { ['Z'] = _testRoot, ['C'] = @"C:\" });
     }
 
     protected virtual void Dispose(bool disposing)
@@ -156,7 +155,7 @@ public class SubstFileSystemTests
     public async Task GetVolumeSerialNumber_SubstToRoot_SameAsUnderlyingDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new() { ['C'] = @"C:\" });
+        var fs = new DosFileSystem(new Dictionary<char, string> { ['C'] = @"C:\" });
         fs.Substs['Q'] = new BatPath('C', []);
         var serialC = await fs.GetVolumeSerialNumberAsync('C');
         var serialQ = await fs.GetVolumeSerialNumberAsync('Q');
@@ -167,7 +166,7 @@ public class SubstFileSystemTests
     public async Task GetVolumeSerialNumber_SubstToSubdir_DifferentFromDevice()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var fs = new DosFileSystem(new() { ['C'] = @"C:\" });
+        var fs = new DosFileSystem(new Dictionary<char, string> { ['C'] = @"C:\" });
         var tempSegments = Path.GetTempPath().TrimEnd('\\')[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
         fs.Substs['Q'] = new BatPath('C', tempSegments);
         var serialC = await fs.GetVolumeSerialNumberAsync('C');
@@ -195,6 +194,7 @@ public class SubstFileSystemTests
         Assert.IsTrue(await _fs.DirectoryExistsAsync(new BatPath('Q', ["sub"])));
     }
 }
+#endif
 
 // ── Subst/Program.cs behaviour tests ─────────────────────────────────────────
 

@@ -1,6 +1,8 @@
 using Bat.Commands;
 using Bat.Console;
+#if WINDOWS
 using BatD.Context.Dos;
+#endif
 using Bat.Parsing;
 using Bat.Tokens;
 
@@ -151,14 +153,18 @@ public class QuotedStringTokenization
 [TestClass]
 public class VariableTokenization
 {
-    private readonly DosContext context;
+    private readonly global::Context.IContext context;
 
     public VariableTokenization()
     {
-        var fileSystem = new DosFileSystem(new() { ['Z'] = @"C:\" });
-        context = new(fileSystem, new TestConsole());
+#if WINDOWS
+        var fileSystem = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
+        context = new DosContext(fileSystem, new TestConsole());
+#else
+        context = new TestCommandContext(new TestFileSystem());
+#endif
         // Set environment variable for testing
-        context.EnvironmentVariables.Add("TESTVAR", "TestValue");
+        context.EnvironmentVariables["TESTVAR"] = "TestValue";
     }
 
     [TestMethod]
@@ -458,12 +464,16 @@ public class SpecialTokenization
 [TestClass]
 public class ComplexScenarios
 {
-    private readonly DosContext context;
+    private readonly global::Context.IContext context;
 
     public ComplexScenarios()
     {
-        var fileSystem = new DosFileSystem(new() { ['Z'] = @"C:\" });
-        context = new(fileSystem, new TestConsole());
+#if WINDOWS
+        var fileSystem = new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" });
+        context = new DosContext(fileSystem, new TestConsole());
+#else
+        context = new TestCommandContext(new TestFileSystem());
+#endif
         context.EnvironmentVariables["PATH"] = "C:\\Windows\\System32";
     }
 
@@ -1290,6 +1300,3 @@ public class TextOrCommandTokenization
         Assert.AreEqual("if 5 > 3 echo greater", result.ToString());
     }
 }
-
-
-

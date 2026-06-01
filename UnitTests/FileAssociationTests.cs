@@ -1,4 +1,6 @@
+#if WINDOWS
 using BatD.Context.Dos;
+#endif
 using BatD.Context.Ux;
 using Context;
 
@@ -30,6 +32,7 @@ public class FileAssociationTests
         Assert.AreEqual("batfile", assoc[".BAT"]);
     }
 
+#if WINDOWS
     [TestMethod]
     public void DosFileSystem_GetFileAssociations_ReturnsWindowsRegistry()
     {
@@ -54,4 +57,5 @@ public class FileAssociationTests
         if (assoc.TryGetValue(".exe", out var lower) && assoc.TryGetValue(".EXE", out var upper))
             Assert.AreEqual(lower, upper, "File association lookup should be case-insensitive");
     }
+#endif
 }

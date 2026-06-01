@@ -1,4 +1,3 @@
-#if WINDOWS
 using BatD.Context.Dos;
 using Context;
 
@@ -324,4 +323,3 @@ public class DosFileSystemTests : IDisposable
         Assert.IsFalse(defaultFs.HasDrive('C'), "C: should NOT be directly accessible");
     }
 }
-#endif

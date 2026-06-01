@@ -1,6 +1,5 @@
-#if WINDOWS
 using BatD.Context;
-using BatD.Files;
+using Bat.Context.Files;
 using global::Context;
 
 namespace BatD.Context.Dos;
@@ -51,7 +50,7 @@ public class DosContext : global::BatD.Context.Context
             if (!bareDrive && !absolutePath) continue;
 
             var toTranslate = bareDrive ? value + @"\" : value;
-            var translated = BatD.Files.PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem).GetAwaiter().GetResult();
+            var translated = PathTranslator.TranslateHostPathToBat(toTranslate, FileSystem).GetAwaiter().GetResult();
             if (string.IsNullOrEmpty(translated))
                 EnvironmentVariables.Remove(key);
             else
@@ -117,5 +116,3 @@ public class DosContext : global::BatD.Context.Context
         CurrentFolders[CurrentDrive] = [];
     }
 }
-
-#endif

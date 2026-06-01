@@ -1,5 +1,4 @@
 // todo: only compile in windos builds
-#if WINDOWS
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
@@ -21,7 +20,7 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     public DosFileSystem() : this(new() { ['Z'] = @"C:\" }) { }
 
     public bool HasDrive(char drive) => _roots.ContainsKey(char.ToUpperInvariant(drive));
-    public void AddRoot(char drive, string nativePath) => _roots[char.ToUpperInvariant(drive)] = nativePath;
+    public override void AddRoot(char drive, string nativePath) => _roots[char.ToUpperInvariant(drive)] = nativePath;
     public char FirstDrive() => _roots.Keys.First();
     public IEnumerable<KeyValuePair<char, string>> GetRoots() => _roots;
 
@@ -286,4 +285,3 @@ public partial class DosFileSystem(Dictionary<char, string> roots) : FileSystem
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool FindClose(IntPtr hFindFile);
 }
-#endif

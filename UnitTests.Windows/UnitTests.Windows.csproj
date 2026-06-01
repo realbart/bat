@@ -5,13 +5,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Bat.UnitTests</RootNamespace>
-    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="**/*.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="MSTest" Version="4.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BatD\BatD.csproj" />
+    <ProjectReference Include="..\BatD.Windows\BatD.Windows.csproj" />
     <ProjectReference Include="..\Subst\Subst.csproj" />
     <ProjectReference Include="..\Tree\Tree.csproj" />
     <ProjectReference Include="..\Cmd\Cmd.csproj" />
@@ -19,17 +24,14 @@
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <Compile Include="DosFileSystemTests.cs" />
+    <Compile Include="EnvironmentTranslationTests.cs" />
+    <Compile Include="PathTranslatorTests.cs" />
     <Compile Include="..\UnitTests\CommandTests.cs" Link="CommandTests.cs" />
-    <Compile Include="..\UnitTests\CrossPlatformTests.cs" Link="CrossPlatformTests.cs" />
-    <Compile Include="..\UnitTests\DosFileSystemTests.cs" Link="DosFileSystemTests.cs" />
-    <Compile Include="..\UnitTests\EnvironmentTranslationTests.cs" Link="EnvironmentTranslationTests.cs" />
-    <Compile Include="..\UnitTests\ExpanderTests.cs" Link="ExpanderTests.cs" />
-    <Compile Include="..\UnitTests\IfBlockParsingTests.cs" Link="IfBlockParsingTests.cs" />
-    <Compile Include="..\UnitTests\IfBlockTokenizingTests.cs" Link="IfBlockTokenizingTests.cs" />
-    <Compile Include="..\UnitTests\IfElseBlockTests.cs" Link="IfElseBlockTests.cs" />
-    <Compile Include="..\UnitTests\ParserTests.cs" Link="ParserTests.cs" />
-    <Compile Include="..\UnitTests\PathTranslatorTests.cs" Link="PathTranslatorTests.cs" />
+    <Compile Include="..\UnitTests\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\UnitTests\TestFileSystem.cs" Link="TestFileSystem.cs" />
+    <Compile Include="..\UnitTests\TestArgs.cs" Link="TestArgs.cs" />
     <Compile Include="..\UnitTests\SubstTests.cs" Link="SubstTests.cs" />
     <Compile Include="..\UnitTests\ExampleScriptTests.cs" Link="ExampleScriptTests.cs" />
     <Compile Include="..\UnitTests\FileAssociationTests.cs" Link="FileAssociationTests.cs" />

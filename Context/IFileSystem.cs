@@ -47,4 +47,6 @@ public interface IFileSystem
     char NativePathSeparator { get; }
 
     Task<(bool Success, HostPath Path)> TryGetNativePathAsync(BatPath path, CancellationToken cancellationToken = default);
+
+    void AddRoot(char drive, string path);
 }

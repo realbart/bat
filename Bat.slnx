@@ -36,6 +36,8 @@
     <Project Path="UnitTests/UnitTests.csproj" />
   </Folder>
   <Project Path="Bat/Bat.csproj" Id="0e00064d-4755-493e-ac6b-e890775da22b" />
+  <Project Path="BatD.Linux/BatD.Linux.csproj" />
+  <Project Path="BatD.Windows/BatD.Windows.csproj" />
   <Project Path="BatD/BatD.csproj" />
   <Project Path="Context/Context.csproj" />
 </Solution>

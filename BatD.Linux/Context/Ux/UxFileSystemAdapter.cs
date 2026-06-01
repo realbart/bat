@@ -2,6 +2,7 @@
 
 using System.Runtime.CompilerServices;
 using Bat.Context;
+using Bat.Context.Files;
 using BatD.Context;
 using global::Context;
 
@@ -21,7 +22,7 @@ public class UxFileSystemAdapter(Dictionary<char, string> mappings, Func<string,
     public UxFileSystemAdapter() : this(new() { ['Z'] = "/" }, UnixFileOwner.GetOwner) { }
 
     public bool HasDrive(char drive) => mappings.ContainsKey(char.ToUpperInvariant(drive));
-    public void AddRoot(char drive, string nativePath) => mappings[char.ToUpperInvariant(drive)] = nativePath;
+    public override void AddRoot(char drive, string nativePath) => mappings[char.ToUpperInvariant(drive)] = nativePath;
     public IEnumerable<KeyValuePair<char, string>> GetRoots() => mappings;
 
     public override char NativeDirectorySeparator => '/';

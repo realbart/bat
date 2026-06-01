@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Bat.Context;
+namespace Bat.Context.Files;
 
 /// <summary>
 /// Resolves the owning username of a file on Unix via libc stat() + getpwuid().

@@ -11,6 +11,8 @@ public abstract class FileSystem : IFileSystem
     public virtual char NativeDirectorySeparator => '\\';
     public virtual char NativePathSeparator => ';';
 
+    public abstract void AddRoot(char drive, string path);
+
     public string GetFullPathDisplayName(BatPath path) =>
         path.Segments.Length == 0
             ? $"{path.Drive}:\\"

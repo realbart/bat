@@ -15,12 +15,14 @@ internal sealed class DaemonServer : IDisposable
     private Socket? _listener;
     private const int PrefixLength = 2048;
 
-    // Shared filesystem — visible to all sessions
-#if WINDOWS
-    private readonly BatD.Context.Dos.DosFileSystem _fileSystem = new();
-#else
-    private readonly BatD.Context.Ux.UxFileSystemAdapter _fileSystem = new();
-#endif
+    public DaemonServer(global::Context.IFileSystem fileSystem, Func<global::Context.IFileSystem, global::Context.IConsole, global::Context.IContext> contextFactory)
+    {
+        _fileSystem = fileSystem;
+        _contextFactory = contextFactory;
+    }
+
+    private readonly global::Context.IFileSystem _fileSystem;
+    private readonly Func<global::Context.IFileSystem, global::Context.IConsole, global::Context.IContext> _contextFactory;
 
     // cmd.exe satellite loaded once at first session
     private MethodInfo? _cmdMain;
@@ -145,11 +147,7 @@ internal sealed class DaemonServer : IDisposable
 
     private global::Context.IContext CreateContext(SocketConsole console)
     {
-#if WINDOWS
-        return new BatD.Context.Dos.DosContext(_fileSystem, console);
-#else
-        return new BatD.Context.Ux.UxContextAdapter(_fileSystem, console);
-#endif
+        return _contextFactory(_fileSystem, console);
     }
 
     private MethodInfo GetCmdMain()

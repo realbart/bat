@@ -1,6 +1,8 @@
+using Bat.Execution;
 #if WINDOWS
 using BatD.Context.Dos;
-using Bat.Execution;
+#endif
+using Context;
 
 namespace Bat.UnitTests;
 
@@ -163,7 +165,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NoVariables_ReturnsOriginal()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             var line = "echo hello world";
 
             // Act
@@ -177,7 +183,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SingleVariable_Expands()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST%";
 
@@ -192,7 +202,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UndefinedVariable_RemainsLiteral()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             var line = "echo %NOTFOUND%";
 
             // Act
@@ -206,7 +220,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MultipleVariables_Expands()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["VAR1"] = "value1";
             ctx.EnvironmentVariables["VAR2"] = "value2";
             var line = "echo %VAR1% and %VAR2%";
@@ -222,7 +240,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_MixedDefinedAndUndefined_ExpandsOnlyDefined()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["DEFINED"] = "exists";
             var line = "echo %DEFINED% and %UNDEFINED%";
 
@@ -237,7 +259,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_IgnoresBatchParameters()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["1"] = "should_not_expand";
             var line = "echo %1";
 
@@ -252,7 +278,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyVariable_Expands()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["EMPTY"] = "";
             var line = "echo %EMPTY%";
 
@@ -267,7 +297,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_EmptyString_ReturnsEmpty()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             var line = "";
 
             // Act
@@ -281,7 +315,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_NullString_ReturnsNull()
         {
             // Arrange
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             string? line = null;
 
             // Act
@@ -295,7 +333,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_UnclosedPercent_StripsLonePercent()
         {
             // CMD strips a lone % when there is no closing % — batch mode behavior
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["TEST"] = "value";
             var line = "echo %TEST";
 
@@ -309,7 +351,11 @@ public class ExpanderTests
         {
             // From SET /? help: "%PATH:str1=str2% would expand the PATH variable,
             // substituting each occurrence of str1 with str2."
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["MYVAR"] = "hello world hello";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:hello=hi%", ctx);
@@ -321,7 +367,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_StringSubstitution_EmptyStr2_DeletesOccurrences()
         {
             // From SET /? help: "str2 can be the empty string to effectively delete all occurrences of str1"
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["MYVAR"] = "abcXdefXghi";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:X=%", ctx);
@@ -333,7 +383,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_OffsetAndLength()
         {
             // From SET /? help: "%PATH:~10,5% would use 5 characters starting at offset 10"
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~10,5%", ctx);
@@ -345,7 +399,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_NegativeOffset_FromEnd()
         {
             // From SET /? help: "%PATH:~-10% would extract the last 10 characters"
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["MYVAR"] = "0123456789ABCDE"; // 15 chars
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~-10%", ctx);
@@ -357,7 +415,11 @@ public class ExpanderTests
         public void ExpandEnvironmentVariables_SubstringExtraction_NegativeLength_ExcludesFromEnd()
         {
             // From SET /? help: "%PATH:~0,-2% would extract all but the last 2 characters"
+#if WINDOWS
             var ctx = new DosContext(new DosFileSystem(new Dictionary<char, string> { ['Z'] = @"C:\" }), new TestConsole());
+#else
+            var ctx = new TestCommandContext(new TestFileSystem());
+#endif
             ctx.EnvironmentVariables["MYVAR"] = "Hello";
 
             var result = Expander.ExpandEnvironmentVariables("echo %MYVAR:~0,-2%", ctx);
@@ -366,6 +428,5 @@ public class ExpanderTests
         }
     }
 }
-#endif
 
 
