@@ -25,9 +25,9 @@ public static partial class UnixFileOwner
         try
         {
             var buf = new byte[StatBufferSize];
-            if (StatNative(path, buf) != 0) return "";
+            if (stat(path, buf) != 0) return "";
             var uid = MemoryMarshal.Read<uint>(buf.AsSpan(UidOffset));
-            var passwdPtr = GetPwuidNative(uid);
+            var passwdPtr = getpwuid(uid);
             if (passwdPtr == nint.Zero) return "";
             var namePtr = Marshal.ReadIntPtr(passwdPtr);  // pw_name is first field
             return Marshal.PtrToStringUTF8(namePtr) ?? "";
@@ -39,8 +39,8 @@ public static partial class UnixFileOwner
     }
 
     [LibraryImport("libc", EntryPoint = "stat", StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int StatNative(string path, byte[] buf);
+    private static partial int stat(string path, byte[] buf);
 
     [LibraryImport("libc", EntryPoint = "getpwuid")]
-    private static partial nint GetPwuidNative(uint uid);
+    private static partial nint getpwuid(uint uid);
 }

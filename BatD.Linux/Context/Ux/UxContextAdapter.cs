@@ -35,11 +35,7 @@ public class UxContextAdapter : global::BatD.Context.Context
 
     public override global::Context.IPseudoTerminal CreatePty()
     {
-#if UNIX
         return new BatD.Pty.PosixPty();
-#else
-        throw new PlatformNotSupportedException();
-#endif
     }
 
     protected override void PostProcessEnvironmentVariables()

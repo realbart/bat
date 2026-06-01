@@ -420,13 +420,19 @@ internal static class Program
 
         try
         {
-            // batd is a WinExe (no console), so we don't redirect streams.
-            // Redirecting streams can interfere with ConPTY child processes.
-            Process.Start(new ProcessStartInfo(daemonPath)
+            var psi = new ProcessStartInfo(daemonPath)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            };
+
+            if (Debugger.IsAttached)
+            {
+                psi.ArgumentList.Add("--die-with-parent");
+                psi.ArgumentList.Add(Process.GetCurrentProcess().Id.ToString());
+            }
+
+            Process.Start(psi);
         }
         catch { return null; }
 

@@ -17,8 +17,13 @@ if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
 }
 
 # Stop any running batd to release file locks before copying
-taskkill /f /im batd.exe 2>$null
-taskkill /f /im bat.exe 2>$null
+if ($IsWindows) {
+    taskkill /f /im batd.exe 2>$null
+    taskkill /f /im bat.exe 2>$null
+} else {
+    pkill -x batd 2>$null
+    pkill -x bat 2>$null
+}
 Start-Sleep -Milliseconds 500
 
 Write-Host "Configuration: $Configuration"
@@ -116,8 +121,9 @@ if (Test-Path $batdProjectFile) {
         exit $LASTEXITCODE
     }
     $batdBinDir = Join-Path $batdProjectDir "bin\$Configuration\net10.0"
-    foreach ($file in @("batd.exe", "batd.dll", "batd.pdb", "batd.deps.json", "batd.runtimeconfig.json",
-                        "Context.dll", "Context.pdb", "Cmd.dll", "Cmd.pdb")) {
+    $filesToCopy = @("batd", "batd.exe", "batd.dll", "batd.pdb", "batd.deps.json", "batd.runtimeconfig.json",
+                        "Context.dll", "Context.pdb", "Cmd.dll", "Cmd.pdb", "BatD.Linux.dll", "BatD.Linux.pdb", "BatD.Windows.dll", "BatD.Windows.pdb")
+    foreach ($file in $filesToCopy) {
         $src = Join-Path $batdBinDir $file
         if (Test-Path $src) {
             Copy-Item $src $OutputPath -Force

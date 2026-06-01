@@ -1,4 +1,5 @@
 using Ipc;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Reflection;
 
@@ -71,7 +72,7 @@ internal sealed class DaemonServer : IDisposable
         return true;
     }
 
-    private static bool TryBind(string socketPath, out Socket? socket)
+    private static bool TryBind(string socketPath, [NotNullWhen(true)] out Socket? socket)
     {
         socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try

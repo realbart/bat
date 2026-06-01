@@ -32,6 +32,7 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             {
                 // ConPTY failed — fall back to regular process and report
                 await context.Console.Error.WriteLineAsync($"[pty] {ex.Message} — falling back");
+                await context.Console.Error.WriteLineAsync($"[debug] {ex.StackTrace}");
                 return await ExecuteWithProcessAsync(hostExecutablePath, arguments, workingDir.Path, context, false);
             }
         }
@@ -101,9 +102,9 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
         {
             var exitCode = await pty.WaitForExitAsync();
             await inputCts.CancelAsync();
-            pty.ClosePseudoConsoleHandle();
             drainCts.CancelAfter(TimeSpan.FromMilliseconds(500));
             try { await outputTask; } catch { }
+            pty.ClosePseudoConsoleHandle();
             context.ErrorCode = exitCode;
             return exitCode;
         }
@@ -179,10 +180,15 @@ internal class PtyNativeExecutor(bool waitForExit = true, bool isGuiApp = false)
             while (!ct.IsCancellationRequested)
             {
                 var key = await console.ReadKeyAsync(true, ct);
-                if (key.KeyChar != '\0')
-                    await stdin.WriteAsync(key.KeyChar);
                 if (key.Key == ConsoleKey.Enter)
+                {
+                    await stdin.WriteAsync(stdin.NewLine);
                     await stdin.FlushAsync(ct);
+                }
+                else if (key.KeyChar != '\0')
+                {
+                    await stdin.WriteAsync(key.KeyChar);
+                }
             }
         }
         catch (OperationCanceledException) { }

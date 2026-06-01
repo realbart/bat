@@ -162,7 +162,21 @@ internal sealed class SocketConsole : IConsole, IDisposable
                     continue;
 
                 case TerminalMessageType.Key:
-                    // Client sent a key while we expect raw — raw mode transition in flight, ignore
+                    // Client sent a key while we expect raw — raw mode transition in flight.
+                    // Convert to bytes so the process receives it.
+                    var keyInfo = TerminalProtocol.ParseKey(msg.Value.Payload);
+                    var keyBytes = KeyToBytes(keyInfo);
+                    if (keyBytes.Length > 0)
+                    {
+                        var nRead = Math.Min(keyBytes.Length, buffer.Length);
+                        keyBytes.AsMemory(0, nRead).CopyTo(buffer);
+                        if (nRead < keyBytes.Length)
+                        {
+                            _rawQueue.Enqueue(keyBytes[nRead..]);
+                            _rawReady.Release();
+                        }
+                        return nRead;
+                    }
                     continue;
 
                 default:
@@ -182,6 +196,23 @@ internal sealed class SocketConsole : IConsole, IDisposable
             _rawReady.Release();
         }
         return n;
+    }
+
+    private static byte[] KeyToBytes(ConsoleKeyInfo key)
+    {
+        if (key.KeyChar != '\0')
+            return Encoding.UTF8.GetBytes([key.KeyChar]);
+
+        return key.Key switch
+        {
+            ConsoleKey.UpArrow => "\x1b[A"u8.ToArray(),
+            ConsoleKey.DownArrow => "\x1b[B"u8.ToArray(),
+            ConsoleKey.RightArrow => "\x1b[C"u8.ToArray(),
+            ConsoleKey.LeftArrow => "\x1b[D"u8.ToArray(),
+            ConsoleKey.Home => "\x1b[H"u8.ToArray(),
+            ConsoleKey.End => "\x1b[F"u8.ToArray(),
+            _ => []
+        };
     }
 
     public IConsole WithOutput(TextWriter newOut) => new RedirectedSocketConsole(this, newOut, Error, In);

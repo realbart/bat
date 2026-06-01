@@ -27,31 +27,31 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
         rows = Math.Max(1, rows);
 
         // Open a new PTY master
-        _masterFd = PosixOpenpt(O_RDWR | O_NOCTTY);
+        _masterFd = posix_openpt(O_RDWR | O_NOCTTY);
         if (_masterFd < 0)
             throw new InvalidOperationException($"posix_openpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-        if (Grantpt(_masterFd) != 0)
+        if (grantpt(_masterFd) != 0)
             throw new InvalidOperationException($"grantpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-        if (Unlockpt(_masterFd) != 0)
+        if (unlockpt(_masterFd) != 0)
             throw new InvalidOperationException($"unlockpt failed with errno {Marshal.GetLastPInvokeError()}");
 
-        var slaveNamePtr = Ptsname(_masterFd);
+        var slaveNamePtr = ptsname(_masterFd);
         if (slaveNamePtr == nint.Zero)
             throw new InvalidOperationException($"ptsname failed with errno {Marshal.GetLastPInvokeError()}");
         var slaveName = Marshal.PtrToStringUTF8(slaveNamePtr)!;
 
         // Set window size on master
         var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows };
-        Ioctl(_masterFd, TIOCSWINSZ, ref winSize);
+        ioctl(_masterFd, TIOCSWINSZ, ref winSize);
 
         // Set master to non-blocking for async operations
-        var flags = Fcntl(_masterFd, F_GETFL, 0);
-        Fcntl(_masterFd, F_SETFL, flags | O_NONBLOCK);
+        var flags = fcntl(_masterFd, F_GETFL, 0);
+        fcntl(_masterFd, F_SETFL, flags | O_NONBLOCK);
 
         // Open slave fd
-        _slaveFd = Open(slaveName, O_RDWR, 0);
+        _slaveFd = open(slaveName, O_RDWR, 0);
         if (_slaveFd < 0)
             throw new InvalidOperationException($"open slave failed with errno {Marshal.GetLastPInvokeError()}");
 
@@ -81,13 +81,14 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
         if (_process == null)
             throw new InvalidOperationException("Failed to start child process");
 
-        // Send the shell script that attaches to the slave PTY and execs the command
-        var shellScript = $"exec setsid -w bash -c 'exec 0<>\"{slaveName}\" 1>&0 2>&0; exec {EscapeForShell(executable)} {arguments}'";
+        // Send the shell script that attaches to the slave PTY and execs the command.
+        // We use stty sane to ensure the PTY is in a usable state (ONLCR, ECHO, etc.).
+        var shellScript = $"exec setsid -w bash -c 'exec 0<>\"{slaveName}\" 1>&0 2>&0; stty sane; exec {EscapeForShell(executable)} {arguments}'";
         _process.StandardInput.WriteLine(shellScript);
         _process.StandardInput.Close();
 
         // Close slave in parent — child has it now
-        Close(_slaveFd);
+        close(_slaveFd);
         _slaveFd = -1;
     }
 
@@ -113,7 +114,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
                 while (written < data.Length)
                 {
                     ct.ThrowIfCancellationRequested();
-                    var result = Write(_masterFd, (nint)pin.Pointer + written, (nuint)(data.Length - written));
+                    var result = write(_masterFd, (nint)pin.Pointer + written, (nuint)(data.Length - written));
                     if (result < 0)
                     {
                         var errno = Marshal.GetLastPInvokeError();
@@ -142,7 +143,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
                 while (!ct.IsCancellationRequested)
                 {
                     if (_masterFd < 0) return 0;
-                    var result = Read(_masterFd, (nint)pin.Pointer, (nuint)buffer.Length);
+                    var result = read(_masterFd, (nint)pin.Pointer, (nuint)buffer.Length);
                     if (result < 0)
                     {
                         var errno = Marshal.GetLastPInvokeError();
@@ -167,7 +168,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
     {
         if (_disposed || _masterFd < 0) return;
         var winSize = new WinSize { ws_col = (ushort)columns, ws_row = (ushort)rows };
-        Ioctl(_masterFd, TIOCSWINSZ, ref winSize);
+        ioctl(_masterFd, TIOCSWINSZ, ref winSize);
     }
 
     public async Task<int> WaitForExitAsync(CancellationToken ct = default)
@@ -183,7 +184,7 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
     {
         if (_masterFd >= 0)
         {
-            Close(_masterFd);
+            close(_masterFd);
             _masterFd = -1;
         }
     }
@@ -195,12 +196,12 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
 
         if (_masterFd >= 0)
         {
-            Close(_masterFd);
+            close(_masterFd);
             _masterFd = -1;
         }
         if (_slaveFd >= 0)
         {
-            Close(_slaveFd);
+            close(_slaveFd);
             _slaveFd = -1;
         }
         _process?.Dispose();
@@ -272,33 +273,33 @@ internal sealed partial class PosixPty : global::Context.IPseudoTerminal
     }
 
     [LibraryImport("libc", EntryPoint = "posix_openpt", SetLastError = true)]
-    private static partial int PosixOpenpt(int flags);
+    private static partial int posix_openpt(int flags);
 
     [LibraryImport("libc", EntryPoint = "grantpt", SetLastError = true)]
-    private static partial int Grantpt(int fd);
+    private static partial int grantpt(int fd);
 
     [LibraryImport("libc", EntryPoint = "unlockpt", SetLastError = true)]
-    private static partial int Unlockpt(int fd);
+    private static partial int unlockpt(int fd);
 
     [LibraryImport("libc", EntryPoint = "ptsname", SetLastError = true)]
-    private static partial nint Ptsname(int fd);
+    private static partial nint ptsname(int fd);
 
     [LibraryImport("libc", EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int Open(string path, int flags, int mode);
+    private static partial int open(string path, int flags, int mode);
 
     [LibraryImport("libc", EntryPoint = "read", SetLastError = true)]
-    private static partial nint Read(int fd, nint buf, nuint count);
+    private static partial nint read(int fd, nint buf, nuint count);
 
     [LibraryImport("libc", EntryPoint = "write", SetLastError = true)]
-    private static partial nint Write(int fd, nint buf, nuint count);
+    private static partial nint write(int fd, nint buf, nuint count);
 
     [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
-    private static partial int Close(int fd);
+    private static partial int close(int fd);
 
     [LibraryImport("libc", EntryPoint = "ioctl", SetLastError = true)]
-    private static partial int Ioctl(int fd, uint request, ref WinSize winp);
+    private static partial int ioctl(int fd, uint request, ref WinSize winp);
 
     [LibraryImport("libc", EntryPoint = "fcntl", SetLastError = true)]
-    private static partial int Fcntl(int fd, int cmd, int arg);
+    private static partial int fcntl(int fd, int cmd, int arg);
 }
 #endif

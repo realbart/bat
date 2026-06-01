@@ -24,12 +24,6 @@
     <DefineConstants>$(DefineConstants);UNIX</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Pty\**" />
-    <EmbeddedResource Remove="Pty\**" />
-    <None Remove="Pty\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Context\Context.csproj" />
     <ProjectReference Include="..\BatD.Windows\BatD.Windows.csproj" Condition="'$(OS)' == 'Windows_NT'" />
     <ProjectReference Include="..\BatD.Linux\BatD.Linux.csproj" Condition="'$(OS)' != 'Windows_NT'" />
@@ -47,16 +41,11 @@
     </AssemblyAttribute>
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="Pty\ConPty.cs" />
-    <Compile Include="Pty\PosixPty.cs" />
-  </ItemGroup>
-
   <!-- Kill any running batd before build — it locks the output binary -->
-  <Target Name="KillBatd" BeforeTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+  <Target Name="KillBatd" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="taskkill /im batd.exe /f 2&gt;nul" IgnoreExitCode="true" />
   </Target>
-  <Target Name="KillBatdUnix" BeforeTargets="Build" Condition="'$(OS)' != 'Windows_NT'">
-    <Exec Command="pkill -f batd || true" IgnoreExitCode="true" />
+  <Target Name="KillBatdUnix" BeforeTargets="PrepareForBuild" Condition="'$(OS)' != 'Windows_NT'">
+    <Exec Command="pkill -x batd || true" IgnoreExitCode="true" />
   </Target>
 </Project>
